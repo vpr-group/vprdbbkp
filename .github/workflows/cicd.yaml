@@ -109,7 +109,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/vprs3bkp${{ matrix.binary_extension }}" "$PKG_NAME/vprs3bkp"
 
           # Copy additional files
-          cp LICENSE README.md "$PKG_NAME/"
+          cp README.md "$PKG_NAME/"
 
           # Create compressed archive
           tar czf "$PKG_NAME.tar.gz" "$PKG_NAME"
