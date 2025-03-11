@@ -30,22 +30,58 @@ jobs:
           args: --all -- --check
 
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build ${{ matrix.platform }} ${{ matrix.target }}
     needs: test
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: linux
+          # x86_64 Architectures
+          - platform: linux-gnu
             target: x86_64-unknown-linux-gnu
             binary_extension: ""
-          - os: ubuntu-latest
-            platform: linux
+            cross_compile: false
+            package_manager: ""
+
+          - platform: linux-musl
+            target: x86_64-unknown-linux-musl
+            binary_extension: ""
+            cross_compile: true
+            package_manager: "musl-tools"
+
+          # ARM64 Architectures
+          - platform: linux-gnu-arm64
             target: aarch64-unknown-linux-gnu
             binary_extension: ""
+            cross_compile: true
+            package_manager: "gcc-aarch64-linux-gnu"
+
+          - platform: linux-musl-arm64
+            target: aarch64-unknown-linux-musl
+            binary_extension: ""
+            cross_compile: true
+            package_manager: "musl-tools gcc-aarch64-linux-gnu"
+
+          # 32-bit x86 Architectures
+          - platform: linux-gnu-i686
+            target: i686-unknown-linux-gnu
+            binary_extension: ""
+            cross_compile: true
+            package_manager: "gcc-multilib"
+
     steps:
       - uses: actions/checkout@v4
+
+      # Install system dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          if [ -n "${{ matrix.package_manager }}" ]; then
+            sudo apt-get install -y ${{ matrix.package_manager }}
+          fi
+
+      # Setup Rust toolchain with cross-compilation target
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -53,29 +89,61 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      # Use cross for more complex cross-compilation
       - name: Build binary
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --target ${{ matrix.target }}
-          use-cross: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+          use-cross: ${{ matrix.cross_compile }}
+
+      # Create distribution package
       - name: Create package
         run: |
-          PKG_NAME="db-backup-cli-${{ github.ref_name }}-${{ matrix.platform }}-$(echo ${{ matrix.target }} | cut -d'-' -f1)"
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          PKG_NAME="vprs3bkp-${VERSION}-${{ matrix.platform }}"
           mkdir -p "$PKG_NAME"
-          cp "target/${{ matrix.target }}/release/db-backup-cli${{ matrix.binary_extension }}" "$PKG_NAME/"
+
+          # Copy binary with target-specific path
+          cp "target/${{ matrix.target }}/release/vprs3bkp${{ matrix.binary_extension }}" "$PKG_NAME/vprs3bkp"
+
+          # Copy additional files
           cp LICENSE README.md "$PKG_NAME/"
+
+          # Create compressed archive
           tar czf "$PKG_NAME.tar.gz" "$PKG_NAME"
-      - name: Upload artifact
+
+          # Optional: Create .deb package for Debian/Ubuntu
+          if [ "${{ matrix.platform }}" != "*musl*" ]; then
+            mkdir -p "$PKG_NAME/DEBIAN"
+            cat << EOF > "$PKG_NAME/DEBIAN/control"
+          Package: vprs3bkp
+          Version: $VERSION
+          Section: utils
+          Priority: optional
+          Architecture: ${{ matrix.target == 'x86_64-unknown-linux-gnu' && 'amd64' || (matrix.target == 'aarch64-unknown-linux-gnu' && 'arm64' || 'i386') }}
+          Maintainer: VPR <info@vpr-group.ch>
+          Description: Database Backup CLI Tool
+           A command-line tool for backing up databases
+          EOF
+            dpkg-deb --build "$PKG_NAME"
+          fi
+
+      # Upload artifacts
+      - name: Upload tarball artifact
         uses: actions/upload-artifact@v4
         with:
-          name: db-backup-cli-${{ matrix.platform }}-${{ matrix.target }}
-          path: db-backup-cli-${{ github.ref_name }}-${{ matrix.platform }}-*.tar.gz
+          name: vprs3bkp-${{ matrix.platform }}
+          path: vprs3bkp-*.tar.gz
+
+      # Optional: Upload .deb package if created
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        if: ${{ !contains(matrix.platform, 'musl') }}
+        with:
+          name: vprs3bkp-${{ matrix.platform }}-deb
+          path: vprs3bkp-*.deb
 
   release:
     name: Create Release
@@ -85,13 +153,16 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+
       - name: List artifacts
-        run: find . -type f -name "*.tar.gz" | sort
+        run: find . -type f \( -name "*.tar.gz" -o -name "*.deb" \) | sort
+
       - name: Create GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files: ./**/*.tar.gz
+          files: |
+            **/*.tar.gz
+            **/*.deb
           draft: false
           prerelease: false
           generate_release_notes: true
