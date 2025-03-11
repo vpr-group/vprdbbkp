@@ -1,173 +1,238 @@
-# Database Backup CLI Tool
+# vprs3bkp - Database Backup to S3
 
-A simple, efficient CLI tool written in Rust to backup PostgreSQL and MySQL databases directly to S3 buckets.
+A robust, efficient CLI tool written in Rust to backup PostgreSQL and MySQL/MariaDB databases directly to S3-compatible storage.
 
 ## Features
 
-- Backup PostgreSQL databases to S3
+- Backup PostgreSQL databases to S3 with automatic version detection
 - Backup MySQL/MariaDB databases to S3
-- Backup folders with parallel uploads to S3
-- File filtering by pattern, size, and type
-- Optional compression for all backup types
-- Configurable concurrency for large folder backups
-- Simple installation on Linux servers
-- Configurable S3 bucket and prefix
-- AWS credentials from environment/config
-- Automatic naming of backup files with timestamps
+- Support for custom S3-compatible storage providers
+- Automatic PostgreSQL version detection and compatibility handling
+- Docker fallback for PostgreSQL version mismatches
+- Configurable compression levels
+- Automatic backup file naming with timestamps and UUIDs
+- Verbose logging option for debugging
+- Environment variable support for secrets and configuration
+- SSL verification toggle for development environments
 
-## Quick Installation
+## Installation
 
-### Install pre-built binary
+### Quick Installation (Linux/macOS)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/vprs3bkp/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | sudo bash
 ```
 
-### Install with dependencies
+### Install with Dependencies
+
+To also install required system dependencies (PostgreSQL client, MySQL client, gzip):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/vprs3bkp/main/install.sh | sudo bash --with-deps
+curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | sudo bash -s -- --with-deps
 ```
 
-### Install from source (requires Rust)
+### Static Build Installation (Better Compatibility)
+
+For environments where dynamic linking might be an issue:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/vprs3bkp/main/install.sh | sudo bash --from-source
+curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | sudo bash -s -- --musl
+```
+
+### Install from Source (requires Rust toolchain)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | sudo bash -s -- --from-source
+```
+
+Or manually:
+
+```bash
+# Clone the repository
+git clone https://github.com/vpr-group/vprs3bkp.git
+cd vprs3bkp
+
+# Build the project
+cargo build --release
+
+# Install the binary
+sudo cp target/release/vprs3bkp /usr/local/bin/
 ```
 
 ## Usage
 
-### Basic PostgreSQL Backup
+### PostgreSQL Backup
+
+Basic usage:
 
 ```bash
 vprs3bkp --bucket my-backup-bucket postgres --database mydb --username dbuser
 ```
 
-### Basic MySQL Backup
+With all options:
 
 ```bash
-vprs3bkp --bucket my-backup-bucket mysql --database mydb --username dbuser
-```
-
-### Full Options
-
-```bash
-# PostgreSQL with all options
 vprs3bkp \
   --bucket my-backup-bucket \
   --region us-west-2 \
   --prefix db-backups/production \
+  --endpoint https://custom-s3-provider.com \
+  --access-key YOUR_ACCESS_KEY \
+  --secret-key YOUR_SECRET_KEY \
   --verbose \
   postgres \
   --database mydb \
   --host db.example.com \
   --port 5432 \
   --username dbuser \
-  --compression 9
+  --password dbpassword \
+  --compression 9 \
+  --force-docker
+```
 
-# MySQL with all options
+### MySQL/MariaDB Backup
+
+Basic usage:
+
+```bash
+vprs3bkp --bucket my-backup-bucket mysql --database mydb --username dbuser
+```
+
+With all options:
+
+```bash
 vprs3bkp \
   --bucket my-backup-bucket \
   --region us-west-2 \
   --prefix db-backups/production \
+  --endpoint https://custom-s3-provider.com \
+  --access-key YOUR_ACCESS_KEY \
+  --secret-key YOUR_SECRET_KEY \
   --verbose \
   mysql \
   --database mydb \
   --host db.example.com \
   --port 3306 \
   --username dbuser \
+  --password dbpassword \
   --compression 9
-
-# Folder backup with all options
-vprs3bkp \
-  --bucket my-backup-bucket \
-  --region us-west-2 \
-  --prefix folder-backups \
-  --verbose \
-  folder \
-  --path /path/to/important/files \
-  --concurrency 20 \
-  --compress \
-  --compression-level 6 \
-  --skip-larger-than 100 \
-  --include "*.{jpg,png,pdf}" \
-  --exclude "temp/*"
 ```
 
-### Using Environment Variables
+## Environment Variables
+
+All command-line options can be specified through environment variables:
+
+### S3 Configuration
 
 ```bash
-# AWS credentials and region
+export S3_REGION=us-east-1
+export S3_BUCKET=my-backup-bucket
+export S3_PREFIX=backups/databases
+export S3_ENDPOINT=https://custom-s3-provider.com
 export S3_ACCESS_KEY_ID=your_access_key
 export S3_SECRET_ACCESS_KEY=your_secret_key
-export S3_REGION=us-east-1
-
-# Database passwords
-export PGPASSWORD=your_postgres_password
-export MYSQL_PWD=your_mysql_password
-
-# Bucket configuration
-export S3_BUCKET=my-backup-bucket
-export S3_PREFIX=backups/daily
-
-# Run backup with minimal CLI arguments
-vprs3bkp postgres --database mydb --username dbuser
 ```
 
-### Setting Up Cron Jobs
+### Database Credentials
+
+```bash
+# PostgreSQL
+export PGPASSWORD=your_postgres_password
+
+# MySQL
+export MYSQL_PWD=your_mysql_password
+```
+
+## Docker Support for PostgreSQL
+
+The tool includes an intelligent version detection system that:
+
+1. Detects your PostgreSQL server version
+2. Checks compatibility with local `pg_dump`
+3. Automatically uses Docker with matching PostgreSQL version when needed
+4. Falls back to local `pg_dump` if Docker is unavailable
+
+You can force Docker usage with the `--force-docker` flag.
+
+## AWS Authentication
+
+The tool uses the AWS SDK's credential provider chain, which checks for credentials in this order:
+
+1. Command-line arguments (`--access-key`, `--secret-key`)
+2. Environment variables (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`)
+3. AWS shared credentials file (`~/.aws/credentials`)
+4. IAM role for Amazon EC2 or ECS task role
+
+## S3-Compatible Storage Providers
+
+To use with S3-compatible storage providers (MinIO, DigitalOcean Spaces, etc.):
+
+```bash
+vprs3bkp \
+  --bucket my-bucket \
+  --endpoint https://minio.example.com \
+  --access-key ACCESS_KEY \
+  --secret-key SECRET_KEY \
+  postgres \
+  --database mydb \
+  --username dbuser
+```
+
+## Setting Up Cron Jobs
 
 Add to `/etc/cron.d/database-backups`:
 
-````
+```
 # Daily PostgreSQL backup at 2:00 AM
-0 2 * * * root S3_REGION=us-east-1 S3_BUCKET=my-backup-bucket PGPASSWORD=secret /usr/local/bin/vprs3bkp postgres --database mydb --username dbuser --host db.example.com
+0 2 * * * root S3_BUCKET=my-backup-bucket PGPASSWORD=secret /usr/local/bin/vprs3bkp postgres --database mydb --username dbuser --host db.example.com
 
 # Daily MySQL backup at 3:00 AM
-0 3 * * * root S3_REGION=us-east-1 S3_BUCKET=my-backup-bucket MYSQL_PWD=secret /usr/local/bin/vprs3bkp mysql --database mydb --username dbuser --host db.example.com
+0 3 * * * root S3_BUCKET=my-backup-bucket MYSQL_PWD=secret /usr/local/bin/vprs3bkp mysql --database mydb --username dbuser --host db.example.com
+```
 
-# Weekly folder backup on Sunday at 1:00 AM
-0 1 * * 0 root S3_REGION=us-east-1 S3_BUCKET=my-backup-bucket /usr/local/bin/vprs3bkp folder --path /var/www/html --compress --concurrency 5
-``` --username dbuser --host db.example.com
-````
+## Backup File Structure
+
+Backups are stored with the following path format:
+
+```
+s3://{bucket}/{prefix}/{db_type}/{db_name}-{date}-{time}-{uuid}.gz
+```
+
+Example:
+
+```
+s3://my-backup-bucket/vprs3bkp/postgres/mydb-2023-04-15-120135-a1b2c3d4.gz
+```
 
 ## Prerequisites
 
-- PostgreSQL client tools (pg_dump) for PostgreSQL backups
-- MySQL client tools (mysqldump) for MySQL backups
-- AWS credentials configured (environment variables or `~/.aws/credentials`)
-- Appropriate S3 permissions (s3:PutObject)
+- PostgreSQL client tools (`pg_dump`) for PostgreSQL backups
+- MySQL client tools (`mysqldump`) for MySQL backups
+- Docker (optional, for version-compatible PostgreSQL backups)
+- AWS credentials with `s3:PutObject` permissions
+- Gzip for compression
 
-## Building from Source
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection refused**: Check database host, port, and firewall settings
+2. **Access denied**: Verify database credentials
+3. **S3 upload failed**: Check S3 credentials and permissions
+4. **pg_dump not found**: Install PostgreSQL client tools or use Docker
+
+Use the `--verbose` flag for detailed logging:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/vprs3bkp.git
-cd vprs3bkp
-
-# Build the project
-cargo build --release
-
-# Run the binary
-./target/release/vprs3bkp --help
+vprs3bkp --verbose --bucket my-bucket postgres --database mydb --username dbuser
 ```
 
-## Configuration
+For development environments with self-signed certificates:
 
-The tool uses the AWS SDK's default credential provider chain, which looks for credentials in the following order:
-
-1. Environment variables: `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`
-2. AWS credentials file: `~/.aws/credentials`
-3. IAM role for Amazon EC2 or ECS task role
+```bash
+vprs3bkp --no-verify-ssl --endpoint https://dev-s3.example.com --bucket test-bucket postgres --database mydb --username dbuser
+```
 
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-# vprs3bkp
-# vprs3bkp
-# vprs3bkp
-# vprs3bkp
-# vprs3bkp
