@@ -3,7 +3,7 @@
 set -e
 
 # Configuration
-VERSION="0.2.0"  # Update this with your latest version
+VERSION="0.3.0"  # Update this with your latest version
 BINARY_NAME="vprs3bkp"
 INSTALL_DIR="/usr/local/bin"
 GITHUB_REPO="vpr-group/vprs3bkp"  # Updated with your actual repo
