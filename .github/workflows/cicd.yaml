@@ -57,9 +57,22 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
           echo "Updated Cargo.toml to version $NEW_VERSION"
 
-      - name: Commit and Push
+      - name: Update install.sh Version
+        run: |
+          NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
+          if [ -f install.sh ]; then
+            sed -i "s/^VERSION=\".*\"/VERSION=\"$NEW_VERSION\"/" install.sh
+            echo "Updated install.sh to version $NEW_VERSION"
+          else
+            echo "Warning: install.sh not found, skipping version update"
+          fi
+
+      - name: Commit and Push Changes
         run: |
           git add Cargo.toml
+          if [ -f install.sh ]; then
+            git add install.sh
+          fi
           git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
           git push origin main
 
@@ -67,7 +80,7 @@ jobs:
         id: tag_version
         run: |
           NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
-          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git tag -a "v$NEW_VERSION" -m "v$NEW_VERSION"
           git push origin "v$NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Tagged version: v$NEW_VERSION"
