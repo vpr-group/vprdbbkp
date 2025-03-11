@@ -15,7 +15,7 @@ pub struct Cli {
     pub bucket: String,
 
     /// S3 prefix (folder path)
-    #[arg(long, env = "S3_PREFIX", default_value = "backups")]
+    #[arg(long, env = "S3_PREFIX", default_value = "vprs3bkp")]
     pub prefix: String,
 
     /// Custom S3 endpoint URL for third-party S3-compatible services
