@@ -19,7 +19,7 @@ on:
           - major
 env:
   CARGO_TERM_COLOR: always
-  BINARY_NAME: vprs3bkp
+  BINARY_NAME: vprs3bkp-cli
 jobs:
   version:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -40,7 +40,8 @@ jobs:
       - name: Get Current Version
         id: current_version
         run: |
-          CURRENT_VERSION=$(grep -m 1 "version" Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          # Update to check version from the workspace Cargo.toml
+          CURRENT_VERSION=$(grep -m 1 "version" cli/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $CURRENT_VERSION"
 
@@ -51,11 +52,13 @@ jobs:
           current_version: ${{ steps.current_version.outputs.current_version }}
           level: ${{ github.event.inputs.version_increment }}
 
-      - name: Update Cargo.toml
+      - name: Update Cargo.toml Files
         run: |
           NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
-          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
-          echo "Updated Cargo.toml to version $NEW_VERSION"
+          # Update both crates to the same version
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" cli/Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" core/Cargo.toml
+          echo "Updated Cargo.toml files to version $NEW_VERSION"
 
       - name: Update install.sh Version
         run: |
@@ -69,7 +72,7 @@ jobs:
 
       - name: Commit and Push Changes
         run: |
-          git add Cargo.toml
+          git add cli/Cargo.toml core/Cargo.toml
           if [ -f install.sh ]; then
             git add install.sh
           fi
@@ -124,7 +127,9 @@ jobs:
           sudo apt-get install -y musl-tools
 
       - name: Build Release
-        run: cargo build --target ${{ matrix.target }} --release --verbose
+        run: |
+          # Build CLI binary specifically
+          cargo build --package cli --target ${{ matrix.target }} --release --verbose
 
       - name: Prepare Artifact
         run: |

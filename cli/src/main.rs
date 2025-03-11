@@ -2,25 +2,14 @@ use anyhow::Result;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::Client as S3Client;
 use clap::Parser;
-use folders::backup_folder;
+use core::{
+    self, backup_folder, download_backup, format_timestamp, get_backup_key, get_latest_backup,
+    get_latest_backups_by_db, list_backups, mysql, postgres, restore_postgres, upload_to_s3,
+};
 use log::{info, warn, LevelFilter};
 
 mod cli;
-mod config;
-mod databases;
-mod folders;
-mod s3;
-mod utils;
-
 use cli::{Cli, Commands};
-use databases::{
-    mysql,
-    postgres::{self, pg_restore::restore_postgres},
-};
-use s3::{
-    download_backup, get_latest_backup, get_latest_backups_by_db, list_backups, upload_to_s3,
-};
-use utils::{format_timestamp, get_backup_key};
 
 #[tokio::main]
 async fn main() -> Result<()> {
