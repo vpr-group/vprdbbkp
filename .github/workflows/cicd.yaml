@@ -1,5 +1,4 @@
 name: Build and Release
-
 on:
   push:
     branches: [main]
@@ -13,20 +12,17 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
+      - uses: actions/checkout@v4
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test
-
       - name: Check code format
         uses: actions-rs/cargo@v1
         with:
@@ -48,10 +44,8 @@ jobs:
             platform: linux
             target: aarch64-unknown-linux-gnu
             binary_extension: ""
-
     steps:
-      - uses: actions/checkout@v3
-
+      - uses: actions/checkout@v4
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -59,20 +53,17 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
-
       - name: Build binary
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --target ${{ matrix.target }}
           use-cross: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
-
       - name: Create package
         run: |
           PKG_NAME="db-backup-cli-${{ github.ref_name }}-${{ matrix.platform }}-$(echo ${{ matrix.target }} | cut -d'-' -f1)"
@@ -80,9 +71,8 @@ jobs:
           cp "target/${{ matrix.target }}/release/db-backup-cli${{ matrix.binary_extension }}" "$PKG_NAME/"
           cp LICENSE README.md "$PKG_NAME/"
           tar czf "$PKG_NAME.tar.gz" "$PKG_NAME"
-
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: db-backup-cli-${{ matrix.platform }}-${{ matrix.target }}
           path: db-backup-cli-${{ github.ref_name }}-${{ matrix.platform }}-*.tar.gz
@@ -92,14 +82,11 @@ jobs:
     needs: build
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
-
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
-
+        uses: actions/download-artifact@v4
       - name: List artifacts
         run: find . -type f -name "*.tar.gz" | sort
-
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1
