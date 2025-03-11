@@ -10,7 +10,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Set this to your project's binary name from Cargo.toml
   BINARY_NAME: vprs3bkp
 
 jobs:
@@ -23,30 +22,18 @@ jobs:
             rust-version: stable
             target: x86_64-unknown-linux-gnu
             artifact-name: linux-x86_64
-          - os: ubuntu-latest
-            rust-version: nightly
-            target: x86_64-unknown-linux-gnu
-            artifact-name: linux-x86_64-nightly
 
           # Debian x86_64 targets
           - os: debian-latest
             rust-version: stable
             target: x86_64-unknown-linux-gnu
             artifact-name: debian-x86_64
-          - os: debian-latest
-            rust-version: nightly
-            target: x86_64-unknown-linux-gnu
-            artifact-name: debian-x86_64-nightly
 
           # macOS Silicon (ARM64) targets
           - os: macos-latest
             rust-version: stable
             target: aarch64-apple-darwin
             artifact-name: macos-silicon
-          - os: macos-latest
-            rust-version: nightly
-            target: aarch64-apple-darwin
-            artifact-name: macos-silicon-nightly
 
     runs-on: ${{ matrix.os }}
 
@@ -57,7 +44,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust-version }}
+          toolchain: stable
           override: true
           target: ${{ matrix.target }}
 
@@ -83,6 +70,8 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -93,14 +82,13 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/linux-x86_64
-            artifacts/linux-x86_64-nightly
             artifacts/debian-x86_64
-            artifacts/debian-x86_64-nightly
             artifacts/macos-silicon
-            artifacts/macos-silicon-nightly
           generate_release_notes: true
+          draft: false
+          prerelease: false
