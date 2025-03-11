@@ -6,6 +6,8 @@ A robust, efficient CLI tool written in Rust to backup PostgreSQL and MySQL/Mari
 
 - Backup PostgreSQL databases to S3 with automatic version detection
 - Backup MySQL/MariaDB databases to S3
+- Backup local folders with parallel uploads to S3
+- File filtering by pattern, size, and type
 - Support for custom S3-compatible storage providers
 - Automatic PostgreSQL version detection and compatibility handling
 - Docker fallback for PostgreSQL version mismatches
@@ -128,6 +130,44 @@ vprs3bkp \
   --compression 9
 ```
 
+### Folder Backup
+
+Basic usage:
+
+```bash
+vprs3bkp --bucket my-backup-bucket folder --path /path/to/backup
+```
+
+With all options:
+
+```bash
+vprs3bkp \
+  --bucket my-backup-bucket \
+  --region us-west-2 \
+  --prefix folder-backups \
+  --verbose \
+  folder \
+  --path /path/to/important/files \
+  --compress \
+  --compression-level 9 \
+  --concurrency 8 \
+  --include "*.{jpg,png,pdf}" \
+  --exclude "temp/*" \
+  --skip-larger-than 100 \
+  --add-timestamp
+```
+
+#### Folder Backup Options
+
+- `--path`: Local folder path to backup (required)
+- `--compress`: Enable gzip compression for each file
+- `--compression-level`: Set compression level (0-9, default: 6)
+- `--concurrency`: Number of parallel uploads (1-100, default: 4)
+- `--include`: Only include files matching these patterns (glob syntax, can be specified multiple times)
+- `--exclude`: Exclude files matching these patterns (glob syntax, can be specified multiple times)
+- `--skip-larger-than`: Skip files larger than this size in MB
+- `--add-timestamp`: Add timestamp to the S3 prefix for better organization
+
 ## Environment Variables
 
 All command-line options can be specified through environment variables:
@@ -198,6 +238,9 @@ Add to `/etc/cron.d/database-backups`:
 
 # Daily MySQL backup at 3:00 AM
 0 3 * * * root S3_BUCKET=my-backup-bucket MYSQL_PWD=secret /usr/local/bin/vprs3bkp mysql --database mydb --username dbuser --host db.example.com
+
+# Weekly folder backup on Sunday at 1:00 AM
+0 1 * * 0 root S3_BUCKET=my-backup-bucket /usr/local/bin/vprs3bkp folder --path /var/www/html --compress --concurrency 8
 ```
 
 ## Backup File Structure
@@ -216,11 +259,35 @@ s3://my-backup-bucket/vprs3bkp/postgres/mydb-2023-04-15-120135-a1b2c3d4.gz
 
 ## Prerequisites
 
-- PostgreSQL client tools (`pg_dump`) for PostgreSQL backups
+- PostgreSQL client tools (`pg_dump` and `psql`) for PostgreSQL backups
 - MySQL client tools (`mysqldump`) for MySQL backups
 - Docker (optional, for version-compatible PostgreSQL backups)
 - AWS credentials with `s3:PutObject` permissions
 - Gzip for compression
+
+### Installing Prerequisites on macOS
+
+```bash
+# Using Homebrew
+brew install postgresql mysql-client
+
+# Verify installation
+psql --version
+pg_dump --version
+mysql --version
+```
+
+### Installing Prerequisites on Linux (Debian/Ubuntu)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y postgresql-client mysql-client gzip
+
+# Verify installation
+psql --version
+pg_dump --version
+mysql --version
+```
 
 ## Troubleshooting
 
@@ -229,7 +296,11 @@ s3://my-backup-bucket/vprs3bkp/postgres/mydb-2023-04-15-120135-a1b2c3d4.gz
 1. **Connection refused**: Check database host, port, and firewall settings
 2. **Access denied**: Verify database credentials
 3. **S3 upload failed**: Check S3 credentials and permissions
-4. **pg_dump not found**: Install PostgreSQL client tools or use Docker
+4. **"Failed to execute psql command: no such file"** or **"pg_dump not found"**: These errors indicate that PostgreSQL client tools are not installed or not in your PATH. Install them with:
+   - macOS: `brew install postgresql`
+   - Ubuntu/Debian: `sudo apt-get install postgresql-client`
+   - Or use Docker by adding the `--force-docker` flag to bypass local PostgreSQL client tools
+5. **"version mismatch detected but Docker is not available"**: Install Docker or ensure your local PostgreSQL client version is compatible with your server
 
 Use the `--verbose` flag for detailed logging:
 

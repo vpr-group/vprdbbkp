@@ -98,4 +98,39 @@ pub enum Commands {
         #[arg(short, long, default_value = "6")]
         compression: u8,
     },
+
+    /// Backup a local folder to S3
+    Folder {
+        /// Local folder path to backup
+        #[arg(short, long)]
+        path: String,
+
+        /// Enable compression of files
+        #[arg(short, long)]
+        compress: bool,
+
+        /// Compression level (0-9) when compression is enabled
+        #[arg(long, default_value = "6")]
+        compression_level: u8,
+
+        /// Number of concurrent uploads (1-100)
+        #[arg(long, default_value = "4")]
+        concurrency: u8,
+
+        /// Include only files matching this pattern (glob syntax, can be used multiple times)
+        #[arg(long)]
+        include: Option<Vec<String>>,
+
+        /// Exclude files matching this pattern (glob syntax, can be used multiple times)
+        #[arg(long)]
+        exclude: Option<Vec<String>>,
+
+        /// Skip files larger than this size in MB
+        #[arg(long)]
+        skip_larger_than: Option<u32>,
+
+        /// Add timestamp to the S3 prefix
+        #[arg(long)]
+        add_timestamp: bool,
+    },
 }

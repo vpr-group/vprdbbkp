@@ -30,3 +30,6 @@ tempfile = "3.8"
 bytes = "1.5"
 uuid = { version = "1.4", features = ["v4"] }
 regex = "1.11.1"
+walkdir = "2.3"
+globset = "0.4"
+flate2 = "1.0"

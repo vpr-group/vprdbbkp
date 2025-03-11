@@ -2,11 +2,13 @@ use anyhow::Result;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::Client as S3Client;
 use clap::Parser;
+use folders::backup_folder;
 use log::{info, warn, LevelFilter};
 
 mod cli;
 mod config;
 mod databases;
+mod folders;
 mod s3;
 mod utils;
 
@@ -136,6 +138,39 @@ async fn main() -> Result<()> {
             //     aws_sdk_s3::primitives::ByteStream::from(backup_bytes),
             // )
             // .await?;
+        }
+        Commands::Folder {
+            path,
+            compress,
+            compression_level,
+            concurrency,
+            include,
+            exclude,
+            skip_larger_than,
+            add_timestamp,
+        } => {
+            info!("Starting folder backup for: {}", path);
+
+            let stats = backup_folder(
+                &s3_client,
+                &cli.bucket,
+                &cli.prefix,
+                &path,
+                compress,
+                compression_level,
+                concurrency,
+                include,
+                exclude,
+                skip_larger_than,
+                add_timestamp,
+            )
+            .await?;
+
+            info!("Folder backup completed successfully:");
+            info!("  Files processed: {}", stats.files_processed);
+            info!("  Files skipped: {}", stats.files_skipped);
+            info!("  Files failed: {}", stats.files_failed);
+            info!("  Total bytes transferred: {}", stats.total_bytes);
         }
     }
 
