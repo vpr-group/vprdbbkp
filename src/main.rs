@@ -38,13 +38,27 @@ async fn main() -> Result<()> {
             .or_default_provider()
             .or_else("us-east-1");
 
-    // Create the AWS config builder
-    let mut aws_config_builder = aws_config::from_env().region(region_provider);
+    // Disable SSL verification if requested
+    if cli.no_verify_ssl {
+        warn!("SSL verification disabled for S3 connections - this is not recommended for production use");
+        // Set environment variable to disable SSL verification
+        std::env::set_var("AWS_HTTPS_VERIFY", "0");
+    }
+
+    // Create the AWS config
+    let aws_config = aws_config::from_env().region(region_provider).load().await;
+
+    // Build S3 client configuration
+    let mut s3_config_builder = aws_sdk_s3::config::Builder::from(&aws_config);
 
     // Add custom endpoint if specified
     if let Some(endpoint) = &cli.endpoint {
         info!("Using custom S3 endpoint: {}", endpoint);
-        aws_config_builder = aws_config_builder.endpoint_url(endpoint);
+        s3_config_builder = s3_config_builder.endpoint_url(endpoint);
+
+        // Force path style access for custom endpoints
+        info!("Enabling path-style access for S3-compatible service");
+        s3_config_builder = s3_config_builder.force_path_style(true);
     }
 
     // Add explicit credentials if provided
@@ -60,20 +74,11 @@ async fn main() -> Result<()> {
             "explicit-credentials",
         );
 
-        aws_config_builder = aws_config_builder.credentials_provider(credentials);
+        s3_config_builder = s3_config_builder.credentials_provider(credentials);
     }
 
-    // Disable SSL verification if requested
-    if cli.no_verify_ssl {
-        warn!("SSL verification disabled for S3 connections - this is not recommended for production use");
-
-        // Set environment variable to disable SSL verification
-        // This affects the underlying HTTP client used by the AWS SDK
-        std::env::set_var("AWS_HTTPS_VERIFY", "0");
-    }
-
-    let aws_config = aws_config_builder.load().await;
-    let s3_client = S3Client::new(&aws_config);
+    // Build the final S3 client with our configuration
+    let s3_client = S3Client::from_conf(s3_config_builder.build());
 
     match cli.command {
         Commands::Postgres {
@@ -105,7 +110,6 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-
         Commands::Mysql {
             database,
             host,
