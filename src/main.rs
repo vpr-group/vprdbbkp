@@ -13,7 +13,10 @@ mod s3;
 mod utils;
 
 use cli::{Cli, Commands};
-use databases::postgres::{self, pg_restore::restore_postgres};
+use databases::{
+    mysql,
+    postgres::{self, pg_restore::restore_postgres},
+};
 use s3::{
     download_backup, get_latest_backup, get_latest_backups_by_db, list_backups, upload_to_s3,
 };
@@ -122,24 +125,24 @@ async fn main() -> Result<()> {
             password,
             compression,
         } => {
-            // let backup_bytes = mysql::backup_mysql(
-            //     &database,
-            //     &host,
-            //     port,
-            //     &username,
-            //     password.as_deref(),
-            //     compression,
-            // )
-            // .await?;
+            let backup_bytes = mysql::backup_mysql(
+                &database,
+                &host,
+                port,
+                &username,
+                password.as_deref(),
+                compression,
+            )
+            .await?;
 
-            // let key = get_backup_key(&cli.prefix, "mysql", &database);
-            // upload_to_s3(
-            //     &s3_client,
-            //     &cli.bucket,
-            //     &key,
-            //     aws_sdk_s3::primitives::ByteStream::from(backup_bytes),
-            // )
-            // .await?;
+            let key = get_backup_key(&cli.prefix, "mysql", &database);
+            upload_to_s3(
+                &s3_client,
+                &cli.bucket,
+                &key,
+                aws_sdk_s3::primitives::ByteStream::from(backup_bytes),
+            )
+            .await?;
         }
         Commands::Folder {
             path,
