@@ -17,7 +17,7 @@ use databases::postgres::{self, pg_restore::restore_postgres};
 use s3::{
     download_backup, get_latest_backup, get_latest_backups_by_db, list_backups, upload_to_s3,
 };
-use utils::get_backup_key;
+use utils::{format_timestamp, get_backup_key};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -319,24 +319,22 @@ async fn main() -> Result<()> {
             let mut max_key_width = 4; // "Key".len()
             let mut max_db_width = 8; // "Database".len()
             let mut max_type_width = 4; // "Type".len()
-            let mut max_date_width = 4; // "Date".len()
+            let date_width = 16; // Fixed width for "YYYY-MM-DD HH:MM" format
 
             // Calculate the required width for each column based on actual data
             for backup in &backups_to_display {
                 max_key_width = max_key_width.max(backup.key.len());
                 max_db_width = max_db_width.max(backup.db_name.len());
                 max_type_width = max_type_width.max(backup.backup_type.len());
-                max_date_width = max_date_width.max(backup.timestamp.len());
             }
 
-            // Cap maximum widths to keep table reasonable (optional)
+            // Cap maximum widths to keep table reasonable
             max_key_width = max_key_width.min(60); // Cap key length at 60 chars
             max_db_width = max_db_width.min(20); // Cap db name at 20 chars
             max_type_width = max_type_width.min(15); // Cap type at 15 chars
-            max_date_width = max_date_width.min(20); // Cap date at 20 chars
 
             // Calculate the total width of the table
-            let total_width = max_key_width + max_db_width + max_type_width + max_date_width + 9; // 9 for separators and padding
+            let total_width = max_key_width + max_db_width + max_type_width + date_width + 9; // 9 for separators and padding
 
             println!("\nAvailable backups:");
             println!("{:-<width$}", "", width = total_width);
@@ -349,7 +347,7 @@ async fn main() -> Result<()> {
                 key_width = max_key_width,
                 db_width = max_db_width,
                 type_width = max_type_width,
-                date_width = max_date_width
+                date_width = date_width
             );
             println!("{:-<width$}", "", width = total_width);
 
@@ -364,16 +362,19 @@ async fn main() -> Result<()> {
                     backup.key.clone()
                 };
 
+                // Format the timestamp in a friendly way
+                let friendly_date = format_timestamp(&backup.timestamp);
+
                 println!(
                     "{:<key_width$} | {:<db_width$} | {:<type_width$} | {:<date_width$}",
                     display_key,
                     backup.db_name,
                     backup.backup_type,
-                    backup.timestamp,
+                    friendly_date,
                     key_width = max_key_width,
                     db_width = max_db_width,
                     type_width = max_type_width,
-                    date_width = max_date_width
+                    date_width = date_width
                 );
             }
 
