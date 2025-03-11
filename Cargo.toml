@@ -5,6 +5,14 @@ edition = "2021"
 authors = ["PTRRR <info@vpr-group.ch>"]
 description = "A CLI tool to backup databases to S3"
 
+[profile.release]
+# Optimize for size
+opt-level = 'z'  # Optimize aggressively for size
+lto = true       # Enable Link Time Optimization
+codegen-units = 1  # Maximize code generation optimization
+strip = true     # Remove debug symbols
+panic = 'abort'  # Reduce binary size by removing panic handling code
+
 [dependencies]
 clap = { version = "4.4", features = ["derive", "env"] }
 tokio = { version = "1.32", features = ["full"] }

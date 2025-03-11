@@ -1,168 +1,106 @@
-name: Build and Release
+name: Rust CI
+
 on:
   push:
-    branches: [main]
+    branches: ["main"]
+    tags:
+      - "v*"
   pull_request:
-    branches: [main]
-  # Allow manual triggering
-  workflow_dispatch:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Set this to your project's binary name from Cargo.toml
+  BINARY_NAME: vprs3bkp
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-      - name: Check code format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
   build:
-    name: Build ${{ matrix.platform }} ${{ matrix.target }}
-    needs: test
-    runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
         include:
-          # x86_64 Architectures
-          - platform: linux-gnu
+          # Linux x86_64 targets
+          - os: ubuntu-latest
+            rust-version: stable
             target: x86_64-unknown-linux-gnu
-            binary_extension: ""
-            cross_compile: false
-            package_manager: ""
+            artifact-name: linux-x86_64
+          - os: ubuntu-latest
+            rust-version: nightly
+            target: x86_64-unknown-linux-gnu
+            artifact-name: linux-x86_64-nightly
 
-          - platform: linux-musl
-            target: x86_64-unknown-linux-musl
-            binary_extension: ""
-            cross_compile: true
-            package_manager: "musl-tools"
+          # Debian x86_64 targets
+          - os: debian-latest
+            rust-version: stable
+            target: x86_64-unknown-linux-gnu
+            artifact-name: debian-x86_64
+          - os: debian-latest
+            rust-version: nightly
+            target: x86_64-unknown-linux-gnu
+            artifact-name: debian-x86_64-nightly
 
-          # ARM64 Architectures
-          - platform: linux-gnu-arm64
-            target: aarch64-unknown-linux-gnu
-            binary_extension: ""
-            cross_compile: true
-            package_manager: "gcc-aarch64-linux-gnu"
+          # macOS Silicon (ARM64) targets
+          - os: macos-latest
+            rust-version: stable
+            target: aarch64-apple-darwin
+            artifact-name: macos-silicon
+          - os: macos-latest
+            rust-version: nightly
+            target: aarch64-apple-darwin
+            artifact-name: macos-silicon-nightly
 
-          - platform: linux-musl-arm64
-            target: aarch64-unknown-linux-musl
-            binary_extension: ""
-            cross_compile: true
-            package_manager: "musl-tools gcc-aarch64-linux-gnu"
-
-          # 32-bit x86 Architectures
-          - platform: linux-gnu-i686
-            target: i686-unknown-linux-gnu
-            binary_extension: ""
-            cross_compile: true
-            package_manager: "gcc-multilib"
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      # Install system dependencies
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          if [ -n "${{ matrix.package_manager }}" ]; then
-            sudo apt-get install -y ${{ matrix.package_manager }}
-          fi
-
-      # Setup Rust toolchain with cross-compilation target
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
-          target: ${{ matrix.target }}
+          toolchain: ${{ matrix.rust-version }}
           override: true
+          target: ${{ matrix.target }}
 
-      # Use cross for more complex cross-compilation
-      - name: Build binary
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target ${{ matrix.target }}
-          use-cross: ${{ matrix.cross_compile }}
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
 
-      # Create distribution package
-      - name: Create package
+      - name: Build Release
+        run: cargo build --target ${{ matrix.target }} --release --verbose
+
+      - name: Prepare Artifact
         run: |
-          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          PKG_NAME="vprs3bkp-${VERSION}-${{ matrix.platform }}"
-          mkdir -p "$PKG_NAME"
+          mkdir -p artifacts
+          cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} artifacts/${{ matrix.artifact-name }}
 
-          # Copy binary with target-specific path
-          cp "target/${{ matrix.target }}/release/vprs3bkp${{ matrix.binary_extension }}" "$PKG_NAME/vprs3bkp"
-
-          # Copy additional files
-          cp README.md "$PKG_NAME/"
-
-          # Create compressed archive
-          tar czf "$PKG_NAME.tar.gz" "$PKG_NAME"
-
-          # Optional: Create .deb package for Debian/Ubuntu
-          if [ "${{ matrix.platform }}" != "*musl*" ]; then
-            mkdir -p "$PKG_NAME/DEBIAN"
-            cat << EOF > "$PKG_NAME/DEBIAN/control"
-          Package: vprs3bkp
-          Version: $VERSION
-          Section: utils
-          Priority: optional
-          Architecture: ${{ matrix.target == 'x86_64-unknown-linux-gnu' && 'amd64' || (matrix.target == 'aarch64-unknown-linux-gnu' && 'arm64' || 'i386') }}
-          Maintainer: VPR <info@vpr-group.ch>
-          Description: Database Backup CLI Tool
-           A command-line tool for backing up databases
-          EOF
-            dpkg-deb --build "$PKG_NAME"
-          fi
-
-      # Upload artifacts
-      - name: Upload tarball artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vprs3bkp-${{ matrix.platform }}
-          path: vprs3bkp-*.tar.gz
-
-      # Optional: Upload .deb package if created
-      - name: Upload .deb artifact
-        uses: actions/upload-artifact@v4
-        if: ${{ !contains(matrix.platform, 'musl') }}
-        with:
-          name: vprs3bkp-${{ matrix.platform }}-deb
-          path: vprs3bkp-*.deb
+          name: ${{ matrix.artifact-name }}
+          path: artifacts/${{ matrix.artifact-name }}
+          retention-days: 7
 
   release:
-    name: Create Release
     needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+
     steps:
-      - name: Download all artifacts
+      - uses: actions/checkout@v4
+
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
 
-      - name: List artifacts
-        run: find . -type f \( -name "*.tar.gz" -o -name "*.deb" \) | sort
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
           files: |
-            **/*.tar.gz
-            **/*.deb
-          draft: false
-          prerelease: false
+            artifacts/linux-x86_64
+            artifacts/linux-x86_64-nightly
+            artifacts/debian-x86_64
+            artifacts/debian-x86_64-nightly
+            artifacts/macos-silicon
+            artifacts/macos-silicon-nightly
           generate_release_notes: true
