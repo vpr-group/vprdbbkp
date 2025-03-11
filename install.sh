@@ -1,24 +1,25 @@
 #!/bin/bash
-# install.sh - Easy installer for db-backup-cli
-
+# install.sh - Easy installer for vprs3bkp
 set -e
 
 # Configuration
-VERSION="0.1.0"
-BINARY_NAME="db-backup-cli"
+VERSION="0.1.1"  # Update this with your latest version
+BINARY_NAME="vprs3bkp"
 INSTALL_DIR="/usr/local/bin"
-GITHUB_REPO="yourusername/db-backup-cli" # Replace with your actual repo
+GITHUB_REPO="vpr-group/vprs3bkp"  # Updated with your actual repo
 
 # Parse command line arguments
 INSTALL_FROM_SOURCE=false
 INSTALL_DEPENDENCIES=false
+USE_MUSL=false
 
 print_usage() {
   echo "Usage: $0 [OPTIONS]"
   echo "Options:"
-  echo "  --from-source       Install from source code (requires Rust toolchain)"
-  echo "  --with-deps         Install dependencies (pg_dump, mysqldump, gzip)"
-  echo "  --help              Display this help message and exit"
+  echo "  --from-source    Install from source code (requires Rust toolchain)"
+  echo "  --with-deps      Install dependencies (pg_dump, mysqldump, gzip)"
+  echo "  --musl           Use statically linked MUSL build (better compatibility)"
+  echo "  --help           Display this help message and exit"
 }
 
 for arg in "$@"; do
@@ -29,6 +30,10 @@ for arg in "$@"; do
       ;;
     --with-deps)
       INSTALL_DEPENDENCIES=true
+      shift
+      ;;
+    --musl)
+      USE_MUSL=true
       shift
       ;;
     --help)
@@ -55,17 +60,22 @@ fi
 # Install dependencies if requested
 if [ "$INSTALL_DEPENDENCIES" = true ]; then
   echo "Installing dependencies..."
-  
   case $OS in
-    ubuntu|debian)
-      apt-get update
-      apt-get install -y postgresql-client mysql-client gzip curl
+    ubuntu|debian|linuxmint)
+      echo "Updating package repositories (ignoring errors)..."
+      sudo apt-get update 2>/dev/null || true
+      echo "Installing required packages..."
+      sudo apt-get install -y --no-install-recommends postgresql-client mysql-client gzip curl
+      if [ $? -ne 0 ]; then
+        echo "Warning: Some packages may not have installed correctly."
+        echo "Continuing with installation anyway..."
+      fi
       ;;
     centos|rhel|fedora)
       if command -v dnf &> /dev/null; then
-        dnf install -y postgresql mysql gzip curl
+        sudo dnf install -y postgresql mysql gzip curl
       else
-        yum install -y postgresql mysql gzip curl
+        sudo yum install -y postgresql mysql gzip curl
       fi
       ;;
     *)
@@ -76,23 +86,22 @@ if [ "$INSTALL_DEPENDENCIES" = true ]; then
 fi
 
 # Create installation directory if it doesn't exist
-mkdir -p $INSTALL_DIR
+sudo mkdir -p $INSTALL_DIR
 
 # Install from source or binary
 if [ "$INSTALL_FROM_SOURCE" = true ]; then
   echo "Installing from source..."
-  
   # Check if Rust is installed
   if ! command -v cargo &> /dev/null; then
     echo "Rust is not installed. Please install Rust first:"
     echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     exit 1
   fi
-  
+
   # Create a temporary directory
   TMP_DIR=$(mktemp -d)
   cd $TMP_DIR
-  
+
   # Clone the repository or download and extract source tarball
   echo "Downloading source code..."
   if command -v git &> /dev/null; then
@@ -100,26 +109,31 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
   else
     curl -L "https://github.com/$GITHUB_REPO/archive/v$VERSION.tar.gz" | tar xz --strip-components=1
   fi
-  
+
   # Build the project
   echo "Building project..."
   cargo build --release
-  
+
   # Install the binary
-  cp target/release/$BINARY_NAME $INSTALL_DIR/
-  
+  sudo cp target/release/$BINARY_NAME $INSTALL_DIR/
+
   # Clean up
   cd - > /dev/null
   rm -rf $TMP_DIR
 else
   # Download pre-built binary based on architecture
   ARCH=$(uname -m)
+  
   case $ARCH in
     x86_64)
-      ARCH_NAME="x86_64"
+      if [ "$USE_MUSL" = true ]; then
+        ARTIFACT_NAME="linux-x86_64-musl"
+      else
+        ARTIFACT_NAME="linux-x86_64"
+      fi
       ;;
     aarch64|arm64)
-      ARCH_NAME="aarch64"
+      ARTIFACT_NAME="macos-silicon"
       ;;
     *)
       echo "Unsupported architecture: $ARCH"
@@ -128,14 +142,29 @@ else
       ;;
   esac
   
-  BINARY_URL="https://github.com/$GITHUB_REPO/releases/download/v$VERSION/$BINARY_NAME-$VERSION-$OS-$ARCH_NAME.tar.gz"
+  # New GitHub release asset URL format
+  BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/$BINARY_NAME-$ARTIFACT_NAME"
   
   echo "Downloading pre-built binary from $BINARY_URL..."
-  curl -L "$BINARY_URL" | tar xz -C $INSTALL_DIR
+  # Create a temporary directory
+  TMP_DIR=$(mktemp -d)
+  
+  # Download the binary to the temporary location
+  if curl -L "$BINARY_URL" -o "$TMP_DIR/$BINARY_NAME"; then
+    # Move to final location
+    sudo mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+    # Clean up
+    rm -rf "$TMP_DIR"
+  else
+    echo "Error: Failed to download from $BINARY_URL"
+    echo "Please check if the release exists and is publicly accessible."
+    rm -rf "$TMP_DIR"
+    exit 1
+  fi
 fi
 
 # Make binary executable
-chmod +x $INSTALL_DIR/$BINARY_NAME
+sudo chmod +x $INSTALL_DIR/$BINARY_NAME
 
 # Verify installation
 if [ -x "$INSTALL_DIR/$BINARY_NAME" ]; then
