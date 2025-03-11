@@ -1,6 +1,6 @@
 [package]
 name = "vprs3bkp"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["PTRRR <info@vpr-group.ch>"]
 description = "A CLI tool to backup databases to S3"
