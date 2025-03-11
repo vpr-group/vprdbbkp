@@ -315,22 +315,69 @@ async fn main() -> Result<()> {
                 backups.iter().collect()
             };
 
-            println!("\nAvailable backups:");
-            println!("{:-<80}", "");
-            println!(
-                "{:<40} | {:<15} | {:<10} | {:<15}",
-                "Key", "Database", "Type", "Date"
-            );
-            println!("{:-<80}", "");
+            // Find the maximum width needed for each column
+            let mut max_key_width = 4; // "Key".len()
+            let mut max_db_width = 8; // "Database".len()
+            let mut max_type_width = 4; // "Type".len()
+            let mut max_date_width = 4; // "Date".len()
 
-            for backup in backups_to_display.clone() {
+            // Calculate the required width for each column based on actual data
+            for backup in &backups_to_display {
+                max_key_width = max_key_width.max(backup.key.len());
+                max_db_width = max_db_width.max(backup.db_name.len());
+                max_type_width = max_type_width.max(backup.backup_type.len());
+                max_date_width = max_date_width.max(backup.timestamp.len());
+            }
+
+            // Cap maximum widths to keep table reasonable (optional)
+            max_key_width = max_key_width.min(60); // Cap key length at 60 chars
+            max_db_width = max_db_width.min(20); // Cap db name at 20 chars
+            max_type_width = max_type_width.min(15); // Cap type at 15 chars
+            max_date_width = max_date_width.min(20); // Cap date at 20 chars
+
+            // Calculate the total width of the table
+            let total_width = max_key_width + max_db_width + max_type_width + max_date_width + 9; // 9 for separators and padding
+
+            println!("\nAvailable backups:");
+            println!("{:-<width$}", "", width = total_width);
+            println!(
+                "{:<key_width$} | {:<db_width$} | {:<type_width$} | {:<date_width$}",
+                "Key",
+                "Database",
+                "Type",
+                "Date",
+                key_width = max_key_width,
+                db_width = max_db_width,
+                type_width = max_type_width,
+                date_width = max_date_width
+            );
+            println!("{:-<width$}", "", width = total_width);
+
+            for backup in &backups_to_display {
+                // Handle potential truncation for the key (if we capped max width)
+                let display_key = if backup.key.len() > max_key_width {
+                    // Show beginning and end with ellipsis in the middle
+                    let start = &backup.key[..max_key_width / 3];
+                    let end = &backup.key[backup.key.len() - max_key_width / 3..];
+                    format!("{}...{}", start, end)
+                } else {
+                    backup.key.clone()
+                };
+
                 println!(
-                    "{:<40} | {:<15} | {:<10} | {:<15}",
-                    backup.key, backup.db_name, backup.backup_type, backup.timestamp
+                    "{:<key_width$} | {:<db_width$} | {:<type_width$} | {:<date_width$}",
+                    display_key,
+                    backup.db_name,
+                    backup.backup_type,
+                    backup.timestamp,
+                    key_width = max_key_width,
+                    db_width = max_db_width,
+                    type_width = max_type_width,
+                    date_width = max_date_width
                 );
             }
 
-            println!("{:-<80}", "");
+            println!("{:-<width$}", "", width = total_width);
             println!("Total: {} backups", backups_to_display.len());
         }
     }
