@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "vprs3bkp-core"
 version = "0.1.0"
 edition = "2021"
 description = "Core functionality for S3 backup and restore"

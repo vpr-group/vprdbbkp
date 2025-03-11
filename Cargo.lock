@@ -121,6 +121,8 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "tauri-plugin-store",
+ "vprs3bkp-core",
 ]
 
 [[package]]
@@ -1027,11 +1029,11 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "clap",
- "core",
  "dotenv",
  "env_logger",
  "log",
  "tokio",
+ "vprs3bkp-core",
 ]
 
 [[package]]
@@ -1073,27 +1075,6 @@ checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
 dependencies = [
  "time",
  "version_check",
-]
-
-[[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-config",
- "aws-sdk-s3",
- "bytes",
- "chrono",
- "dotenv",
- "env_logger",
- "flate2",
- "globset",
- "log",
- "regex",
- "tempfile",
- "tokio",
- "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -4709,6 +4690,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-store"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c0c08fae6995909f5e9a0da6038273b750221319f2c0f3b526d6de1cde21505"
+dependencies = [
+ "dunce",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tauri-runtime"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5332,6 +5329,27 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vprs3bkp-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-s3",
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger",
+ "flate2",
+ "globset",
+ "log",
+ "regex",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "walkdir",
+]
 
 [[package]]
 name = "vsimd"

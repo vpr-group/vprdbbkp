@@ -2,11 +2,11 @@ use anyhow::Result;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::Client as S3Client;
 use clap::Parser;
-use core::{
+use log::{info, warn, LevelFilter};
+use vprs3bkp_core::{
     self, backup_folder, download_backup, format_timestamp, get_backup_key, get_latest_backup,
     get_latest_backups_by_db, list_backups, mysql, postgres, restore_postgres, upload_to_s3,
 };
-use log::{info, warn, LevelFilter};
 
 mod cli;
 use cli::{Cli, Commands};
