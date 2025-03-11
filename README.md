@@ -17,11 +17,21 @@ A robust, efficient CLI tool written in Rust to backup PostgreSQL and MySQL/Mari
 
 ## Installation
 
-### Quick Installation (Linux/macOS)
+### Quick Installation
+
+#### Linux
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | sudo bash
 ```
+
+#### macOS
+
+```bash
+curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | bash
+```
+
+Note: macOS users may need to remove `sudo` depending on their permission settings.
 
 ### Install with Dependencies
 

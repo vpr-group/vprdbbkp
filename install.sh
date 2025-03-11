@@ -49,13 +49,18 @@ for arg in "$@"; do
 done
 
 # Detect OS
-if [ -f /etc/os-release ]; then
+OS="unknown"
+if [ "$(uname)" == "Darwin" ]; then
+  OS="macos"
+elif [ -f /etc/os-release ]; then
   . /etc/os-release
   OS=$ID
 else
-  echo "Cannot detect operating system"
-  exit 1
+  echo "Warning: Cannot precisely detect operating system, assuming Linux"
+  OS="linux"
 fi
+
+echo "Detected OS: $OS"
 
 # Install dependencies if requested
 if [ "$INSTALL_DEPENDENCIES" = true ]; then
@@ -78,6 +83,17 @@ if [ "$INSTALL_DEPENDENCIES" = true ]; then
         sudo yum install -y postgresql mysql gzip curl
       fi
       ;;
+    macos)
+      if command -v brew &> /dev/null; then
+        echo "Installing dependencies with Homebrew..."
+        brew install postgresql mysql gzip curl
+      else
+        echo "Homebrew not found. Please install Homebrew first:"
+        echo "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        echo "Then install the dependencies with: brew install postgresql mysql"
+        echo "Continuing with installation anyway..."
+      fi
+      ;;
     *)
       echo "Unsupported OS for automatic dependency installation"
       echo "Please install postgresql-client, mysql-client and gzip manually"
@@ -85,8 +101,15 @@ if [ "$INSTALL_DEPENDENCIES" = true ]; then
   esac
 fi
 
+# Determine if we need sudo (usually not on macOS)
+SUDO_CMD="sudo"
+if [ "$OS" = "macos" ] && [ -w "$INSTALL_DIR" ]; then
+  # If user can write to the install directory on macOS, don't use sudo
+  SUDO_CMD=""
+fi
+
 # Create installation directory if it doesn't exist
-sudo mkdir -p $INSTALL_DIR
+$SUDO_CMD mkdir -p $INSTALL_DIR
 
 # Install from source or binary
 if [ "$INSTALL_FROM_SOURCE" = true ]; then
@@ -115,32 +138,41 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
   cargo build --release
 
   # Install the binary
-  sudo cp target/release/$BINARY_NAME $INSTALL_DIR/
+  $SUDO_CMD cp target/release/$BINARY_NAME $INSTALL_DIR/
 
   # Clean up
   cd - > /dev/null
   rm -rf $TMP_DIR
 else
-  # Download pre-built binary based on architecture
+  # Download pre-built binary based on architecture and OS
   ARCH=$(uname -m)
   
-  case $ARCH in
-    x86_64)
+  if [ "$OS" = "macos" ]; then
+    if [ "$ARCH" = "arm64" ]; then
+      ARTIFACT_NAME="macos-silicon"
+    else
+      ARTIFACT_NAME="macos-intel"
+    fi
+  else
+    # Linux
+    if [ "$ARCH" = "x86_64" ]; then
       if [ "$USE_MUSL" = true ]; then
         ARTIFACT_NAME="linux-x86_64-musl"
       else
         ARTIFACT_NAME="linux-x86_64"
       fi
-      ;;
-    aarch64|arm64)
-      ARTIFACT_NAME="macos-silicon"
-      ;;
-    *)
+    elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+      if [ "$USE_MUSL" = true ]; then
+        ARTIFACT_NAME="linux-aarch64-musl"
+      else
+        ARTIFACT_NAME="linux-aarch64"
+      fi
+    else
       echo "Unsupported architecture: $ARCH"
       echo "Please install from source with --from-source"
       exit 1
-      ;;
-  esac
+    fi
+  fi
   
   # New GitHub release asset URL format
   BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/$BINARY_NAME-$ARTIFACT_NAME"
@@ -152,7 +184,7 @@ else
   # Download the binary to the temporary location
   if curl -L "$BINARY_URL" -o "$TMP_DIR/$BINARY_NAME"; then
     # Move to final location
-    sudo mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+    $SUDO_CMD mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
     # Clean up
     rm -rf "$TMP_DIR"
   else
@@ -164,7 +196,7 @@ else
 fi
 
 # Make binary executable
-sudo chmod +x $INSTALL_DIR/$BINARY_NAME
+$SUDO_CMD chmod +x $INSTALL_DIR/$BINARY_NAME
 
 # Verify installation
 if [ -x "$INSTALL_DIR/$BINARY_NAME" ]; then
