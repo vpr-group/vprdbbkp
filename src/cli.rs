@@ -133,4 +133,97 @@ pub enum Commands {
         #[arg(long)]
         add_timestamp: bool,
     },
+
+    /// Restore a PostgreSQL database from S3 backup
+    RestorePostgres {
+        /// Database name to restore to (will be created if it doesn't exist)
+        #[arg(short, long)]
+        database: String,
+
+        /// Host name
+        #[arg(long, short = 'H', default_value = "localhost")]
+        host: String,
+
+        /// Port number
+        #[arg(short, long, default_value = "5432")]
+        port: u16,
+
+        /// Username
+        #[arg(short, long)]
+        username: String,
+
+        /// Password (prefer using PGPASSWORD env var)
+        #[arg(long, env = "PGPASSWORD")]
+        password: Option<String>,
+
+        /// S3 key of the backup to restore (full path after bucket)
+        #[arg(short, long)]
+        key: Option<String>,
+
+        /// Latest backup for the specified database (overrides --key)
+        #[arg(long)]
+        latest: bool,
+
+        /// Force using Docker even if local pg_restore is compatible
+        #[arg(long)]
+        force_docker: bool,
+
+        /// Drop the database before restoring (USE WITH CAUTION)
+        #[arg(long)]
+        drop_db: bool,
+    },
+
+    /// Restore a MySQL/MariaDB database from S3 backup
+    RestoreMysql {
+        /// Database name to restore to (will be created if it doesn't exist)
+        #[arg(short, long)]
+        database: String,
+
+        /// Host name
+        #[arg(short, long, default_value = "localhost")]
+        host: String,
+
+        /// Port number
+        #[arg(short, long, default_value = "3306")]
+        port: u16,
+
+        /// Username
+        #[arg(short, long)]
+        username: String,
+
+        /// Password (prefer using MYSQL_PWD env var)
+        #[arg(long, env = "MYSQL_PWD")]
+        password: Option<String>,
+
+        /// S3 key of the backup to restore (full path after bucket)
+        #[arg(short, long)]
+        key: Option<String>,
+
+        /// Latest backup for the specified database (overrides --key)
+        #[arg(long)]
+        latest: bool,
+
+        /// Drop the database before restoring (USE WITH CAUTION)
+        #[arg(long)]
+        drop_db: bool,
+    },
+
+    /// List available backups in S3 bucket
+    List {
+        /// Type of backups to list (postgres, mysql, folder)
+        #[arg(short, long)]
+        backup_type: Option<String>,
+
+        /// Filter by database name
+        #[arg(short, long)]
+        database: Option<String>,
+
+        /// Show only the latest backup per database
+        #[arg(long)]
+        latest_only: bool,
+
+        /// Number of backups to show (most recent first)
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
 }

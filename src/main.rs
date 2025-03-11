@@ -13,8 +13,10 @@ mod s3;
 mod utils;
 
 use cli::{Cli, Commands};
-use databases::postgres;
-use s3::upload_to_s3;
+use databases::postgres::{self, pg_restore::restore_postgres};
+use s3::{
+    download_backup, get_latest_backup, get_latest_backups_by_db, list_backups, upload_to_s3,
+};
 use utils::get_backup_key;
 
 #[tokio::main]
@@ -171,6 +173,165 @@ async fn main() -> Result<()> {
             info!("  Files skipped: {}", stats.files_skipped);
             info!("  Files failed: {}", stats.files_failed);
             info!("  Total bytes transferred: {}", stats.total_bytes);
+        }
+        Commands::RestorePostgres {
+            database,
+            host,
+            port,
+            username,
+            password,
+            key,
+            latest,
+            force_docker,
+            drop_db,
+        } => {
+            // Determine which backup to restore
+            let backup_key = if latest {
+                info!(
+                    "Looking for latest PostgreSQL backup for database: {}",
+                    database
+                );
+
+                let latest_backup =
+                    get_latest_backup(&s3_client, &cli.bucket, &cli.prefix, "postgres", &database)
+                        .await?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("No backups found for database {}", database)
+                        })?;
+
+                info!(
+                    "Found latest backup from {}: {}",
+                    latest_backup.last_modified, latest_backup.key
+                );
+
+                latest_backup.key
+            } else if let Some(s3_key) = key {
+                info!("Using specified backup key: {}", s3_key);
+                s3_key
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Either --key or --latest must be specified"
+                ));
+            };
+
+            // Download the backup
+            let backup_data = download_backup(&s3_client, &cli.bucket, &backup_key).await?;
+
+            // Restore the database
+            restore_postgres(
+                &database,
+                &host,
+                port,
+                &username,
+                password.as_deref(),
+                backup_data,
+                force_docker,
+                drop_db,
+            )
+            .await?;
+
+            info!("PostgreSQL database restore completed successfully");
+        }
+        Commands::RestoreMysql {
+            database,
+            host,
+            port,
+            username,
+            password,
+            key,
+            latest,
+            drop_db,
+        } => {
+            // Determine which backup to restore
+            // let backup_key = if latest {
+            //     info!("Looking for latest MySQL backup for database: {}", database);
+
+            //     let latest_backup =
+            //         get_latest_backup(&s3_client, &cli.bucket, &cli.prefix, "mysql", &database)
+            //             .await?
+            //             .ok_or_else(|| {
+            //                 anyhow::anyhow!("No backups found for database {}", database)
+            //             })?;
+
+            //     info!(
+            //         "Found latest backup from {}: {}",
+            //         latest_backup.last_modified, latest_backup.key
+            //     );
+
+            //     latest_backup.key
+            // } else if let Some(s3_key) = key {
+            //     info!("Using specified backup key: {}", s3_key);
+            //     s3_key
+            // } else {
+            //     return Err(anyhow::anyhow!(
+            //         "Either --key or --latest must be specified"
+            //     ));
+            // };
+
+            // // Download the backup
+            // let backup_data = download_backup(&s3_client, &cli.bucket, &backup_key).await?;
+
+            // // Restore the database
+            // restore_mysql(
+            //     &database,
+            //     &host,
+            //     port,
+            //     &username,
+            //     password.as_deref(),
+            //     backup_data,
+            //     drop_db,
+            // )
+            // .await?;
+
+            // info!("MySQL database restore completed successfully");
+        }
+        Commands::List {
+            backup_type,
+            database,
+            latest_only,
+            limit,
+        } => {
+            info!("Listing backups in bucket: {}/{}", cli.bucket, cli.prefix);
+
+            let backups = list_backups(
+                &s3_client,
+                &cli.bucket,
+                &cli.prefix,
+                backup_type.as_deref(),
+                database.as_deref(),
+                limit,
+            )
+            .await?;
+
+            if backups.is_empty() {
+                info!("No backups found matching the criteria");
+                return Ok(());
+            }
+
+            let backups_to_display = if latest_only {
+                info!("Showing only the latest backup per database");
+                get_latest_backups_by_db(&backups)
+            } else {
+                backups.iter().collect()
+            };
+
+            println!("\nAvailable backups:");
+            println!("{:-<80}", "");
+            println!(
+                "{:<40} | {:<15} | {:<10} | {:<15}",
+                "Key", "Database", "Type", "Date"
+            );
+            println!("{:-<80}", "");
+
+            for backup in backups_to_display.clone() {
+                println!(
+                    "{:<40} | {:<15} | {:<10} | {:<15}",
+                    backup.key, backup.db_name, backup.backup_type, backup.timestamp
+                );
+            }
+
+            println!("{:-<80}", "");
+            println!("Total: {} backups", backups_to_display.len());
         }
     }
 

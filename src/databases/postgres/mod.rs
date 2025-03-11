@@ -4,6 +4,7 @@ use log::{debug, error, info, warn};
 use std::process::{Command, Stdio};
 
 pub mod pg_docker;
+pub mod pg_restore;
 
 /// Get the local pg_dump version
 fn get_local_pg_dump_version() -> Result<(u32, u32)> {

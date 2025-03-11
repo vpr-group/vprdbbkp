@@ -7,6 +7,8 @@ A robust, efficient CLI tool written in Rust to backup PostgreSQL and MySQL/Mari
 - Backup PostgreSQL databases to S3 with automatic version detection
 - Backup MySQL/MariaDB databases to S3
 - Backup local folders with parallel uploads to S3
+- Restore PostgreSQL and MySQL databases from S3 backups
+- List and manage existing backups in S3
 - File filtering by pattern, size, and type
 - Support for custom S3-compatible storage providers
 - Automatic PostgreSQL version detection and compatibility handling
@@ -167,6 +169,125 @@ vprs3bkp \
 - `--exclude`: Exclude files matching these patterns (glob syntax, can be specified multiple times)
 - `--skip-larger-than`: Skip files larger than this size in MB
 - `--add-timestamp`: Add timestamp to the S3 prefix for better organization
+
+### List Available Backups
+
+Basic usage:
+
+```bash
+vprs3bkp --bucket my-backup-bucket list
+```
+
+With filtering:
+
+```bash
+vprs3bkp --bucket my-backup-bucket list --backup-type postgres --database mydb --latest-only --limit 5
+```
+
+#### List Options
+
+- `--backup-type`: Filter by backup type (postgres, mysql, folder)
+- `--database`: Filter by database name
+- `--latest-only`: Show only the latest backup per database
+- `--limit`: Number of backups to show (default: 10)
+
+### Restore PostgreSQL Database
+
+Restore the latest backup:
+
+```bash
+vprs3bkp --bucket my-backup-bucket restore-postgres --database mydb --username dbuser --latest
+```
+
+Restore from a specific backup:
+
+```bash
+vprs3bkp \
+  --bucket my-backup-bucket \
+  --region us-west-2 \
+  restore-postgres \
+  --database mydb \
+  --host db.example.com \
+  --port 5432 \
+  --username dbuser \
+  --key vprs3bkp/postgres/mydb-2023-04-15-120135-a1b2c3d4.gz
+```
+
+With all options:
+
+```bash
+vprs3bkp \
+  --bucket my-backup-bucket \
+  --region us-west-2 \
+  --prefix vprs3bkp \
+  --verbose \
+  restore-postgres \
+  --database mydb \
+  --host db.example.com \
+  --port 5432 \
+  --username dbuser \
+  --key vprs3bkp/postgres/mydb-2023-04-15-120135-a1b2c3d4.gz \
+  --force-docker \
+  --drop-db
+```
+
+#### PostgreSQL Restore Options
+
+- `--database`: Database name to restore to (will be created if it doesn't exist)
+- `--host`: Hostname (default: localhost)
+- `--port`: Port number (default: 5432)
+- `--username`: Database username
+- `--password`: Database password (prefer using PGPASSWORD env var)
+- `--key`: S3 key of the backup to restore
+- `--latest`: Use the latest backup for this database (overrides --key)
+- `--force-docker`: Force using Docker even if local pg_restore is compatible
+- `--drop-db`: Drop the database before restoring (USE WITH CAUTION)
+
+### Restore MySQL Database
+
+Restore the latest backup:
+
+```bash
+vprs3bkp --bucket my-backup-bucket restore-mysql --database mydb --username dbuser --latest
+```
+
+Restore from a specific backup:
+
+```bash
+vprs3bkp \
+  --bucket my-backup-bucket \
+  restore-mysql \
+  --database mydb \
+  --username dbuser \
+  --key vprs3bkp/mysql/mydb-2023-04-15-120135-a1b2c3d4.gz
+```
+
+With all options:
+
+```bash
+vprs3bkp \
+  --bucket my-backup-bucket \
+  --region us-west-2 \
+  --verbose \
+  restore-mysql \
+  --database mydb \
+  --host db.example.com \
+  --port 3306 \
+  --username dbuser \
+  --key vprs3bkp/mysql/mydb-2023-04-15-120135-a1b2c3d4.gz \
+  --drop-db
+```
+
+#### MySQL Restore Options
+
+- `--database`: Database name to restore to (will be created if it doesn't exist)
+- `--host`: Hostname (default: localhost)
+- `--port`: Port number (default: 3306)
+- `--username`: Database username
+- `--password`: Database password (prefer using MYSQL_PWD env var)
+- `--key`: S3 key of the backup to restore
+- `--latest`: Use the latest backup for this database (overrides --key)
+- `--drop-db`: Drop the database before restoring (USE WITH CAUTION)
 
 ## Environment Variables
 
