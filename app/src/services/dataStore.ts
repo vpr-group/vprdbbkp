@@ -10,10 +10,12 @@ export interface S3StorageConfig {
   secretKey: string;
 }
 
+export type StorageConfig = S3StorageConfig;
+
 export interface Project {
   id: string;
   name: string;
-  config: S3StorageConfig;
+  config: StorageConfig;
 }
 
 export interface PostgresConfig {

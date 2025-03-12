@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ProjectDialog from "../components/ProjectDialog.svelte";
   import { StoreService, type Project } from "../services/dataStore";
   import { onMount } from "svelte";
 
@@ -7,12 +8,16 @@
   let isLoading = $state(true);
   let projects = $state<Project[]>([]);
 
-  onMount(async () => {
+  const loadProjects = async () => {
     await storeService.waitForInitialized();
     storeService.getProjects().then((res) => {
       projects = res;
       isLoading = false;
     });
+  };
+
+  onMount(() => {
+    loadProjects();
   });
 </script>
 
@@ -20,7 +25,24 @@
   {#if isLoading}
     <span>Is Loding</span>
   {:else if projects.length === 0}
-    <button>Create new project</button>
+    <ProjectDialog
+      oncreate={(project) => {
+        console.log(project);
+        storeService.saveProject(project);
+        loadProjects();
+      }}
+    />
+  {:else}
+    <ProjectDialog
+      oncreate={async (project) => {
+        console.log(project);
+        await storeService.saveProject(project);
+        loadProjects();
+      }}
+    />
+    {#each projects as project}
+      <span>{project.name}</span>
+    {/each}
   {/if}
 </main>
 
