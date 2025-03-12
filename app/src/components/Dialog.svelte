@@ -7,11 +7,10 @@
   interface Props {
     label?: string;
     children?: Snippet;
-    trigger?: Snippet;
     icon?: IconName;
   }
 
-  const { label, children, trigger, icon }: Props = $props();
+  const { label, children, icon }: Props = $props();
 </script>
 
 {#snippet defaultTriggerChild()}
@@ -19,7 +18,11 @@
 {/snippet}
 
 <Dialog.Root>
-  <Dialog.Trigger child={trigger || defaultTriggerChild}></Dialog.Trigger>
+  <Dialog.Trigger>
+    {#snippet child({ props })}
+      <Button {...props} {icon}>{label}</Button>
+    {/snippet}
+  </Dialog.Trigger>
   <Dialog.Overlay>
     <div class="dialog__overlay"></div>
   </Dialog.Overlay>
