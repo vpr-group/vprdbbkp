@@ -30,9 +30,7 @@
   });
 </script>
 
-<Dialog
-  label={storageProvider ? "Edit Storage Provider" : "Create Storage Provider"}
->
+<Dialog label={storageProvider ? "Edit" : "Create"}>
   <div class="project__form">
     <Input
       type="text"

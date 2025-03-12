@@ -1,5 +1,9 @@
 <script lang="ts">
+  import BackupSourceCard from "../components/BackupSourceCard.svelte";
   import BackupSourceDialog from "../components/BackupSourceDialog.svelte";
+  import Grid from "../components/Grid.svelte";
+  import Separation from "../components/Separation.svelte";
+  import StorageProviderCard from "../components/StorageProviderCard.svelte";
   import StorageProviderDialog from "../components/StorageProviderDialog.svelte";
   import {
     StoreService,
@@ -35,34 +39,40 @@
   });
 </script>
 
-<main class="container">
-  {#if isLoading}
-    <span>Is Loading</span>
-  {:else}
+{#if isLoading}
+  <span>Is Loading</span>
+{:else}
+  {#snippet storageProviderActions()}
     <StorageProviderDialog
       onsubmit={async (storageProvider) => {
         await storeService.saveStorageProvider(storageProvider);
         loadProjects();
       }}
     />
+  {/snippet}
 
+  <Separation label="Storage Providers" sideSection={storageProviderActions} />
+
+  <Grid>
+    {#each storageProviders as storageProvider}
+      <StorageProviderCard {storageProvider} />
+    {/each}
+  </Grid>
+
+  {#snippet backupSourcesActions()}
     <BackupSourceDialog
       onsubmit={async (backupSource) => {
         await storeService.saveBackupSource(backupSource);
         loadBackupSources();
       }}
     />
+  {/snippet}
 
-    {#each storageProviders as storageProvider}
-      <a href={`/storage-providers/${storageProvider.id}`}>
-        {storageProvider.name}
-      </a>
-    {/each}
+  <Separation label="Backup Sources" sideSection={backupSourcesActions} />
 
+  <Grid>
     {#each backupSources as backupSource}
-      <a href={`/backup-sources/${backupSource.id}`}>
-        {backupSource.name}
-      </a>
+      <BackupSourceCard {backupSource} />
     {/each}
-  {/if}
-</main>
+  </Grid>
+{/if}

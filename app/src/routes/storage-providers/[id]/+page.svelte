@@ -7,6 +7,9 @@
     ActionsService,
     type BackupListItem,
   } from "../../../services/actions";
+  import Table from "../../../components/Table.svelte";
+  import Separation from "../../../components/Separation.svelte";
+  import Button from "../../../components/Button.svelte";
 
   const storeService = new StoreService();
   const actionsService = new ActionsService();
@@ -33,22 +36,38 @@
   });
 </script>
 
+{#snippet sideSection()}
+  {#if storageProvider}
+    <StorageProviderDialog
+      {storageProvider}
+      onsubmit={async (storageProvider) => {
+        await storeService.saveStorageProvider(storageProvider);
+        loadStorageProvider();
+      }}
+    />
+    <Button onclick={() => loadBackups()}>Refresh</Button>
+  {/if}
+{/snippet}
+
 {#if storageProvider}
-  <div>
-    <h1>{storageProvider.name}</h1>
-    <span>{storageProvider.type} - {storageProvider.bucket}</span>
-  </div>
-
-  <StorageProviderDialog
-    {storageProvider}
-    onsubmit={async (storageProvider) => {
-      await storeService.saveStorageProvider(storageProvider);
-      loadStorageProvider();
-    }}
+  <Separation
+    label={storageProvider.name}
+    subLabel={`${storageProvider.type} - ${storageProvider.bucket}`}
+    {sideSection}
   />
-  <button onclick={() => loadBackups()}>Refresh backups</button>
 
-  {#each backups as backup}
-    <span>{backup.key}</span>
-  {/each}
+  <Table
+    headers={[
+      { label: "key", width: "40%" },
+      { label: "type", width: "10%" },
+      { label: "Timestamp" },
+    ]}
+    rows={backups.map((row) => ({
+      cells: [
+        { label: row.key },
+        { label: row.backupType },
+        { label: row.timestamp },
+      ],
+    }))}
+  />
 {/if}

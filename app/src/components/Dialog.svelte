@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Dialog } from "bits-ui";
   import type { Snippet } from "svelte";
+  import Button from "./Button.svelte";
 
   interface Props {
     label?: string;
@@ -11,8 +12,12 @@
   const { label, children, trigger }: Props = $props();
 </script>
 
+{#snippet defaultTriggerChild()}
+  <Button>{label || "Dialog"}</Button>
+{/snippet}
+
 <Dialog.Root>
-  <Dialog.Trigger child={trigger}>{label || "Dialog"}</Dialog.Trigger>
+  <Dialog.Trigger child={trigger || defaultTriggerChild}></Dialog.Trigger>
   <Dialog.Overlay>
     <div class="dialog__overlay"></div>
   </Dialog.Overlay>
@@ -29,23 +34,25 @@
   .dialog {
     &__overlay {
       position: fixed;
+      z-index: 20;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgb(224, 217, 209);
-      opacity: 0.8;
+      background-color: var(--color-light);
+      opacity: 0.95;
     }
 
     &__content {
       position: fixed;
+      z-index: 30;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background-color: rgb(245, 243, 240);
+      background-color: white;
       padding: 1rem;
       border-radius: 0.5rem;
-      border: solid 1px rgb(216, 210, 203);
+      box-shadow: var(--shadow);
     }
   }
 </style>
