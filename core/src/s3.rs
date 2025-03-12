@@ -3,8 +3,10 @@ use aws_sdk_s3::{primitives::ByteStream, Client as S3Client};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use log::{debug, info};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackupInfo {
     pub key: String,
     pub size: i64,
