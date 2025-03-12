@@ -1,18 +1,28 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import type { IconName } from "./Icon.svelte";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     children?: Snippet;
     href?: string;
     onclick?: () => void;
+    preIcon?: IconName;
+    icon?: IconName;
   }
 
-  const { children, href, onclick }: Props = $props();
+  const { children, href, onclick, icon, preIcon }: Props = $props();
 </script>
 
 {#snippet innerButton()}
   {#if children}
+    {#if preIcon}
+      <Icon icon={preIcon} />
+    {/if}
     {@render children()}
+    {#if icon}
+      <Icon {icon} />
+    {/if}
   {/if}
 {/snippet}
 
@@ -27,11 +37,14 @@
     background-color: black;
     color: white;
     border: none;
-    padding: 0.2rem 0.7rem;
+    padding: 0.3rem 0.7rem;
     text-decoration: none;
     box-shadow: var(--shadow);
-    border-radius: 0.1rem;
+    border-radius: 0.2rem;
     cursor: pointer;
     font-family: var(--mono-font-family);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
   }
 </style>

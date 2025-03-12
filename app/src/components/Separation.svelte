@@ -51,6 +51,11 @@
       color: var(--color-grey);
     }
 
+    &__side-section {
+      display: flex;
+      gap: 0.5rem;
+    }
+
     h4 {
       font-size: 1.5rem;
       font-weight: 600;

@@ -31,7 +31,10 @@
   });
 </script>
 
-<Dialog label={backupSource ? "Edit" : "Create"}>
+<Dialog
+  label={backupSource ? "Edit" : "Create"}
+  icon={backupSource ? "pencil" : "plus"}
+>
   <div class="project__form">
     <Input
       type="text"

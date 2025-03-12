@@ -13,7 +13,7 @@
 
 <div class="layout">
   {#if page.url.pathname !== "/"}
-    <Button href="/">Back</Button>
+    <Button href="/" preIcon="arrow-left">Back</Button>
   {/if}
 
   <PageContent>

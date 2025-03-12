@@ -45,7 +45,7 @@
         loadStorageProvider();
       }}
     />
-    <Button onclick={() => loadBackups()}>Refresh</Button>
+    <Button onclick={() => loadBackups()} icon="reload">Refresh</Button>
   {/if}
 {/snippet}
 

@@ -2,18 +2,20 @@
   import { Dialog } from "bits-ui";
   import type { Snippet } from "svelte";
   import Button from "./Button.svelte";
+  import type { IconName } from "./Icon.svelte";
 
   interface Props {
     label?: string;
     children?: Snippet;
     trigger?: Snippet;
+    icon?: IconName;
   }
 
-  const { label, children, trigger }: Props = $props();
+  const { label, children, trigger, icon }: Props = $props();
 </script>
 
 {#snippet defaultTriggerChild()}
-  <Button>{label || "Dialog"}</Button>
+  <Button {icon}>{label || "Dialog"}</Button>
 {/snippet}
 
 <Dialog.Root>

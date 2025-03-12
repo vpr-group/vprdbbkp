@@ -30,7 +30,10 @@
   });
 </script>
 
-<Dialog label={storageProvider ? "Edit" : "Create"}>
+<Dialog
+  label={storageProvider ? "Edit" : "Create"}
+  icon={storageProvider ? "pencil" : "plus"}
+>
   <div class="project__form">
     <Input
       type="text"
