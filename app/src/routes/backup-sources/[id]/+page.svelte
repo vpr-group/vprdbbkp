@@ -8,10 +8,14 @@
   import Table from "../../../components/Table.svelte";
   import { goto } from "$app/navigation";
   import type { CSSProperties } from "../../../utils/css";
+  import { ActionsService } from "../../../services/actions";
+  import StatusDot from "../../../components/StatusDot.svelte";
 
+  const actionService = new ActionsService();
   const storeService = new StoreService();
 
   let backupSource = $state<BackupSource | null>(null);
+  let connected = $state(false);
 
   const loadBackupSource = async () => {
     await storeService.waitForInitialized();
@@ -22,8 +26,15 @@
     color: "var(--color-grey)",
   };
 
-  onMount(() => {
+  onMount(async () => {
     loadBackupSource();
+  });
+
+  $effect(() => {
+    if (!backupSource) return;
+    actionService.verifyBackupSourceConnection(backupSource).then((res) => {
+      connected = res.connected;
+    });
   });
 </script>
 
@@ -47,12 +58,17 @@
   {/if}
 {/snippet}
 
+{#snippet label()}
+  {#if backupSource}
+    <div class="backup-source__label">
+      <StatusDot status={connected ? "success" : undefined} />
+      {backupSource.name}
+    </div>
+  {/if}
+{/snippet}
+
 {#if backupSource}
-  <Separation
-    label={backupSource.name}
-    subLabel={backupSource.type}
-    {sideSection}
-  />
+  <Separation {label} subLabel={backupSource.type} {sideSection} />
 
   <Table
     rows={[
@@ -101,3 +117,13 @@
     ]}
   />
 {/if}
+
+<style lang="scss">
+  .backup-source {
+    &__label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+  }
+</style>

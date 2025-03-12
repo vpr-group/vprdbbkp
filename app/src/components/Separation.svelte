@@ -3,7 +3,7 @@
 
   interface Props {
     preLabel?: string;
-    label?: string;
+    label?: string | Snippet;
     subLabel?: string;
     sideSection?: Snippet;
   }
@@ -18,7 +18,15 @@
 
   {#if label}
     <div class="separation__label">
-      <h4>{label}</h4>
+      <h4>
+        {#if label}
+          {#if typeof label === "string"}
+            {label}
+          {:else}
+            {@render label()}
+          {/if}
+        {/if}
+      </h4>
 
       {#if sideSection}
         <div class="separation__side-section">

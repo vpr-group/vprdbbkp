@@ -5,7 +5,7 @@
     children?: Snippet;
     href?: string;
     preTitle?: string;
-    title?: string;
+    title?: string | Snippet;
     subTitle?: string;
   }
 
@@ -18,7 +18,15 @@
   {/if}
 
   {#if title}
-    <h4 class="card__title">{title}</h4>
+    <h4 class="card__title">
+      {#if title}
+        {#if typeof title === "string"}
+          {title}
+        {:else}
+          {@render title()}
+        {/if}
+      {/if}
+    </h4>
   {/if}
 
   {#if subTitle}

@@ -2,7 +2,7 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::Client as S3Client;
 use log::info;
 use serde::{Deserialize, Serialize};
-use vprs3bkp_core::BackupInfo;
+use vprs3bkp_core::{postgres::is_postgres_connected_default_timeout, BackupInfo};
 
 // Define types that match your TypeScript interfaces
 #[derive(Debug, Deserialize)]
@@ -23,6 +23,24 @@ pub struct BackupListItem {
     size: u64,
     timestamp: String,
     status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostgresBackupSource {
+    #[serde(rename = "type")]
+    backup_source_type: String,
+    database_type: String,
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    database: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BackupConnectionResult {
+    connected: bool,
 }
 
 #[tauri::command]
@@ -95,6 +113,23 @@ pub async fn list_backups(storage_provider: S3StorageProvider) -> Result<Vec<Bac
     .map_err(|e| format!("Failed to list objects: {}", e))?;
 
     Ok(backups)
+}
+
+#[tauri::command]
+pub async fn verify_backup_source_connection(
+    backup_source: PostgresBackupSource,
+) -> Result<BackupConnectionResult, String> {
+    let connected = is_postgres_connected_default_timeout(
+        &backup_source.host,
+        backup_source.port,
+        &backup_source.database,
+        &backup_source.username,
+        Some(&backup_source.password),
+    )
+    .await
+    .map_err(|e| format!("Failed to check backup source connection: {}", e))?;
+
+    Ok(BackupConnectionResult { connected })
 }
 
 #[tauri::command]
