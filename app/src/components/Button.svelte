@@ -43,6 +43,7 @@
     border-radius: 0.2rem;
     cursor: pointer;
     font-family: var(--mono-font-family);
+    font-size: inherit;
     display: flex;
     align-items: center;
     gap: 0.3rem;
