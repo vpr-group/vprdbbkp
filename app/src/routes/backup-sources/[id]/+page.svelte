@@ -89,7 +89,13 @@
       {
         cells: [
           { label: "password", width: "10rem", style: cellLabelStyle },
-          { label: backupSource.password || "-" },
+          {
+            label:
+              (backupSource.password || "")
+                .split("")
+                .map((it) => "•")
+                .join("") || "-",
+          },
         ],
       },
     ]}
