@@ -19,6 +19,7 @@ export interface Project {
 }
 
 export interface PostgresConfig {
+  type: "postgres";
   database: string;
   host: string;
   port: number;
@@ -26,11 +27,13 @@ export interface PostgresConfig {
   password: string;
 }
 
+export type WorkspaceConfig = PostgresConfig;
+
 export interface Workspace {
   id: string;
   name: string;
   projectId: string;
-  config: PostgresConfig;
+  config: WorkspaceConfig;
 }
 
 export class StoreService {

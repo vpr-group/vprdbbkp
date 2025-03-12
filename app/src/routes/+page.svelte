@@ -41,7 +41,7 @@
       }}
     />
     {#each projects as project}
-      <span>{project.name}</span>
+      <a href={`/projects/${project.id}`}>{project.name}</a>
     {/each}
   {/if}
 </main>

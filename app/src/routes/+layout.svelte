@@ -8,6 +8,7 @@
   const { children }: Props = $props();
 </script>
 
+<a href="/">Home</a>
 {@render children()}
 
 <style lang="scss">

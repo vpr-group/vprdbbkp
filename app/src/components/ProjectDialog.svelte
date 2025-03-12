@@ -10,11 +10,12 @@
   import Input from "./Input.svelte";
 
   interface Props {
+    project?: Project;
     onchange?: (project: Project) => void;
     oncreate?: (project: Project) => void;
   }
 
-  const { onchange, oncreate }: Props = $props();
+  const { project, onchange, oncreate }: Props = $props();
 
   const defaultS3Config: S3StorageConfig = {
     type: "S3",
@@ -29,26 +30,28 @@
     s3: defaultS3Config,
   };
 
-  let project = $state<Project>({
-    id: createId(),
-    name: "",
-    config: { ...defaultConfigs.s3 },
-  });
+  let currentProject = $state<Project>(
+    project || {
+      id: createId(),
+      name: "",
+      config: { ...defaultConfigs.s3 },
+    }
+  );
 
   const updateConfig = (
     newConfig: RequiredBy<Partial<StorageConfig>, "type">
   ) => {
-    project = {
-      ...project,
+    currentProject = {
+      ...currentProject,
       config: {
-        ...project.config,
+        ...currentProject.config,
         ...newConfig,
       },
     };
   };
 
   $effect(() => {
-    onchange?.(project);
+    onchange?.(currentProject);
   });
 </script>
 
@@ -57,20 +60,20 @@
     <Input
       type="text"
       name="Name"
-      value={project.name}
+      value={currentProject.name}
       oninput={(e) => {
-        project = {
-          ...project,
+        currentProject = {
+          ...currentProject,
           name: e.currentTarget.value,
         };
       }}
     />
 
-    {#if project.config.type === "S3"}
+    {#if currentProject.config.type === "S3"}
       <Input
         type="text"
         name="Endpoint"
-        value={project.config.endpoint}
+        value={currentProject.config.endpoint}
         oninput={(e) => {
           const endpoint = e.currentTarget.value;
           updateConfig({ type: "S3", endpoint });
@@ -79,7 +82,7 @@
       <Input
         type="text"
         name="Region"
-        value={project.config.region}
+        value={currentProject.config.region}
         oninput={(e) => {
           const region = e.currentTarget.value;
           updateConfig({ type: "S3", region });
@@ -88,7 +91,7 @@
       <Input
         type="text"
         name="Bucket"
-        value={project.config.bucket}
+        value={currentProject.config.bucket}
         oninput={(e) => {
           const bucket = e.currentTarget.value;
           updateConfig({ type: "S3", bucket });
@@ -97,7 +100,7 @@
       <Input
         type="text"
         name="Access Key"
-        value={project.config.accessKey}
+        value={currentProject.config.accessKey}
         oninput={(e) => {
           const accessKey = e.currentTarget.value;
           updateConfig({ type: "S3", accessKey });
@@ -106,7 +109,7 @@
       <Input
         type="text"
         name="Secret Key"
-        value={project.config.secretKey}
+        value={currentProject.config.secretKey}
         oninput={(e) => {
           const secretKey = e.currentTarget.value;
           updateConfig({ type: "S3", secretKey });
@@ -114,7 +117,7 @@
       />
     {/if}
 
-    <button onclick={() => oncreate?.(project)}>Create</button>
+    <button onclick={() => oncreate?.(currentProject)}>Create</button>
   </div>
 </Dialog>
 
