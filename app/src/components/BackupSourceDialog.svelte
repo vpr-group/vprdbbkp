@@ -61,6 +61,54 @@
             };
           }}
         />
+
+        <Input
+          name="Host"
+          value={currentBackupSource.host}
+          oninput={(e) => {
+            const host = e.currentTarget.value;
+            currentBackupSource = {
+              ...currentBackupSource,
+              host,
+            };
+          }}
+        />
+
+        <Input
+          name="Port"
+          value={currentBackupSource.port.toString()}
+          oninput={(e) => {
+            const port = parseInt(e.currentTarget.value);
+            currentBackupSource = {
+              ...currentBackupSource,
+              port,
+            };
+          }}
+        />
+
+        <Input
+          name="Username"
+          value={currentBackupSource.username}
+          oninput={(e) => {
+            const username = e.currentTarget.value;
+            currentBackupSource = {
+              ...currentBackupSource,
+              username,
+            };
+          }}
+        />
+
+        <Input
+          name="Password"
+          value={currentBackupSource.password}
+          oninput={(e) => {
+            const password = e.currentTarget.value;
+            currentBackupSource = {
+              ...currentBackupSource,
+              password,
+            };
+          }}
+        />
       {/if}
     {/if}
 

@@ -15,14 +15,14 @@
 </script>
 
 {#snippet innerButton()}
+  {#if preIcon}
+    <Icon icon={preIcon} />
+  {/if}
   {#if children}
-    {#if preIcon}
-      <Icon icon={preIcon} />
-    {/if}
     {@render children()}
-    {#if icon}
-      <Icon {icon} />
-    {/if}
+  {/if}
+  {#if icon}
+    <Icon {icon} />
   {/if}
 {/snippet}
 

@@ -4,6 +4,7 @@
     renderHandler?: Snippet<[cell: Cell, row?: Row]>;
     width?: string;
     multiline?: boolean;
+    style?: CSSProperties;
   }
 
   export type HeaderCell = Cell & { sortable?: boolean };
@@ -18,7 +19,7 @@
 
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { getCss } from "../utils/css";
+  import { getCss, type CSSProperties } from "../utils/css";
 
   interface Props {
     headers?: HeaderCell[];
@@ -63,6 +64,7 @@
     <div
       class="table__cell"
       style={getCss({
+        ...(cell.style || {}),
         width: getHeaderWidth(index) || cell.width,
         whiteSpace: cell.multiline ? "initial" : undefined,
         flex: cell.multiline ? "initial" : undefined,
@@ -84,7 +86,7 @@
         <div
           class="table__cell"
           class:table--sortable={header.sortable}
-          style={getCss({ width: header.width })}
+          style={getCss({ ...(header.style || {}), width: header.width })}
         >
           <span>{header.label}</span>
         </div>

@@ -38,6 +38,7 @@
 
 {#snippet sideSection()}
   {#if storageProvider}
+    <Button onclick={() => loadBackups()} icon="cross">Delete</Button>
     <StorageProviderDialog
       {storageProvider}
       onsubmit={async (storageProvider) => {

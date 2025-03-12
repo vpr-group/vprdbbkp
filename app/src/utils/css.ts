@@ -1,7 +1,20 @@
 import { dashify } from "./strings";
 
+export type CSSProperties = Partial<
+  Omit<
+    CSSStyleDeclaration,
+    | "item"
+    | "getPropertyPriority"
+    | "getPropertyValue"
+    | "removeProperty"
+    | "setProperty"
+    | "length"
+    | "parentRule"
+  >
+>;
+
 export const getCss = (
-  object: Partial<CSSStyleDeclaration> & Record<`--${string}`, string>
+  object: CSSProperties & { [key: string]: string | number | undefined }
 ) =>
   Object.entries(object)
     .filter(([, value]) => value !== undefined)

@@ -11,6 +11,6 @@
 
 <Card
   href={`/backup-sources/${backupSource.id}`}
-  preTitle={`source type: ${backupSource.type.toLowerCase()}`}
+  subTitle={`${backupSource.type.toLowerCase()}`}
   title={backupSource.name}
 ></Card>
