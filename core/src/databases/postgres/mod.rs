@@ -6,6 +6,87 @@ use std::process::{Command, Stdio};
 pub mod pg_docker;
 pub mod pg_restore;
 
+use std::time::Duration;
+use tokio_postgres::NoTls;
+
+pub async fn is_postgres_connected(
+    host: &str,
+    port: u16,
+    database: &str,
+    username: &str,
+    password: Option<&str>,
+    timeout_seconds: u64,
+) -> Result<bool> {
+    info!(
+        "Checking PostgreSQL connection to {}:{}/{}",
+        host, port, database
+    );
+
+    let connection_string = match password {
+        Some(pass) => format!(
+            "host={} port={} dbname={} user={} password={}",
+            host, port, database, username, pass
+        ),
+        None => format!(
+            "host={} port={} dbname={} user={}",
+            host, port, database, username
+        ),
+    };
+
+    debug!(
+        "Attempting PostgreSQL connection with timeout of {} seconds",
+        timeout_seconds
+    );
+
+    // Set up connection timeout
+    let timeout = Duration::from_secs(timeout_seconds);
+
+    // Attempt to connect with timeout
+    match tokio::time::timeout(timeout, tokio_postgres::connect(&connection_string, NoTls)).await {
+        Ok(Ok((client, connection))) => {
+            // Spawn the connection handler
+            tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    error!("PostgreSQL connection error: {}", e);
+                }
+            });
+
+            // Execute a simple query to validate the connection
+            match client.execute("SELECT 1", &[]).await {
+                Ok(_) => {
+                    info!("Successfully connected to PostgreSQL database");
+                    Ok(true)
+                }
+                Err(e) => {
+                    error!("Failed to execute test query: {}", e);
+                    Ok(false)
+                }
+            }
+        }
+        Ok(Err(e)) => {
+            error!("PostgreSQL connection error: {}", e);
+            Ok(false)
+        }
+        Err(_) => {
+            error!(
+                "PostgreSQL connection timed out after {} seconds",
+                timeout_seconds
+            );
+            Ok(false)
+        }
+    }
+}
+
+pub async fn is_postgres_connected_default_timeout(
+    host: &str,
+    port: u16,
+    database: &str,
+    username: &str,
+    password: Option<&str>,
+) -> Result<bool> {
+    is_postgres_connected(host, port, database, username, password, 5).await
+}
+
 /// Get the local pg_dump version
 fn get_local_pg_dump_version() -> Result<(u32, u32)> {
     let output = Command::new("pg_dump")
