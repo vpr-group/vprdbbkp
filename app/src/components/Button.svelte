@@ -27,10 +27,11 @@
     background-color: black;
     color: white;
     border: none;
-    padding: 0.4rem 0.7rem;
+    padding: 0.2rem 0.7rem;
     text-decoration: none;
     box-shadow: var(--shadow);
-    border-radius: 0.2rem;
+    border-radius: 0.1rem;
     cursor: pointer;
+    font-family: var(--mono-font-family);
   }
 </style>

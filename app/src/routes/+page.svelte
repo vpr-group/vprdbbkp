@@ -51,7 +51,11 @@
     />
   {/snippet}
 
-  <Separation label="Storage Providers" sideSection={storageProviderActions} />
+  <Separation
+    label="Storage Providers"
+    subLabel={`${storageProviders.length} items`}
+    sideSection={storageProviderActions}
+  />
 
   <Grid>
     {#each storageProviders as storageProvider}
@@ -68,7 +72,11 @@
     />
   {/snippet}
 
-  <Separation label="Backup Sources" sideSection={backupSourcesActions} />
+  <Separation
+    label="Backup Sources"
+    subLabel={`${backupSources.length} items`}
+    sideSection={backupSourcesActions}
+  />
 
   <Grid>
     {#each backupSources as backupSource}

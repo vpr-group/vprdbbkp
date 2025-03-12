@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import PageContent from "../components/PageContent.svelte";
+  import Button from "../components/Button.svelte";
+  import { page } from "$app/state";
 
   interface Props {
     children: Snippet;
@@ -9,11 +11,15 @@
   const { children }: Props = $props();
 </script>
 
-<a href="/">Home</a>
+<div class="layout">
+  {#if page.url.pathname !== "/"}
+    <Button href="/">Back</Button>
+  {/if}
 
-<PageContent>
-  {@render children()}
-</PageContent>
+  <PageContent>
+    {@render children()}
+  </PageContent>
+</div>
 
 <style lang="scss">
   @font-face {
@@ -60,6 +66,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    box-sizing: border-box;
   }
 
   :global(html, body) {
@@ -70,6 +77,14 @@
   }
 
   :global(body) {
-    padding: 2rem 3rem;
+    padding: 2rem;
+  }
+
+  .layout {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    gap: 1rem;
   }
 </style>

@@ -28,21 +28,8 @@
   });
 </script>
 
-<Card href={`/storage-providers/${storageProvider.id}`}>
-  <span>{storageProvider.type}</span>
-  <h3>{storageProvider.name}</h3>
-
-  {#if loadingBackups}
-    <span>Loading</span>
-  {:else}
-    <span>{backups.length} backups</span>
-  {/if}
-</Card>
-
-<style lang="scss">
-  h3 {
-    font-size: 2rem;
-    margin: 0;
-    text-transform: uppercase;
-  }
-</style>
+<Card
+  href={`/storage-providers/${storageProvider.id}`}
+  title={storageProvider.name}
+  subTitle={`${backups.length} backups`}
+></Card>

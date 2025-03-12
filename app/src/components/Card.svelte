@@ -4,12 +4,27 @@
   interface Props {
     children?: Snippet;
     href?: string;
+    preTitle?: string;
+    title?: string;
+    subTitle?: string;
   }
 
-  const { children, href }: Props = $props();
+  const { children, href, preTitle, title, subTitle }: Props = $props();
 </script>
 
 {#snippet cardInner()}
+  {#if preTitle}
+    <span class="card__pre-title">{preTitle}</span>
+  {/if}
+
+  {#if title}
+    <h4 class="card__title">{title}</h4>
+  {/if}
+
+  {#if subTitle}
+    <span class="card__sub-title">{subTitle}</span>
+  {/if}
+
   {#if children}
     {@render children()}
   {/if}
@@ -32,5 +47,23 @@
     padding: 1rem;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
+
+    &__pre-title,
+    &__sub-title {
+      font-family: var(--mono-font-family);
+    }
+
+    &__pre-title {
+      display: block;
+    }
+
+    &__sub-title {
+      color: var(--color-grey);
+    }
+
+    &__title {
+      font-size: 1.5rem;
+      margin: 0;
+    }
   }
 </style>

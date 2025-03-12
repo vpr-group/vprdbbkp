@@ -58,12 +58,14 @@
 
   <Table
     headers={[
+      { label: "#", width: "3rem" },
       { label: "key", width: "40%" },
       { label: "type", width: "10%" },
       { label: "Timestamp" },
     ]}
-    rows={backups.map((row) => ({
+    rows={backups.map((row, index) => ({
       cells: [
+        { label: (index + 1).toString().padStart(2, "0") },
         { label: row.key },
         { label: row.backupType },
         { label: row.timestamp },

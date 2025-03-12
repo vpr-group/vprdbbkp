@@ -13,7 +13,7 @@
 
 <div class="separation">
   {#if preLabel}
-    <span>{preLabel}</span>
+    <span class="separation__pre-label">{preLabel}</span>
   {/if}
 
   {#if label}
@@ -29,7 +29,7 @@
   {/if}
 
   {#if subLabel}
-    <span>{subLabel}</span>
+    <span class="separation__sub-label">{subLabel}</span>
   {/if}
 </div>
 
@@ -37,11 +37,18 @@
   .separation {
     border-bottom: solid 1px var(--color-light-grey);
     padding: 0.5rem 0;
+    line-height: 1.3;
 
     &__label {
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+
+    &__pre-label,
+    &__sub-label {
+      font-family: var(--mono-font-family);
+      color: var(--color-grey);
     }
 
     h4 {

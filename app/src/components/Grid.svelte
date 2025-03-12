@@ -8,7 +8,7 @@
     style?: Partial<CSSStyleDeclaration>;
   }
 
-  const { children, minmax = "20rem", style }: Props = $props();
+  const { children, minmax = "33%", style }: Props = $props();
 
   const computedStyle = $derived(
     getCss({
