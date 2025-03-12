@@ -40,13 +40,6 @@
 
 {#snippet sideSection()}
   {#if backupSource}
-    <BackupSourceDialog
-      {backupSource}
-      onsubmit={async (backupSource) => {
-        await storeService.saveBackupSource(backupSource);
-        loadBackupSource();
-      }}
-    />
     <Button
       onclick={async () => {
         if (!backupSource) return;
@@ -55,6 +48,14 @@
       }}
       icon="cross">Delete</Button
     >
+    <BackupSourceDialog
+      {backupSource}
+      onsubmit={async (backupSource) => {
+        await storeService.saveBackupSource(backupSource);
+        loadBackupSource();
+      }}
+    />
+    <Button icon="upload">Backup</Button>
   {/if}
 {/snippet}
 

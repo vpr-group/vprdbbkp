@@ -5,7 +5,8 @@
     | "pencil"
     | "reload"
     | "arrow-left"
-    | "cross";
+    | "cross"
+    | "upload";
 
   interface Props {
     icon: IconName;
@@ -65,6 +66,15 @@
       fill="currentColor"
       fill-rule="evenodd"
       d="M12.854 2.854a.5.5 0 0 0-.708-.708L7.5 6.793L2.854 2.146a.5.5 0 1 0-.708.708L6.793 7.5l-4.647 4.646a.5.5 0 0 0 .708.708L7.5 8.207l4.646 4.647a.5.5 0 0 0 .708-.708L8.207 7.5z"
+      clip-rule="evenodd"
+    /></svg
+  >
+{:else if icon === "upload"}
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15"
+    ><!-- Icon from Radix Icons by WorkOS - https://github.com/radix-ui/icons/blob/master/LICENSE --><path
+      fill="currentColor"
+      fill-rule="evenodd"
+      d="M7.818 1.182a.45.45 0 0 0-.636 0l-3 3a.45.45 0 1 0 .636.636L7.05 2.586V9.5a.45.45 0 1 0 .9 0V2.586l2.232 2.232a.45.45 0 1 0 .636-.636zM2.5 10a.5.5 0 0 1 .5.5V12c0 .554.446 1 .996 1h7.005A1 1 0 0 0 12 12v-1.5a.5.5 0 1 1 1 0V12a2 2 0 0 1-1.999 2H3.996A1.997 1.997 0 0 1 2 12v-1.5a.5.5 0 0 1 .5-.5"
       clip-rule="evenodd"
     /></svg
   >

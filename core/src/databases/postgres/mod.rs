@@ -1,13 +1,15 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use log::{debug, error, info, warn};
+use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+use postgres_openssl::MakeTlsConnector;
 use std::process::{Command, Stdio};
+use tokio_postgres::NoTls;
 
 pub mod pg_docker;
 pub mod pg_restore;
 
 use std::time::Duration;
-use tokio_postgres::NoTls;
 
 pub async fn is_postgres_connected(
     host: &str,
@@ -16,13 +18,15 @@ pub async fn is_postgres_connected(
     username: &str,
     password: Option<&str>,
     timeout_seconds: u64,
+    use_ssl: Option<bool>,
 ) -> Result<bool> {
     info!(
         "Checking PostgreSQL connection to {}:{}/{}",
         host, port, database
     );
 
-    let connection_string = match password {
+    // Build base connection string
+    let base_connection_string = match password {
         Some(pass) => format!(
             "host={} port={} dbname={} user={} password={}",
             host, port, database, username, pass
@@ -33,48 +37,122 @@ pub async fn is_postgres_connected(
         ),
     };
 
-    debug!(
-        "Attempting PostgreSQL connection with timeout of {} seconds",
-        timeout_seconds
-    );
-
     // Set up connection timeout
     let timeout = Duration::from_secs(timeout_seconds);
 
-    // Attempt to connect with timeout
-    match tokio::time::timeout(timeout, tokio_postgres::connect(&connection_string, NoTls)).await {
-        Ok(Ok((client, connection))) => {
-            // Spawn the connection handler
-            tokio::spawn(async move {
-                if let Err(e) = connection.await {
-                    error!("PostgreSQL connection error: {}", e);
-                }
-            });
+    // Try with SSL first if use_ssl is None or true
+    if use_ssl.unwrap_or(true) {
+        debug!("Attempting PostgreSQL connection with SSL");
 
-            // Execute a simple query to validate the connection
-            match client.execute("SELECT 1", &[]).await {
-                Ok(_) => {
-                    info!("Successfully connected to PostgreSQL database");
-                    Ok(true)
-                }
-                Err(e) => {
-                    error!("Failed to execute test query: {}", e);
-                    Ok(false)
+        // Add sslmode=require to connection string
+        let ssl_connection_string = format!("{} sslmode=require", base_connection_string);
+
+        // Configure SSL with OpenSSL
+        let mut builder = SslConnector::builder(SslMethod::tls())?;
+        builder.set_verify(SslVerifyMode::NONE); // For testing - enable proper verification in production
+        let connector = MakeTlsConnector::new(builder.build());
+
+        // Attempt SSL connection
+        match tokio::time::timeout(
+            timeout.clone(),
+            tokio_postgres::connect(&ssl_connection_string, connector),
+        )
+        .await
+        {
+            Ok(Ok((client, connection))) => {
+                // Spawn the connection handler
+                tokio::spawn(async move {
+                    if let Err(e) = connection.await {
+                        error!("PostgreSQL SSL connection error: {}", e);
+                    }
+                });
+
+                // Execute a simple query to validate the connection
+                match client.execute("SELECT 1", &[]).await {
+                    Ok(_) => {
+                        info!("Successfully connected to PostgreSQL database with SSL");
+                        return Ok(true);
+                    }
+                    Err(e) => {
+                        error!("Failed to execute test query with SSL: {}", e);
+                        if use_ssl == Some(true) {
+                            return Ok(false);
+                        }
+                        // If SSL was just an attempt, we continue to non-SSL below
+                        warn!("SSL connection failed, trying without SSL");
+                    }
                 }
             }
-        }
-        Ok(Err(e)) => {
-            error!("PostgreSQL connection error: {}", e);
-            Ok(false)
-        }
-        Err(_) => {
-            error!(
-                "PostgreSQL connection timed out after {} seconds",
-                timeout_seconds
-            );
-            Ok(false)
+            Ok(Err(e)) => {
+                error!("PostgreSQL SSL connection error: {}", e);
+                if use_ssl == Some(true) {
+                    return Ok(false);
+                }
+                // If SSL was just an attempt, continue to non-SSL
+                warn!("SSL connection failed, trying without SSL");
+            }
+            Err(_) => {
+                error!(
+                    "PostgreSQL SSL connection timed out after {} seconds",
+                    timeout_seconds
+                );
+                if use_ssl == Some(true) {
+                    return Ok(false);
+                }
+                // If SSL was just an attempt, continue to non-SSL
+                warn!("SSL connection timed out, trying without SSL");
+            }
         }
     }
+
+    // Try non-SSL connection if use_ssl is None or false
+    if use_ssl.unwrap_or(false) == false {
+        debug!("Attempting PostgreSQL connection without SSL");
+
+        // Attempt to connect with NoTls
+        match tokio::time::timeout(
+            timeout,
+            tokio_postgres::connect(&base_connection_string, NoTls),
+        )
+        .await
+        {
+            Ok(Ok((client, connection))) => {
+                // Spawn the connection handler
+                tokio::spawn(async move {
+                    if let Err(e) = connection.await {
+                        error!("PostgreSQL connection error: {}", e);
+                    }
+                });
+
+                // Execute a simple query to validate the connection
+                match client.execute("SELECT 1", &[]).await {
+                    Ok(_) => {
+                        info!("Successfully connected to PostgreSQL database without SSL");
+                        return Ok(true);
+                    }
+                    Err(e) => {
+                        error!("Failed to execute test query without SSL: {}", e);
+                        return Ok(false);
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                error!("PostgreSQL connection error without SSL: {}", e);
+                return Ok(false);
+            }
+            Err(_) => {
+                error!(
+                    "PostgreSQL connection timed out after {} seconds (without SSL)",
+                    timeout_seconds
+                );
+                return Ok(false);
+            }
+        }
+    }
+
+    // If we reach here, both SSL and non-SSL failed
+    warn!("All PostgreSQL connection attempts failed");
+    Ok(false)
 }
 
 pub async fn is_postgres_connected_default_timeout(
@@ -84,7 +162,7 @@ pub async fn is_postgres_connected_default_timeout(
     username: &str,
     password: Option<&str>,
 ) -> Result<bool> {
-    is_postgres_connected(host, port, database, username, password, 5).await
+    is_postgres_connected(host, port, database, username, password, 5, None).await
 }
 
 /// Get the local pg_dump version
