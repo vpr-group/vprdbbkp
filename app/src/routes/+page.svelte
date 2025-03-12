@@ -1,50 +1,68 @@
 <script lang="ts">
-  import ProjectDialog from "../components/ProjectDialog.svelte";
-  import { StoreService, type Project } from "../services/dataStore";
+  import BackupSourceDialog from "../components/BackupSourceDialog.svelte";
+  import StorageProviderDialog from "../components/StorageProviderDialog.svelte";
+  import {
+    StoreService,
+    type BackupSource,
+    type StorageProvider,
+  } from "../services/store";
   import { onMount } from "svelte";
 
   const storeService = new StoreService();
 
   let isLoading = $state(true);
-  let projects = $state<Project[]>([]);
+  let storageProviders = $state<StorageProvider[]>([]);
+  let backupSources = $state<BackupSource[]>([]);
 
   const loadProjects = async () => {
     await storeService.waitForInitialized();
-    storeService.getProjects().then((res) => {
-      projects = res;
-      isLoading = false;
+    storeService.getStorageProviders().then((res) => {
+      storageProviders = res;
+    });
+  };
+
+  const loadBackupSources = async () => {
+    await storeService.waitForInitialized();
+    storeService.getBackupSources().then((res) => {
+      backupSources = res;
     });
   };
 
   onMount(() => {
-    loadProjects();
+    Promise.all([loadProjects(), loadBackupSources()]).finally(() => {
+      isLoading = false;
+    });
   });
 </script>
 
 <main class="container">
   {#if isLoading}
-    <span>Is Loding</span>
-  {:else if projects.length === 0}
-    <ProjectDialog
-      oncreate={(project) => {
-        console.log(project);
-        storeService.saveProject(project);
-        loadProjects();
-      }}
-    />
+    <span>Is Loading</span>
   {:else}
-    <ProjectDialog
-      oncreate={async (project) => {
-        console.log(project);
-        await storeService.saveProject(project);
+    <StorageProviderDialog
+      onsubmit={async (storageProvider) => {
+        await storeService.saveStorageProvider(storageProvider);
         loadProjects();
       }}
     />
-    {#each projects as project}
-      <a href={`/projects/${project.id}`}>{project.name}</a>
+
+    <BackupSourceDialog
+      onsubmit={async (backupSource) => {
+        await storeService.saveBackupSource(backupSource);
+        loadBackupSources();
+      }}
+    />
+
+    {#each storageProviders as storageProvider}
+      <a href={`/storage-providers/${storageProvider.id}`}>
+        {storageProvider.name}
+      </a>
+    {/each}
+
+    {#each backupSources as backupSource}
+      <a href={`/backup-sources/${backupSource.id}`}>
+        {backupSource.name}
+      </a>
     {/each}
   {/if}
 </main>
-
-<style>
-</style>
