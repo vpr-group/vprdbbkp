@@ -3,6 +3,9 @@
   import { StoreService, type StorageProvider } from "../services/store";
   import DropdownMenu from "./DropdownMenu.svelte";
   import Button from "./Button.svelte";
+  import Dialog from "./Dialog.svelte";
+  import Separation from "./Separation.svelte";
+  import DialogActions from "./DialogActions.svelte";
 
   interface Props {
     onbackup?: (storageProvider: StorageProvider) => void;
@@ -32,15 +35,36 @@
   align="end"
 >
   {#snippet item(storageProvider)}
-    <Button
-      preIcon="arrow-right"
-      style={{ backgroundColor: "var(--color-light-grey)", color: "black" }}
-      onclick={() => {
-        open = false;
-        onbackup?.(storageProvider);
+    <Dialog
+      icon="arrow-right"
+      label={storageProvider.name}
+      buttonStyle={{
+        backgroundColor: "var(--color-light-grey)",
+        color: "black",
       }}
     >
-      {storageProvider.name}
-    </Button>
+      <div class="restore-dropdown__content">
+        <Separation label="Backup" />
+
+        <p>
+          You are about backup in the following bucket: <strong>
+            {storageProvider.bucket}
+          </strong>
+        </p>
+
+        <DialogActions>
+          <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
+          <Button
+            icon="arrow-right"
+            onclick={() => {
+              open = false;
+              onbackup?.(storageProvider);
+            }}
+          >
+            Continue
+          </Button>
+        </DialogActions>
+      </div>
+    </Dialog>
   {/snippet}
 </DropdownMenu>

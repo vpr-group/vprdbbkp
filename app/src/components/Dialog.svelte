@@ -3,36 +3,43 @@
   import type { Snippet } from "svelte";
   import Button from "./Button.svelte";
   import type { IconName } from "./Icon.svelte";
+  import type { CSSProperties } from "../utils/css";
 
   interface Props {
+    open?: boolean;
     label?: string;
     children?: Snippet;
     icon?: IconName;
+    buttonStyle?: CSSProperties;
   }
 
-  const { label, children, icon }: Props = $props();
+  let {
+    open = $bindable(false),
+    label,
+    children,
+    icon,
+    buttonStyle,
+  }: Props = $props();
 </script>
 
-{#snippet defaultTriggerChild()}
-  <Button {icon}>{label || "Dialog"}</Button>
-{/snippet}
-
-<Dialog.Root>
+<Dialog.Root bind:open>
   <Dialog.Trigger>
     {#snippet child({ props })}
-      <Button {...props} {icon}>{label}</Button>
+      <Button {...props} {icon} style={buttonStyle}>{label}</Button>
     {/snippet}
   </Dialog.Trigger>
-  <Dialog.Overlay>
-    <div class="dialog__overlay"></div>
-  </Dialog.Overlay>
-  <Dialog.Content>
-    <div class="dialog__content">
-      {#if children}
-        {@render children()}
-      {/if}
-    </div>
-  </Dialog.Content>
+  <Dialog.Portal>
+    <Dialog.Overlay>
+      <div class="dialog__overlay"></div>
+    </Dialog.Overlay>
+    <Dialog.Content>
+      <div class="dialog__content">
+        {#if children}
+          {@render children()}
+        {/if}
+      </div>
+    </Dialog.Content>
+  </Dialog.Portal>
 </Dialog.Root>
 
 <style lang="scss">

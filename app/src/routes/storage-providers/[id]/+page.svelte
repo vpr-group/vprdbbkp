@@ -60,6 +60,7 @@
 
   {#snippet actions(cell: Cell, row?: Row)}
     <RestoreDropdown
+      backupKey={cell.label || ""}
       onrestore={(backupSource) => {
         if (!storageProvider) return;
         actionsService.restoreBackup(

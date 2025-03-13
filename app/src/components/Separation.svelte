@@ -43,6 +43,7 @@
 
 <style lang="scss">
   .separation {
+    width: 100%;
     border-bottom: solid 1px var(--color-light-grey);
     padding: 0.5rem 0;
     line-height: 1.3;
