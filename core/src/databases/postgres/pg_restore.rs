@@ -317,32 +317,98 @@ async fn restore_pg_docker(
         format!("postgresql://{}@{}:{}/{}", username, host, port, database)
     };
 
-    // Build Docker command
-    let mut docker_cmd = Command::new("docker");
-    docker_cmd
-        .arg("run")
-        .arg("--rm")
-        .arg("--network=host") // Use host networking to connect to the PostgreSQL server
-        .arg(format!("-v{}:/backup", backup_dir))
-        .arg(format!("postgres:{}", version_tag))
-        .arg("pg_restore")
-        .arg("--dbname")
-        .arg(connection_url)
-        .arg("--verbose")
-        .arg("--no-owner")
-        .arg("--no-privileges")
-        .arg("--clean") // Drop objects before recreating them
-        .arg("--if-exists") // Add IF EXISTS for cleaner drops
-        .arg("--no-comments") // Skip comments to avoid warnings
-        .arg("--exit-on-error") // Continue on error
-        .arg(format!("/backup/{}", backup_file))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    let backup_dir_arg = format!("-v{}:/backup", backup_dir);
+    let version_tag_arg = format!("postgres:{}", version_tag);
+    let backup_file_arg = format!("/backup/{}", backup_file);
 
-    debug!("Executing Docker pg_restore command");
-    let output = docker_cmd
-        .output()
-        .context("Failed to execute Docker command")?;
+    // Create the Docker command string for all platforms
+    let docker_args = vec![
+        "run",
+        "--rm",
+        "--network=host", // Use host networking to connect to the PostgreSQL server
+        &backup_dir_arg,
+        &version_tag_arg,
+        "pg_restore",
+        "--dbname",
+        &connection_url,
+        "--verbose",
+        "--no-owner",
+        "--no-privileges",
+        "--clean",         // Drop objects before recreating them
+        "--if-exists",     // Add IF EXISTS for cleaner drops
+        "--no-comments",   // Skip comments to avoid warnings
+        "--exit-on-error", // Continue on error
+        &backup_file_arg,
+    ];
+
+    // Platform-specific execution with privilege escalation
+    let output = {
+        #[cfg(target_os = "linux")]
+        {
+            debug!("Using pkexec for privilege escalation on Linux");
+            let mut cmd = Command::new("pkexec");
+            cmd.arg("docker");
+            for arg in docker_args {
+                cmd.arg(arg);
+            }
+            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+            cmd.output()
+                .context("Failed to execute Docker command with pkexec")?
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            debug!("Using osascript for privilege escalation on macOS");
+            // Construct the full docker command as a string for osascript
+            let docker_cmd = format!("docker {}", docker_args.join(" "));
+
+            let mut cmd = Command::new("osascript");
+            cmd.arg("-e")
+                .arg(format!(
+                    "do shell script \"{}\" with administrator privileges",
+                    docker_cmd
+                ))
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            cmd.output()
+                .context("Failed to execute Docker command with osascript")?
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            debug!("Using PowerShell RunAs for privilege escalation on Windows");
+
+            // Format the arguments for PowerShell
+            let docker_args_str = docker_args.join(",");
+
+            let mut cmd = Command::new("powershell");
+            cmd
+                .arg("-Command")
+                .arg(format!(
+                    "$process = Start-Process -Verb RunAs -FilePath 'docker' -ArgumentList '{}' -Wait -NoNewWindow -PassThru -RedirectStandardOutput 'stdout.tmp' -RedirectStandardError 'stderr.tmp'; Get-Content -Path 'stdout.tmp'; Get-Content -Path 'stderr.tmp'; Remove-Item -Path 'stdout.tmp','stderr.tmp'; exit $process.ExitCode",
+                    docker_args_str.replace("'", "''")
+                ))
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            cmd.output()
+                .context("Failed to execute Docker command with PowerShell RunAs")?
+        }
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            debug!("No privilege escalation available on this platform, attempting direct Docker access");
+            let mut cmd = Command::new("docker");
+            for arg in docker_args {
+                cmd.arg(arg);
+            }
+            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+            cmd.output().context("Failed to execute Docker command")?
+        }
+    };
 
     // Check for errors, but continue on warnings
     if !output.status.success() {
