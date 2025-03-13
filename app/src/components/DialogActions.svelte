@@ -16,6 +16,7 @@
 
 <style lang="scss">
   .dialog-actions {
+    margin-top: 2rem;
     display: flex;
     gap: 4px;
   }

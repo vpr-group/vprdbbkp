@@ -24,12 +24,24 @@
     gap: 0.5rem;
     padding: 0;
 
+    label {
+      color: var(--color-grey);
+      font-family: var(--mono-font-family);
+    }
+
     input {
-      background-color: rgb(220, 220, 220);
+      background-color: var(--color-light);
       border: none;
       font-size: inherit;
-      padding: 0.5rem;
+      font-family: inherit;
+
+      padding: 0.3rem 0.7rem;
       border-radius: 0.2rem;
+
+      &:focus {
+        outline: none;
+        box-shadow: var(--shadow);
+      }
     }
   }
 </style>
