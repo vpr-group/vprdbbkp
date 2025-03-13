@@ -1,6 +1,7 @@
-use commands::{greet, list_backups, verify_backup_source_connection};
+use commands::{backup_source, greet, list_backups, verify_backup_source_connection};
 use log::LevelFilter;
 mod commands;
+mod utils;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,7 +15,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             list_backups,
-            verify_backup_source_connection
+            verify_backup_source_connection,
+            backup_source
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

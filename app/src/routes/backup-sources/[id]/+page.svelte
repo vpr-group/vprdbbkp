@@ -10,6 +10,7 @@
   import type { CSSProperties } from "../../../utils/css";
   import { ActionsService } from "../../../services/actions";
   import StatusDot from "../../../components/StatusDot.svelte";
+  import BackupDropdown from "../../../components/BackupDropdown.svelte";
 
   const actionService = new ActionsService();
   const storeService = new StoreService();
@@ -55,7 +56,12 @@
         loadBackupSource();
       }}
     />
-    <Button icon="upload">Backup</Button>
+    <BackupDropdown
+      onbackup={(storageProvider) => {
+        if (!backupSource) return;
+        actionService.backupSource(backupSource, storageProvider);
+      }}
+    />
   {/if}
 {/snippet}
 

@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import type { IconName } from "./Icon.svelte";
   import Icon from "./Icon.svelte";
+  import { getCss, type CSSProperties } from "../utils/css";
 
   interface Props {
     children?: Snippet;
@@ -9,9 +10,11 @@
     onclick?: () => void;
     preIcon?: IconName;
     icon?: IconName;
+    style?: CSSProperties;
   }
 
-  const { children, href, onclick, icon, preIcon }: Props = $props();
+  const { children, href, onclick, icon, preIcon, style, ...props }: Props =
+    $props();
 </script>
 
 {#snippet innerButton()}
@@ -27,9 +30,24 @@
 {/snippet}
 
 {#if href}
-  <a class="button" {onclick} {href}>{@render innerButton()}</a>
+  <a
+    class="button"
+    {onclick}
+    {href}
+    style={style ? getCss(style || {}) : undefined}
+    {...props}
+  >
+    {@render innerButton()}
+  </a>
 {:else}
-  <button class="button" {onclick}>{@render innerButton()}</button>
+  <button
+    class="button"
+    {onclick}
+    style={style ? getCss(style || {}) : undefined}
+    {...props}
+  >
+    {@render innerButton()}
+  </button>
 {/if}
 
 <style lang="scss">

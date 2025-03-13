@@ -41,8 +41,23 @@ export class ActionsService {
     } catch (error) {
       console.error("Failed to test backup source connection:", error);
       return {
-        connection: false,
+        connected: false,
       };
+    }
+  }
+
+  async backupSource(
+    backupSource: BackupSource,
+    storageProvider: StorageProvider
+  ): Promise<void> {
+    try {
+      const result = await invoke<BackupSourceConnection>("backup_source", {
+        backupSource,
+        storageProvider,
+      });
+      console.log(result);
+    } catch (error) {
+      console.error("Failed to test backup source connection:", error);
     }
   }
 }

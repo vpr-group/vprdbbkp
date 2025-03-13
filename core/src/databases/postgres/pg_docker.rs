@@ -117,8 +117,9 @@ pub async fn docker_pg_dump(
     };
 
     // Build Docker command
-    let mut docker_cmd = Command::new("docker");
+    let mut docker_cmd = Command::new("pkexec");
     docker_cmd
+        .arg("docker")
         .arg("run")
         .arg("--rm")
         .arg("--network=host") // Use host networking to connect to the PostgreSQL server

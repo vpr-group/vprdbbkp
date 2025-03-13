@@ -61,7 +61,7 @@
 
     &__side-section {
       display: flex;
-      gap: 0.5rem;
+      gap: 4px;
     }
 
     h4 {
