@@ -7,9 +7,10 @@
     ActionsService,
     type BackupListItem,
   } from "../../../services/actions";
-  import Table from "../../../components/Table.svelte";
+  import Table, { type Cell, type Row } from "../../../components/Table.svelte";
   import Separation from "../../../components/Separation.svelte";
   import Button from "../../../components/Button.svelte";
+  import RestoreDropdown from "../../../components/RestoreDropdown.svelte";
 
   const storeService = new StoreService();
   const actionsService = new ActionsService();
@@ -57,6 +58,21 @@
     {sideSection}
   />
 
+  {#snippet actions(cell: Cell, row?: Row)}
+    <RestoreDropdown
+      onrestore={(backupSource) => {
+        if (!storageProvider) return;
+        actionsService.restoreBackup(
+          cell.label || "",
+          backupSource,
+          storageProvider
+        );
+        console.log(cell.label);
+        console.log(backupSource);
+      }}
+    />
+  {/snippet}
+
   <Table
     headers={[
       { label: "#", width: "3rem" },
@@ -70,6 +86,17 @@
         { label: row.key },
         { label: row.backupType },
         { label: row.timestamp },
+        {
+          label: row.key,
+          renderHandler: actions,
+          style: {
+            padding: "0 0.5rem",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flex: "1 1 auto",
+            width: "100%",
+          },
+        },
       ],
     }))}
   />

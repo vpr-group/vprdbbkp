@@ -64,10 +64,10 @@
     <div
       class="table__cell"
       style={getCss({
-        ...(cell.style || {}),
         width: getHeaderWidth(index) || cell.width,
         whiteSpace: cell.multiline ? "initial" : undefined,
         flex: cell.multiline ? "initial" : undefined,
+        ...(cell.style || {}),
       })}
     >
       {#if cell.renderHandler}
@@ -86,7 +86,7 @@
         <div
           class="table__cell"
           class:table--sortable={header.sortable}
-          style={getCss({ ...(header.style || {}), width: header.width })}
+          style={getCss({ width: header.width, ...(header.style || {}) })}
         >
           <span>{header.label}</span>
         </div>

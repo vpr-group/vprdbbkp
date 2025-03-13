@@ -51,13 +51,30 @@ export class ActionsService {
     storageProvider: StorageProvider
   ): Promise<void> {
     try {
-      const result = await invoke<BackupSourceConnection>("backup_source", {
+      const result = await invoke<string>("backup_source", {
         backupSource,
         storageProvider,
       });
       console.log(result);
     } catch (error) {
       console.error("Failed to test backup source connection:", error);
+    }
+  }
+
+  async restoreBackup(
+    backupKey: string,
+    backupSource: BackupSource,
+    storageProvider: StorageProvider
+  ): Promise<void> {
+    try {
+      const result = await invoke<string>("restore_backup", {
+        backupKey,
+        backupSource,
+        storageProvider,
+      });
+      console.log(result);
+    } catch (error) {
+      console.error("Failed to restore backup:", error);
     }
   }
 }

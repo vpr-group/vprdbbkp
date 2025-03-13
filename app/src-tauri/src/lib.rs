@@ -1,4 +1,6 @@
-use commands::{backup_source, greet, list_backups, verify_backup_source_connection};
+use commands::{
+    backup_source, greet, list_backups, restore_backup, verify_backup_source_connection,
+};
 use log::LevelFilter;
 mod commands;
 mod utils;
@@ -16,7 +18,8 @@ pub fn run() {
             greet,
             list_backups,
             verify_backup_source_connection,
-            backup_source
+            backup_source,
+            restore_backup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

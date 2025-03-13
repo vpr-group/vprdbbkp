@@ -1,8 +1,9 @@
+use log::info;
 use serde::{Deserialize, Serialize};
 use vprs3bkp_core::{
-    get_backup_key,
+    download_backup, get_backup_key,
     postgres::{self, is_postgres_connected_default_timeout},
-    upload_to_s3, BackupInfo,
+    restore_postgres, upload_to_s3, BackupInfo,
 };
 
 use crate::utils::get_s3_client;
@@ -101,6 +102,42 @@ pub async fn backup_source(
     )
     .await
     .map_err(|e| format!("Failed to upload backup: {}", e))?;
+
+    Ok("ok".into())
+}
+
+#[tauri::command]
+pub async fn restore_backup(
+    backup_key: String,
+    backup_source: PostgresBackupSource,
+    storage_provider: S3StorageProvider,
+) -> Result<String, String> {
+    if storage_provider.provider_type != "s3" {
+        return Err("Only S3 storage providers are supported".to_string());
+    }
+
+    let s3_client = get_s3_client(&storage_provider).await?;
+
+    // Download the backup
+    let backup_data = download_backup(&s3_client, &storage_provider.bucket, &backup_key)
+        .await
+        .map_err(|e| format!("Failed to download backup: {}", e))?;
+
+    // Restore the database
+    restore_postgres(
+        &backup_source.database,
+        &backup_source.host,
+        backup_source.port,
+        &backup_source.username,
+        Some(&backup_source.password),
+        backup_data,
+        true,
+        false,
+    )
+    .await
+    .map_err(|e| format!("Failed to restore backup: {}", e))?;
+
+    info!("PostgreSQL database restore completed successfully");
 
     Ok("ok".into())
 }
