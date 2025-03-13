@@ -116,24 +116,99 @@ pub async fn docker_pg_dump(
         format!("postgresql://{}@{}:{}/{}", username, host, port, database)
     };
 
-    // Build Docker command
-    let mut docker_cmd = Command::new("pkexec");
-    docker_cmd
-        .arg("docker")
-        .arg("run")
-        .arg("--rm")
-        .arg("--network=host") // Use host networking to connect to the PostgreSQL server
-        .arg(format!("postgres:{}", version_tag))
-        .arg("pg_dump")
-        .arg("--format=custom")
-        .arg(connection_url)
-        .stdout(Stdio::piped());
+    // Build Docker command with platform-specific privilege escalation
+    let mut docker_process = {
+        #[cfg(target_os = "linux")]
+        {
+            debug!("Using pkexec for privilege escalation on Linux");
+            let mut cmd = Command::new("pkexec");
+            cmd.arg("docker")
+                .arg("run")
+                .arg("--rm")
+                .arg("--network=host") // Use host networking to connect to the PostgreSQL server
+                .arg(format!("postgres:{}", version_tag))
+                .arg("pg_dump")
+                .arg("--format=custom")
+                .arg(&connection_url)
+                .stdout(Stdio::piped());
 
-    // Run pg_dump via Docker
-    debug!("Executing pg_dump via Docker");
-    let mut docker_process = docker_cmd
-        .spawn()
-        .context("Failed to execute Docker command")?;
+            cmd.spawn()
+                .context("Failed to execute Docker command with pkexec")?
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            debug!("Using osascript for privilege escalation on macOS");
+            let docker_cmd = format!(
+                "docker run --rm --network=host postgres:{} pg_dump --format=custom {}",
+                version_tag, connection_url
+            );
+
+            let mut cmd = Command::new("osascript");
+            cmd.arg("-e")
+                .arg(format!(
+                    "do shell script \"{}\" with administrator privileges",
+                    docker_cmd
+                ))
+                .stdout(Stdio::piped());
+
+            cmd.spawn()
+                .context("Failed to execute Docker command with osascript")?
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            debug!("Using PowerShell RunAs for privilege escalation on Windows");
+            let docker_args = format!(
+                "run --rm --network=host postgres:{} pg_dump --format=custom {}",
+                version_tag, connection_url
+            );
+
+            let mut cmd = Command::new("powershell");
+            cmd
+                .arg("-Command")
+                .arg(format!(
+                    "Start-Process -Verb RunAs -FilePath 'docker' -ArgumentList '{}' -NoNewWindow -Wait -RedirectStandardOutput stdout.tmp",
+                    docker_args.replace("'", "''")
+                ))
+                .stdout(Stdio::piped());
+
+            // For Windows, we need to handle the redirection differently
+            // This is a simplified approach and may need adjustment for production use
+            let status = cmd
+                .status()
+                .context("Failed to execute Docker command with PowerShell")?;
+            if !status.success() {
+                return Err(anyhow::anyhow!(
+                    "Failed to execute Docker command with elevated privileges"
+                ));
+            }
+
+            // Now read from the temporary file
+            let mut cmd = Command::new("powershell");
+            cmd.arg("-Command")
+                .arg("Get-Content -Path stdout.tmp; Remove-Item -Path stdout.tmp")
+                .stdout(Stdio::piped());
+
+            cmd.spawn().context("Failed to read Docker output")?
+        }
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            debug!("No privilege escalation available on this platform, attempting direct Docker access");
+            let mut cmd = Command::new("docker");
+            cmd.arg("run")
+                .arg("--rm")
+                .arg("--network=host")
+                .arg(format!("postgres:{}", version_tag))
+                .arg("pg_dump")
+                .arg("--format=custom")
+                .arg(&connection_url)
+                .stdout(Stdio::piped());
+
+            cmd.spawn().context("Failed to execute Docker command")?
+        }
+    };
 
     // Set up compression
     let mut gzip_cmd = Command::new("gzip");
