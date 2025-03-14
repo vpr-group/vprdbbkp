@@ -8,6 +8,8 @@ use tokio_postgres::NoTls;
 
 pub mod pg_docker;
 pub mod pg_restore;
+pub mod pg_tools;
+pub mod pg_versions;
 
 use std::time::Duration;
 

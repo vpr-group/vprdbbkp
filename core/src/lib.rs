@@ -1,6 +1,7 @@
 // vprs3bkp-core/src/lib.rs
 pub mod databases;
 pub mod folders;
+pub mod platform;
 pub mod s3;
 pub mod utils;
 
