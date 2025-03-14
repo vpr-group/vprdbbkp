@@ -11,6 +11,8 @@ pub enum PostgresVersion {
     V17,
 }
 
+pub const DEFAULT_POSTGRES_VERSION: PostgresVersion = PostgresVersion::V15;
+
 impl PostgresVersion {
     // Get the version as a string (e.g., "9.6", "10", "15")
     pub fn as_str(&self) -> &'static str {
