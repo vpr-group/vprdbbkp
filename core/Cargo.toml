@@ -28,3 +28,4 @@ webpki-roots = "0.25.0"
 openssl = "0.10"
 postgres-openssl = "0.5"
 dirs = "5.0.1"
+opendal = { version = "0.52.0", features = ["services-webdav", "services-s3", "services-fs"] }

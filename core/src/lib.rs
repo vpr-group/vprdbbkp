@@ -3,6 +3,7 @@ pub mod databases;
 pub mod folders;
 pub mod platform;
 pub mod s3;
+pub mod storage;
 pub mod utils;
 
 // Re-export commonly used types and functions
