@@ -1,15 +1,13 @@
 use anyhow::Result;
-use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_s3::Client as S3Client;
 use clap::Parser;
 use log::{info, warn, LevelFilter};
-use vprs3bkp_core::{
-    self, backup_folder, download_backup, format_timestamp, get_backup_key, get_latest_backup,
-    get_latest_backups_by_db, list_backups, mysql, postgres, restore_postgres, upload_to_s3,
-};
 
 mod cli;
 use cli::{Cli, Commands};
+use vprs3bkp_core::databases::{
+    backup_source,
+    configs::{PGSourceConfig, SourceConfig}, restore_source,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,85 +26,8 @@ async fn main() -> Result<()> {
         })
         .init();
 
-    // Set up AWS configuration
-    let region_provider =
-        RegionProviderChain::first_try(cli.region.map(aws_sdk_s3::config::Region::new))
-            .or_default_provider()
-            .or_else("us-east-1");
-
-    // Disable SSL verification if requested
-    if cli.no_verify_ssl {
-        warn!("SSL verification disabled for S3 connections - this is not recommended for production use");
-        // Set environment variable to disable SSL verification
-        std::env::set_var("AWS_HTTPS_VERIFY", "0");
-    }
-
-    // Create the AWS config
-    let aws_config = aws_config::from_env().region(region_provider).load().await;
-
-    // Build S3 client configuration
-    let mut s3_config_builder = aws_sdk_s3::config::Builder::from(&aws_config);
-
-    // Add custom endpoint if specified
-    if let Some(endpoint) = &cli.endpoint {
-        info!("Using custom S3 endpoint: {}", endpoint);
-        s3_config_builder = s3_config_builder.endpoint_url(endpoint);
-
-        // Force path style access for custom endpoints
-        info!("Enabling path-style access for S3-compatible service");
-        s3_config_builder = s3_config_builder.force_path_style(true);
-    }
-
-    // Add explicit credentials if provided
-    if let (Some(access_key), Some(secret_key)) = (&cli.access_key, &cli.secret_key) {
-        info!("Using explicitly provided S3 credentials");
-
-        // Create static credentials
-        let credentials = aws_sdk_s3::config::Credentials::new(
-            access_key,
-            secret_key,
-            None, // session token
-            None, // expiry
-            "explicit-credentials",
-        );
-
-        s3_config_builder = s3_config_builder.credentials_provider(credentials);
-    }
-
-    // Build the final S3 client with our configuration
-    let s3_client = S3Client::from_conf(s3_config_builder.build());
-
     match cli.command {
-        Commands::Postgres {
-            database,
-            host,
-            port,
-            username,
-            password,
-            compression,
-            force_docker,
-        } => {
-            let backup_bytes = postgres::backup_postgres_with_options(
-                &database,
-                &host,
-                port,
-                &username,
-                password.as_deref(),
-                compression,
-                force_docker,
-            )
-            .await?;
-
-            let key = get_backup_key(&cli.prefix, "postgres", &database);
-            upload_to_s3(
-                &s3_client,
-                &cli.bucket,
-                &key,
-                aws_sdk_s3::primitives::ByteStream::from(backup_bytes),
-            )
-            .await?;
-        }
-        Commands::Mysql {
+        Commands::BackupPostgres {
             database,
             host,
             port,
@@ -114,57 +35,16 @@ async fn main() -> Result<()> {
             password,
             compression,
         } => {
-            let backup_bytes = mysql::backup_mysql(
-                &database,
-                &host,
+            let source_config = SourceConfig::PG(PGSourceConfig {
+                name: "".into(),
+                database,
+                host,
                 port,
-                &username,
-                password.as_deref(),
-                compression,
-            )
-            .await?;
+                username,
+                password,
+            });
 
-            let key = get_backup_key(&cli.prefix, "mysql", &database);
-            upload_to_s3(
-                &s3_client,
-                &cli.bucket,
-                &key,
-                aws_sdk_s3::primitives::ByteStream::from(backup_bytes),
-            )
-            .await?;
-        }
-        Commands::Folder {
-            path,
-            compress,
-            compression_level,
-            concurrency,
-            include,
-            exclude,
-            skip_larger_than,
-            add_timestamp,
-        } => {
-            info!("Starting folder backup for: {}", path);
-
-            let stats = backup_folder(
-                &s3_client,
-                &cli.bucket,
-                &cli.prefix,
-                &path,
-                compress,
-                compression_level,
-                concurrency,
-                include,
-                exclude,
-                skip_larger_than,
-                add_timestamp,
-            )
-            .await?;
-
-            info!("Folder backup completed successfully:");
-            info!("  Files processed: {}", stats.files_processed);
-            info!("  Files skipped: {}", stats.files_skipped);
-            info!("  Files failed: {}", stats.files_failed);
-            info!("  Total bytes transferred: {}", stats.total_bytes);
+            backup_source(source_config).await?;
         }
         Commands::RestorePostgres {
             database,
@@ -177,105 +57,18 @@ async fn main() -> Result<()> {
             force_docker,
             drop_db,
         } => {
-            // Determine which backup to restore
-            let backup_key = if latest {
-                info!(
-                    "Looking for latest PostgreSQL backup for database: {}",
-                    database
-                );
-
-                let latest_backup =
-                    get_latest_backup(&s3_client, &cli.bucket, &cli.prefix, "postgres", &database)
-                        .await?
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("No backups found for database {}", database)
-                        })?;
-
-                info!(
-                    "Found latest backup from {}: {}",
-                    latest_backup.last_modified, latest_backup.key
-                );
-
-                latest_backup.key
-            } else if let Some(s3_key) = key {
-                info!("Using specified backup key: {}", s3_key);
-                s3_key
-            } else {
-                return Err(anyhow::anyhow!(
-                    "Either --key or --latest must be specified"
-                ));
-            };
-
-            // Download the backup
-            let backup_data = download_backup(&s3_client, &cli.bucket, &backup_key).await?;
-
-            // Restore the database
-            restore_postgres(
-                &database,
-                &host,
+            let source_config = SourceConfig::PG(PGSourceConfig {
+                name: "".into(),
+                database,
+                host,
                 port,
-                &username,
-                password.as_deref(),
-                backup_data,
-                force_docker,
-                drop_db,
-            )
-            .await?;
+                username,
+                password,
+            });
+
+            restore_source(source_config, dump_data)
 
             info!("PostgreSQL database restore completed successfully");
-        }
-        Commands::RestoreMysql {
-            database,
-            host,
-            port,
-            username,
-            password,
-            key,
-            latest,
-            drop_db,
-        } => {
-            // Determine which backup to restore
-            // let backup_key = if latest {
-            //     info!("Looking for latest MySQL backup for database: {}", database);
-
-            //     let latest_backup =
-            //         get_latest_backup(&s3_client, &cli.bucket, &cli.prefix, "mysql", &database)
-            //             .await?
-            //             .ok_or_else(|| {
-            //                 anyhow::anyhow!("No backups found for database {}", database)
-            //             })?;
-
-            //     info!(
-            //         "Found latest backup from {}: {}",
-            //         latest_backup.last_modified, latest_backup.key
-            //     );
-
-            //     latest_backup.key
-            // } else if let Some(s3_key) = key {
-            //     info!("Using specified backup key: {}", s3_key);
-            //     s3_key
-            // } else {
-            //     return Err(anyhow::anyhow!(
-            //         "Either --key or --latest must be specified"
-            //     ));
-            // };
-
-            // // Download the backup
-            // let backup_data = download_backup(&s3_client, &cli.bucket, &backup_key).await?;
-
-            // // Restore the database
-            // restore_mysql(
-            //     &database,
-            //     &host,
-            //     port,
-            //     &username,
-            //     password.as_deref(),
-            //     backup_data,
-            //     drop_db,
-            // )
-            // .await?;
-
-            // info!("MySQL database restore completed successfully");
         }
         Commands::List {
             backup_type,

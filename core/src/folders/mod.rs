@@ -11,8 +11,6 @@ use tokio::sync::Semaphore;
 use tokio::task;
 use walkdir::WalkDir;
 
-use crate::s3::upload_to_s3;
-
 /// Statistics about the backup process
 pub struct BackupStats {
     pub total_files: usize,
@@ -238,28 +236,28 @@ async fn process_file(
     let bytes_read = file.read_to_end(&mut contents).await?;
 
     // Compress if requested
-    if compress {
-        debug!("Compressing file with level {}", compression_level);
-        let mut encoder = flate2::write::GzEncoder::new(
-            Vec::new(),
-            flate2::Compression::new(compression_level.into()),
-        );
-        std::io::Write::write_all(&mut encoder, &contents)?;
-        contents = encoder.finish()?;
+    // if compress {
+    //     debug!("Compressing file with level {}", compression_level);
+    //     let mut encoder = flate2::write::GzEncoder::new(
+    //         Vec::new(),
+    //         flate2::Compression::new(compression_level.into()),
+    //     );
+    //     std::io::Write::write_all(&mut encoder, &contents)?;
+    //     contents = encoder.finish()?;
 
-        // Add .gz extension if not already present
-        if !s3_key.ends_with(".gz") {
-            let s3_key = format!("{}.gz", s3_key);
-            debug!("Uploading to s3://{}/{}", bucket, s3_key);
-            upload_to_s3(client, bucket, &s3_key, ByteStream::from(contents.clone())).await?;
-        } else {
-            debug!("Uploading to s3://{}/{}", bucket, s3_key);
-            upload_to_s3(client, bucket, s3_key, ByteStream::from(contents.clone())).await?;
-        }
-    } else {
-        debug!("Uploading to s3://{}/{}", bucket, s3_key);
-        upload_to_s3(client, bucket, s3_key, ByteStream::from(contents.clone())).await?;
-    }
+    //     // Add .gz extension if not already present
+    //     if !s3_key.ends_with(".gz") {
+    //         let s3_key = format!("{}.gz", s3_key);
+    //         debug!("Uploading to s3://{}/{}", bucket, s3_key);
+    //         upload_to_s3(client, bucket, &s3_key, ByteStream::from(contents.clone())).await?;
+    //     } else {
+    //         debug!("Uploading to s3://{}/{}", bucket, s3_key);
+    //         upload_to_s3(client, bucket, s3_key, ByteStream::from(contents.clone())).await?;
+    //     }
+    // } else {
+    //     debug!("Uploading to s3://{}/{}", bucket, s3_key);
+    //     upload_to_s3(client, bucket, s3_key, ByteStream::from(contents.clone())).await?;
+    // }
 
     Ok(bytes_read as u64)
 }

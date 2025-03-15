@@ -42,7 +42,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Backup a PostgreSQL database
-    Postgres {
+    BackupPostgres {
         /// Database name
         #[arg(short, long)]
         database: String,
@@ -66,72 +66,6 @@ pub enum Commands {
         /// Compression level (0-9)
         #[arg(short, long, default_value = "6")]
         compression: u8,
-
-        /// Force using Docker even if local pg_dump is compatible
-        #[arg(long)]
-        force_docker: bool,
-    },
-
-    /// Backup a MySQL/MariaDB database
-    Mysql {
-        /// Database name
-        #[arg(short, long)]
-        database: String,
-
-        /// Host name
-        #[arg(short, long, default_value = "localhost")]
-        host: String,
-
-        /// Port number
-        #[arg(short, long, default_value = "3306")]
-        port: u16,
-
-        /// Username
-        #[arg(short, long)]
-        username: String,
-
-        /// Password (prefer using MYSQL_PWD env var)
-        #[arg(long, env = "MYSQL_PWD")]
-        password: Option<String>,
-
-        /// Compression level (0-9)
-        #[arg(short, long, default_value = "6")]
-        compression: u8,
-    },
-
-    /// Backup a local folder to S3
-    Folder {
-        /// Local folder path to backup
-        #[arg(short, long)]
-        path: String,
-
-        /// Enable compression of files
-        #[arg(short, long)]
-        compress: bool,
-
-        /// Compression level (0-9) when compression is enabled
-        #[arg(long, default_value = "6")]
-        compression_level: u8,
-
-        /// Number of concurrent uploads (1-100)
-        #[arg(long, default_value = "4")]
-        concurrency: u8,
-
-        /// Include only files matching this pattern (glob syntax, can be used multiple times)
-        #[arg(long)]
-        include: Option<Vec<String>>,
-
-        /// Exclude files matching this pattern (glob syntax, can be used multiple times)
-        #[arg(long)]
-        exclude: Option<Vec<String>>,
-
-        /// Skip files larger than this size in MB
-        #[arg(long)]
-        skip_larger_than: Option<u32>,
-
-        /// Add timestamp to the S3 prefix
-        #[arg(long)]
-        add_timestamp: bool,
     },
 
     /// Restore a PostgreSQL database from S3 backup
@@ -167,41 +101,6 @@ pub enum Commands {
         /// Force using Docker even if local pg_restore is compatible
         #[arg(long)]
         force_docker: bool,
-
-        /// Drop the database before restoring (USE WITH CAUTION)
-        #[arg(long)]
-        drop_db: bool,
-    },
-
-    /// Restore a MySQL/MariaDB database from S3 backup
-    RestoreMysql {
-        /// Database name to restore to (will be created if it doesn't exist)
-        #[arg(short, long)]
-        database: String,
-
-        /// Host name
-        #[arg(short, long, default_value = "localhost")]
-        host: String,
-
-        /// Port number
-        #[arg(short, long, default_value = "3306")]
-        port: u16,
-
-        /// Username
-        #[arg(short, long)]
-        username: String,
-
-        /// Password (prefer using MYSQL_PWD env var)
-        #[arg(long, env = "MYSQL_PWD")]
-        password: Option<String>,
-
-        /// S3 key of the backup to restore (full path after bucket)
-        #[arg(short, long)]
-        key: Option<String>,
-
-        /// Latest backup for the specified database (overrides --key)
-        #[arg(long)]
-        latest: bool,
 
         /// Drop the database before restoring (USE WITH CAUTION)
         #[arg(long)]

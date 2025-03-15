@@ -5,21 +5,13 @@ use anyhow::Result;
 pub mod databases;
 pub mod folders;
 pub mod platform;
-pub mod s3;
 pub mod storage;
 pub mod utils;
 
 use databases::{backup_source, configs::SourceConfig, restore_source};
-pub use databases::{
-    mysql::{self, backup_mysql, backup_mysql_with_options},
-    postgres::{self, backup_postgres, backup_postgres_with_options, pg_restore::restore_postgres},
-};
 pub use folders::{backup_folder, BackupStats};
 use opendal::Entry;
-pub use s3::{
-    download_backup, get_latest_backup, get_latest_backups_by_db, list_backups, upload_to_s3,
-    BackupInfo,
-};
+
 use storage::{configs::StorageConfig, storage::Storage};
 use utils::get_filename;
 pub use utils::{format_timestamp, get_backup_key};

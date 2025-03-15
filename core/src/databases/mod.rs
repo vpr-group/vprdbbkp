@@ -3,9 +3,7 @@ use std::borrow::Borrow;
 use anyhow::Result;
 use bytes::Bytes;
 use configs::SourceConfig;
-use postgres::restore_postgres;
-
-use crate::backup_postgres;
+use postgres::{backup_postgres, restore_postgres};
 
 pub mod configs;
 pub mod mysql;
