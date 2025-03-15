@@ -393,14 +393,14 @@ mod tests {
 
     #[test]
     fn test_pg_tools_initialization() {
-        let pg_tools = PgTools::new(PostgresVersion::V16).expect("Failed to initialize PgTools");
+        let pg_tools = PgTools::default().expect("Failed to initialize PgTools");
         assert!(pg_tools.cache_dir.exists());
-        assert_eq!(pg_tools.version, PostgresVersion::V16);
+        assert_eq!(pg_tools.version, PostgresVersion::V15);
     }
 
     #[tokio::test]
     async fn test_pg_connection() {
-        let pg_tools = PgTools::new(PostgresVersion::V12).expect("Failed to initialize PgTools");
+        let pg_tools = PgTools::default().expect("Failed to initialize PgTools");
         let is_connected = pg_tools
             .is_postgres_connected("api", "localhost", 5432, "postgres", Some("postgres"))
             .await
