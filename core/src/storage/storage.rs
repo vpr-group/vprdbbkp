@@ -1,4 +1,7 @@
+use std::borrow::Borrow;
+
 use anyhow::{Context, Result};
+use bytes::Bytes;
 use opendal::layers::LoggingLayer;
 use opendal::services;
 use opendal::Entry;
@@ -12,8 +15,13 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub async fn new(storage_config: StorageConfig) -> Result<Self> {
-        let operator = match storage_config.clone() {
+    pub async fn new<B>(storage_config: B) -> Result<Self>
+    where
+        B: Borrow<StorageConfig>,
+    {
+        let borrowed_storage_config = storage_config.borrow();
+
+        let operator = match borrowed_storage_config {
             StorageConfig::S3(config) => {
                 let builder = services::S3::default()
                     .bucket(&config.bucket)
@@ -26,7 +34,7 @@ impl Storage {
                 operator.finish()
             }
             StorageConfig::Local(config) => {
-                let builder = services::Fs::default();
+                let builder = services::Fs::default().root(config.root.to_str().unwrap_or(""));
                 let operator = Operator::new(builder)?.layer(LoggingLayer::default());
                 operator.finish()
             }
@@ -34,15 +42,33 @@ impl Storage {
 
         return Ok(Storage {
             operator,
-            storage_config,
+            storage_config: borrowed_storage_config.clone(),
         });
     }
 
-    pub async fn list(&self) -> Result<Vec<Entry>> {
+    pub fn get_prefix(&self) -> String {
         let prefix = match self.storage_config.clone() {
             StorageConfig::S3(config) => format!("{}", config.prefix.unwrap_or("".into())),
             StorageConfig::Local(config) => format!("{}", config.prefix.unwrap_or("".into())),
         };
+
+        prefix
+    }
+
+    pub fn get_filename_from_path(&self, path: &str) -> String {
+        let prefix = self.get_prefix();
+
+        if path.starts_with(&format!("{}/", prefix)) {
+            // Remove the prefix and the following slash
+            path[prefix.len() + 1..].to_string()
+        } else {
+            // If path doesn't start with prefix, return the original path
+            path.to_string()
+        }
+    }
+
+    pub async fn list(&self) -> Result<Vec<Entry>> {
+        let prefix = self.get_prefix();
 
         let entries = self
             .operator
@@ -52,6 +78,31 @@ impl Storage {
             .context(format!("Failed to list dumps in"))?;
 
         Ok(entries)
+    }
+
+    pub async fn write(&self, filename: &str, bytes: Bytes) -> Result<String> {
+        let prefix = self.get_prefix();
+        let path = format!("{}/{}", prefix, filename);
+
+        self.operator
+            .write(&path, bytes)
+            .await
+            .context(format!("Failed to write bytes"))?;
+
+        Ok(path)
+    }
+
+    pub async fn read(&self, filename: &str) -> Result<Bytes> {
+        let prefix = self.get_prefix();
+        let path = format!("{}/{}", prefix, filename);
+
+        let buffer = self
+            .operator
+            .read(&path)
+            .await
+            .context(format!("Failed to read file {}", path))?;
+
+        Ok(Bytes::from(buffer.to_vec()))
     }
 }
 

@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use bytes::Bytes;
 use std::process::Stdio;
 use std::{env, fs, path::PathBuf};
+use tempfile::TempDir;
 use tokio::process::Command;
 
 use super::pg_versions::{PostgresVersion, DEFAULT_POSTGRES_VERSION};
@@ -63,6 +64,25 @@ impl PgTools {
         }
 
         Ok(Command::new(&pg_dump_path))
+    }
+
+    pub fn get_pg_restore_path(&self) -> PathBuf {
+        self.cache_dir
+            .join(format!("{}/bin/pg_restore", self.version.as_str()))
+    }
+
+    pub fn get_pg_restore_command(&self) -> Result<Command> {
+        let pg_restore_path = self.get_pg_restore_path();
+
+        if !std::path::Path::new(&pg_restore_path).exists() {
+            return Err(anyhow!(
+                "pg_restore executable not found at {}. Make sure PostgreSQL {} is properly installed.",
+                pg_restore_path.display(),
+                self.version.as_str()
+            ));
+        }
+
+        Ok(Command::new(&pg_restore_path))
     }
 
     pub fn extract_postgres_version(version_string: &str) -> Option<(u32, u32)> {
@@ -383,6 +403,209 @@ impl PgTools {
             }
 
             Ok(Bytes::from(output.stdout))
+        }
+    }
+
+    pub async fn restore(
+        &self,
+        database: &str,
+        host: &str,
+        port: u16,
+        username: &str,
+        password: Option<&str>,
+        dump_data: Bytes,
+        compressed: bool,
+    ) -> Result<()> {
+        let target_version = self
+            .get_postgres_version(database, host, port, username, password)
+            .await
+            .context(format!(
+                "Failed to connect to PostgreSQL at {}:{} to verify version",
+                host, port
+            ))?;
+
+        if target_version != self.version {
+            return Err(anyhow!(
+            "Version mismatch: Tool is configured for PostgreSQL {} but target database is running {}. Please use the correct version.",
+            self.version.as_str(),
+            target_version.as_str(),
+        ));
+        }
+
+        let pg_restore_path = self.get_pg_restore_path();
+
+        if compressed {
+            // Create a temporary file to store the compressed data
+            let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
+            let compressed_file_path = temp_dir.path().join("dump.gz");
+            let decompressed_file_path = temp_dir.path().join("dump.pgdump");
+
+            // Write the compressed data to a temporary file
+            tokio::fs::write(&compressed_file_path, &dump_data)
+                .await
+                .context("Failed to write compressed data to temporary file")?;
+
+            // Set up gunzip command to decompress the data
+            let mut gunzip_cmd = Command::new("gunzip");
+            gunzip_cmd
+                .arg("-c")
+                .arg(&compressed_file_path)
+                .stdout(Stdio::piped());
+
+            // Start gunzip process
+            let mut gunzip_process = gunzip_cmd.spawn().context("Failed to execute gunzip")?;
+
+            // Get handle to gunzip stdout
+            let mut gunzip_stdout = gunzip_process
+                .stdout
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("Failed to capture gunzip stdout"))?;
+
+            // Write the decompressed data to a temporary file
+            let mut decompressed_file = tokio::fs::File::create(&decompressed_file_path)
+                .await
+                .context("Failed to create decompressed file")?;
+
+            // Copy data from gunzip to the temporary file
+            tokio::io::copy(&mut gunzip_stdout, &mut decompressed_file)
+                .await
+                .context("Failed to decompress data")?;
+
+            // Wait for gunzip to complete
+            let gunzip_status = gunzip_process
+                .wait()
+                .await
+                .context("Failed to wait for gunzip")?;
+            if !gunzip_status.success() {
+                let exit_code = gunzip_status.code().unwrap_or(-1);
+                return Err(anyhow!("gunzip failed with exit code: {}", exit_code));
+            }
+
+            // Set up pg_restore command
+            let mut pg_restore_cmd = self.get_pg_restore_command()?;
+            pg_restore_cmd
+                .arg(format!("--host={}", host))
+                .arg(format!("--port={}", port))
+                .arg(format!("--username={}", username))
+                .arg("--dbname=".to_string() + database)
+                .arg("--no-owner")
+                .arg("--no-privileges")
+                .arg("--clean") // Drop objects before recreating them
+                .arg("--if-exists") // Add IF EXISTS for cleaner drops
+                .arg("--no-comments") // Skip comments to avoid warnings
+                .arg("--exit-on-error") // Continue on error
+                .arg(&decompressed_file_path);
+
+            // Set the PGPASSWORD environment variable if password is provided
+            if let Some(pass) = password {
+                pg_restore_cmd.env("PGPASSWORD", pass);
+            }
+
+            // Execute the command
+            let output = pg_restore_cmd.output().await.context(format!(
+                "Failed to execute pg_restore command at {}",
+                pg_restore_path.display()
+            ))?;
+
+            // Check if the command executed successfully
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let exit_code = output.status.code().unwrap_or(-1);
+
+                // Provide specific error messages based on common failure patterns
+                if stderr.contains("connection to server") && stderr.contains("failed") {
+                    return Err(anyhow!(
+                        "Connection to database failed. Please check:\n- Host '{}' and port '{}' are correct\n- Database '{}' exists\n- User '{}' has access permissions\n- PostgreSQL is running\n\nError details: {}",
+                        host, port, database, username, stderr.trim()
+                    ));
+                } else if stderr.contains("permission denied") {
+                    return Err(anyhow!(
+                        "Permission denied. User '{}' doesn't have sufficient privileges to restore database '{}'.\nError details: {}",
+                        username, database, stderr.trim()
+                    ));
+                } else {
+                    return Err(anyhow!(
+                        "pg_restore failed with exit code {}.\nCommand: {} --host={} --port={} --username={} --dbname={} --no-owner --no-privileges {}\n\nError details: {}",
+                        exit_code,
+                        pg_restore_path.display(),
+                        host,
+                        port,
+                        username,
+                        database,
+                        decompressed_file_path.display(),
+                        stderr.trim()
+                    ));
+                }
+            }
+
+            Ok(())
+        } else {
+            // Create a temporary file to store the dump data
+            let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
+            let dump_file_path = temp_dir.path().join("dump.pgdump");
+
+            // Write the dump data to a temporary file
+            tokio::fs::write(&dump_file_path, &dump_data)
+                .await
+                .context("Failed to write dump data to temporary file")?;
+
+            // Set up pg_restore command
+            let mut cmd = self.get_pg_restore_command()?;
+            cmd.arg(format!("--host={}", host))
+                .arg(format!("--port={}", port))
+                .arg(format!("--username={}", username))
+                .arg("--dbname=".to_string() + database)
+                .arg("--no-owner")
+                .arg("--no-privileges")
+                .arg("--clean") // Drop objects before recreating them
+                .arg("--if-exists") // Add IF EXISTS for cleaner drops
+                .arg("--no-comments") // Skip comments to avoid warnings
+                .arg("--exit-on-error") // Continue on error
+                .arg(&dump_file_path);
+
+            // Set the PGPASSWORD environment variable if password is provided
+            if let Some(pass) = password {
+                cmd.env("PGPASSWORD", pass);
+            }
+
+            // Execute the command
+            let output = cmd.output().await.context(format!(
+                "Failed to execute pg_restore command at {}",
+                pg_restore_path.display()
+            ))?;
+
+            // Check if the command executed successfully
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let exit_code = output.status.code().unwrap_or(-1);
+
+                // Provide specific error messages based on common failure patterns
+                if stderr.contains("connection to server") && stderr.contains("failed") {
+                    return Err(anyhow!(
+                        "Connection to database failed. Please check:\n- Host '{}' and port '{}' are correct\n- Database '{}' exists\n- User '{}' has access permissions\n- PostgreSQL is running\n\nError details: {}",
+                        host, port, database, username, stderr.trim()
+                    ));
+                } else if stderr.contains("permission denied") {
+                    return Err(anyhow!(
+                        "Permission denied. User '{}' doesn't have sufficient privileges to restore database '{}'.\nError details: {}",
+                        username, database, stderr.trim()
+                    ));
+                } else {
+                    return Err(anyhow!(
+                        "pg_restore failed with exit code {}.\nCommand: {} --host={} --port={} --username={} --dbname={} --no-owner --no-privileges {}\n\nError details: {}",
+                        exit_code,
+                        pg_restore_path.display(),
+                        host,
+                        port,
+                        username,
+                        database,
+                        dump_file_path.display(),
+                        stderr.trim()
+                    ));
+                }
+            }
+
+            Ok(())
         }
     }
 }

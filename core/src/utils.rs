@@ -1,5 +1,50 @@
+use std::borrow::Borrow;
+
 use chrono::Utc;
 use uuid::Uuid;
+
+use crate::databases::configs::SourceConfig;
+
+pub fn slugify(input: &str) -> String {
+    let mut slug = String::new();
+    let mut prev_is_separator = false;
+
+    for c in input.chars() {
+        if c.is_alphanumeric() {
+            slug.push(c.to_lowercase().next().unwrap());
+            prev_is_separator = false;
+        } else if !prev_is_separator {
+            // Replace any non-alphanumeric character with a hyphen
+            slug.push('-');
+            prev_is_separator = true;
+        }
+    }
+
+    // Remove leading and trailing hyphens
+    let slug = slug.trim_matches('-');
+
+    slug.to_string()
+}
+
+pub fn get_filename<B>(backup_source_config: B) -> String
+where
+    B: Borrow<SourceConfig>,
+{
+    let now = Utc::now();
+    let date_str = now.format("%Y-%m-%d-%H%M%S");
+    let uuid_string = Uuid::new_v4().to_string();
+    let uuid = uuid_string.split('-').next().unwrap_or("backup");
+
+    match backup_source_config.borrow() {
+        SourceConfig::PG(config) => format!(
+            "{}-{}-{}-{}.gz",
+            slugify(&config.name),
+            slugify(&config.database),
+            date_str,
+            uuid
+        ),
+    }
+}
 
 pub fn get_backup_key(prefix: &str, db_type: &str, db_name: &str) -> String {
     let now = Utc::now();

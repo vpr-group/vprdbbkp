@@ -49,6 +49,33 @@ pub async fn backup_postgres(
     Ok(output)
 }
 
+pub async fn restore_postgres(
+    database: &str,
+    host: &str,
+    port: u16,
+    username: &str,
+    password: Option<&str>,
+    dump_data: Bytes,
+    compressed: bool,
+) -> Result<()> {
+    let mut pg_tools = PgTools::default()?;
+
+    let version = pg_tools
+        .get_postgres_version(database, host, port, username, password)
+        .await?;
+
+    // Set the correct PostrgreSQL target version
+    pg_tools = PgTools::new(version)?;
+
+    pg_tools
+        .restore(
+            database, host, port, username, password, dump_data, compressed,
+        )
+        .await?;
+
+    Ok(())
+}
+
 /// Get the local pg_dump version
 fn get_local_pg_dump_version() -> Result<(u32, u32)> {
     let output = Command::new("pg_dump")
