@@ -58,6 +58,12 @@ jobs:
           # Update both crates to the same version
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" cli/Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" core/Cargo.toml
+          # Update Tauri app version if it exists
+          if [ -f app/src-tauri/Cargo.toml ]; then
+            sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" app/src-tauri/Cargo.toml
+            sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" app/src-tauri/tauri.conf.json
+            echo "Updated app/src-tauri/Cargo.toml and tauri.conf.json to version $NEW_VERSION"
+          fi
           echo "Updated Cargo.toml files to version $NEW_VERSION"
 
       - name: Update install.sh Version
@@ -75,6 +81,9 @@ jobs:
           git add cli/Cargo.toml core/Cargo.toml
           if [ -f cli/install.sh ]; then
             git add cli/install.sh
+          fi
+          if [ -f app/src-tauri/Cargo.toml ]; then
+            git add app/src-tauri/Cargo.toml app/src-tauri/tauri.conf.json
           fi
           git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
           git push origin main
@@ -145,8 +154,89 @@ jobs:
           path: artifacts/vprs3bkp-${{ matrix.artifact-name }}
           retention-days: 7
 
+  build-tauri:
+    needs: [version]
+    if: always() && (github.event_name != 'workflow_dispatch' || needs.version.result == 'success')
+    strategy:
+      matrix:
+        include:
+          # Linux build
+          - os: ubuntu-20.04
+            platform: linux
+            artifact-name: linux-x64
+          # macOS Silicon (ARM64) build
+          - os: macos-latest
+            platform: macos
+            artifact-name: macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', needs.version.outputs.new_version) || '' }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+          cache-dependency-path: "app/package-lock.json"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev \
+            build-essential \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install app dependencies and build
+        run: |
+          cd app
+          npm ci
+          npm run build
+
+      - name: Build Tauri App (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          cd app
+          npm run tauri build
+
+      - name: Build Tauri App (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          cd app
+          npm run tauri build -- --target aarch64-apple-darwin
+
+      - name: Prepare Tauri Artifacts
+        run: |
+          mkdir -p tauri-artifacts
+          if [ "${{ matrix.platform }}" == "linux" ]; then
+            cp app/src-tauri/target/release/bundle/appimage/*.AppImage tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.AppImage || true
+            cp app/src-tauri/target/release/bundle/deb/*.deb tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.deb || true
+          fi
+          if [ "${{ matrix.platform }}" == "macos" ]; then
+            # For macOS, we copy the .app directory and .dmg file if available
+            cp -R app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app tauri-artifacts/ || true
+            cp app/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.dmg || true
+          fi
+          ls -la tauri-artifacts/
+
+      - name: Upload Tauri Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.artifact-name }}
+          path: tauri-artifacts/
+          retention-days: 7
+
   release:
-    needs: [build, version]
+    needs: [build, build-tauri, version]
     if: github.event_name == 'workflow_dispatch' && needs.version.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -163,6 +253,7 @@ jobs:
         run: |
           mkdir -p release-artifacts
           find dist -type f -name "*" -exec cp {} release-artifacts/ \;
+          find dist -type d -name "*.app" -exec cp -r {} release-artifacts/ \;
           ls -la release-artifacts/
 
       - name: Create GitHub Release
