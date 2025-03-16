@@ -220,13 +220,13 @@ jobs:
         run: |
           mkdir -p tauri-artifacts
           if [ "${{ matrix.platform }}" == "linux" ]; then
-            cp app/src-tauri/target/release/bundle/appimage/*.AppImage tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.AppImage || true
-            cp app/src-tauri/target/release/bundle/deb/*.deb tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.deb || true
+            cp target/release/bundle/appimage/*.AppImage tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.AppImage || true
+            cp target/release/bundle/deb/*.deb tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.deb || true
           fi
           if [ "${{ matrix.platform }}" == "macos" ]; then
             # For macOS, we copy the .app directory and .dmg file if available
-            cp -R app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app tauri-artifacts/ || true
-            cp app/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.dmg || true
+            cp -R target/aarch64-apple-darwin/release/bundle/macos/*.app tauri-artifacts/ || true
+            cp target/aarch64-apple-darwin/release/bundle/dmg/*.dmg tauri-artifacts/vprs3bkp-app-${{ matrix.artifact-name }}.dmg || true
           fi
           ls -la tauri-artifacts/
 
