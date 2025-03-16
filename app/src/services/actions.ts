@@ -55,17 +55,17 @@ export class ActionsService {
   }
 
   async backupSource(
-    backupSource: SourceConfig,
-    storageProvider: StorageConfig
+    sourceConfig: SourceConfig,
+    storageConfig: StorageConfig
   ): Promise<void> {
     try {
-      const result = await invoke<string>("backup_source", {
-        backupSource,
-        storageProvider,
+      const result = await invoke<string>("backup", {
+        sourceConfig,
+        storageConfig,
       });
       console.log(result);
     } catch (error) {
-      console.error("Failed to test backup source connection:", error);
+      console.error("Failed to backup source:", error);
     }
   }
 
