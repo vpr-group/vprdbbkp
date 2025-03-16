@@ -121,6 +121,7 @@ dependencies = [
  "aws-sdk-s3",
  "env_logger",
  "log",
+ "opendal",
  "serde",
  "serde_json",
  "tauri",
