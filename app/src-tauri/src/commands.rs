@@ -1,7 +1,10 @@
 use crate::utils::serializable_entry::{entries_to_serializable, SerializableEntry};
 use log::info;
 use serde::{Deserialize, Serialize};
-use vprs3bkp_core::{databases::configs::SourceConfig, storage::configs::StorageConfig};
+use vprs3bkp_core::{
+    databases::{configs::SourceConfig, is_database_connected},
+    storage::configs::StorageConfig,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupConnectionResult {
@@ -47,5 +50,9 @@ pub async fn restore(
 pub async fn verify_connection(
     source_config: SourceConfig,
 ) -> Result<BackupConnectionResult, String> {
-    Ok(BackupConnectionResult { connected: true })
+    let connected = is_database_connected(source_config)
+        .await
+        .map_err(|e| format!("Failed to check source connection: {}", e))?;
+
+    Ok(BackupConnectionResult { connected })
 }

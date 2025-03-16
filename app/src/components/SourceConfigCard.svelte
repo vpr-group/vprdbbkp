@@ -17,7 +17,7 @@
 
   onMount(async () => {
     await storeService.waitForInitialized();
-    actionService.verifyBackupSourceConnection(sourceConfig).then((res) => {
+    actionService.verifySourceonnection(sourceConfig).then((res) => {
       connected = res.connected;
     });
   });

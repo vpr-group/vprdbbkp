@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { StoreService, type SourceConfig } from "../../../services/store";
   import Separation from "../../../components/Separation.svelte";
-  import BackupSourceDialog from "../../../components/BackupSourceDialog.svelte";
+  import BackupSourceDialog from "../../../components/SourceConfigDialog.svelte";
   import Button from "../../../components/Button.svelte";
   import Table from "../../../components/Table.svelte";
   import { goto } from "$app/navigation";
@@ -15,12 +15,12 @@
   const actionService = new ActionsService();
   const storeService = new StoreService();
 
-  let backupSource = $state<SourceConfig | null>(null);
+  let sourceConfig = $state<SourceConfig | null>(null);
   let connected = $state(false);
 
   const loadBackupSource = async () => {
     await storeService.waitForInitialized();
-    backupSource = await storeService.getSourceConfig(page.params.id);
+    sourceConfig = await storeService.getSourceConfig(page.params.id);
   };
 
   const cellLabelStyle: CSSProperties = {
@@ -32,25 +32,25 @@
   });
 
   $effect(() => {
-    if (!backupSource) return;
-    actionService.verifyBackupSourceConnection(backupSource).then((res) => {
+    if (!sourceConfig) return;
+    actionService.verifySourceonnection(sourceConfig).then((res) => {
       connected = res.connected;
     });
   });
 </script>
 
 {#snippet sideSection()}
-  {#if backupSource}
+  {#if sourceConfig}
     <Button
       onclick={async () => {
-        if (!backupSource) return;
-        await storeService.deleteSourceConfig(backupSource?.id);
+        if (!sourceConfig) return;
+        await storeService.deleteSourceConfig(sourceConfig?.id);
         goto("/");
       }}
       icon="cross">Delete</Button
     >
     <BackupSourceDialog
-      {backupSource}
+      {sourceConfig}
       onsubmit={async (backupSource) => {
         await storeService.saveSourceConfig(backupSource);
         loadBackupSource();
@@ -58,55 +58,55 @@
     />
     <BackupDropdown
       onbackup={(storageProvider) => {
-        if (!backupSource) return;
-        actionService.backupSource(backupSource, storageProvider);
+        if (!sourceConfig) return;
+        actionService.backupSource(sourceConfig, storageProvider);
       }}
     />
   {/if}
 {/snippet}
 
 {#snippet label()}
-  {#if backupSource}
+  {#if sourceConfig}
     <div class="backup-source__label">
       <StatusDot status={connected ? "success" : undefined} />
-      {backupSource.name}
+      {sourceConfig.name}
     </div>
   {/if}
 {/snippet}
 
-{#if backupSource}
-  <Separation {label} subLabel={backupSource.type} {sideSection} />
+{#if sourceConfig}
+  <Separation {label} subLabel={sourceConfig.type} {sideSection} />
 
   <Table
     rows={[
       {
         cells: [
           { label: "database type", width: "10rem", style: cellLabelStyle },
-          { label: backupSource.databaseType || "-" },
+          { label: sourceConfig.type || "-" },
         ],
       },
       {
         cells: [
           { label: "database", width: "10rem", style: cellLabelStyle },
-          { label: backupSource.database || "-" },
+          { label: sourceConfig.database || "-" },
         ],
       },
       {
         cells: [
           { label: "host", width: "10rem", style: cellLabelStyle },
-          { label: backupSource.host || "-" },
+          { label: sourceConfig.host || "-" },
         ],
       },
       {
         cells: [
           { label: "port", width: "10rem", style: cellLabelStyle },
-          { label: backupSource.port.toString() || "-" },
+          { label: sourceConfig.port.toString() || "-" },
         ],
       },
       {
         cells: [
           { label: "username", width: "10rem", style: cellLabelStyle },
-          { label: backupSource.username || "-" },
+          { label: sourceConfig.username || "-" },
         ],
       },
       {
@@ -114,7 +114,7 @@
           { label: "password", width: "10rem", style: cellLabelStyle },
           {
             label:
-              (backupSource.password || "")
+              (sourceConfig.password || "")
                 .split("")
                 .map((it) => "•")
                 .join("") || "-",

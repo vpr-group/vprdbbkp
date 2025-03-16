@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { StoreService, type StorageConfig } from "../../../services/store";
   import { page } from "$app/state";
-  import StorageProviderDialog from "../../../components/StorageProviderDialog.svelte";
+  import StorageProviderDialog from "../../../components/StorageConfigDialog.svelte";
   import { ActionsService, type Entry } from "../../../services/actions";
   import Table, { type Cell, type Row } from "../../../components/Table.svelte";
   import Separation from "../../../components/Separation.svelte";

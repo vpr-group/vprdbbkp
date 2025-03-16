@@ -38,14 +38,13 @@ export class ActionsService {
     }
   }
 
-  async verifyBackupSourceConnection(
-    backupSource: SourceConfig
+  async verifySourceonnection(
+    sourceConfig: SourceConfig
   ): Promise<BackupSourceConnection> {
     try {
-      const result = await invoke<BackupSourceConnection>(
-        "verify_backup_source_connection",
-        { backupSource }
-      );
+      const result = await invoke<BackupSourceConnection>("verify_connection", {
+        sourceConfig,
+      });
       return result;
     } catch (error) {
       console.error("Failed to test backup source connection:", error);

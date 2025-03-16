@@ -1,10 +1,10 @@
 <script lang="ts">
-  import BackupSourceCard from "../components/BackupSourceCard.svelte";
-  import BackupSourceDialog from "../components/BackupSourceDialog.svelte";
+  import BackupSourceCard from "../components/SourceConfigCard.svelte";
+  import BackupSourceDialog from "../components/SourceConfigDialog.svelte";
   import Grid from "../components/Grid.svelte";
   import Separation from "../components/Separation.svelte";
-  import StorageProviderCard from "../components/StorageProviderCard.svelte";
-  import StorageProviderDialog from "../components/StorageProviderDialog.svelte";
+  import StorageProviderCard from "../components/StorageConfigCard.svelte";
+  import StorageProviderDialog from "../components/StorageConfigDialog.svelte";
   import {
     StoreService,
     type SourceConfig,
