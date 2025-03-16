@@ -2,15 +2,18 @@
 name = "cli"
 version = "0.1.0"
 edition = "2021"
-description = "CLI for S3 backup and restore"
+description = "CLI for DB backup and restore"
+
+[profile.release]
+opt-level = "z"         # Optimize for size
+lto = true              # Enable Link Time Optimization
+codegen-units = 1       # Maximize size reduction optimizations
+panic = "abort"         # Remove panic unwinding code
+strip = true            # Strip symbols from binary
+debug = false           # No debug symbols
 
 [dependencies]
-vprs3bkp-core = { path = "../core" }
 anyhow = "1.0"
-aws-config = "0.56"
-aws-sdk-s3 = "0.30"
+vprs3bkp-core = { path = "../core" }
 clap = { version = "4.3", features = ["derive", "env"] }
-dotenv = "0.15"
-env_logger = "0.10"
-log = "0.4"
-tokio = { version = "1.28", features = ["full"] }
+tokio = { version = "1.28", default-features = false, features = ["rt-multi-thread", "macros", "fs", "io-util"] }

@@ -9,7 +9,6 @@ pub mod storage;
 pub mod utils;
 
 use databases::{backup_source, configs::SourceConfig, restore_source};
-pub use folders::{backup_folder, BackupStats};
 use opendal::Entry;
 
 use storage::{configs::StorageConfig, storage::Storage};

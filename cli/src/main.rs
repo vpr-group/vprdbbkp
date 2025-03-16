@@ -1,170 +1,158 @@
 use anyhow::Result;
 use clap::Parser;
-use log::{info, warn, LevelFilter};
+use cli::{source_from_cli, storage_from_cli, Cli, Commands};
+use vprs3bkp_core::{
+    backup,
+    databases::{configs::SourceConfig, postgres::backup_postgres},
+    list, restore,
+    storage::storage::Storage,
+    utils::get_filename,
+};
 
 mod cli;
-use cli::{Cli, Commands};
-use vprs3bkp_core::databases::{
-    backup_source,
-    configs::{PGSourceConfig, SourceConfig}, restore_source,
-};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Load .env file if present
-    let _ = dotenv::dotenv();
-
-    // Parse command-line arguments
+    // Parse command line arguments
     let cli = Cli::parse();
 
-    // Set up logging
-    env_logger::Builder::new()
-        .filter_level(if cli.verbose {
-            LevelFilter::Debug
-        } else {
-            LevelFilter::Info
-        })
-        .init();
+    // Process commands
+    match &cli.command {
+        Commands::Backup(args) => {
+            let source_config = source_from_cli(&args.source)?;
+            let storage_config = storage_from_cli(&args.storage)?;
 
-    match cli.command {
-        Commands::BackupPostgres {
-            database,
-            host,
-            port,
-            username,
-            password,
-            compression,
-        } => {
-            let source_config = SourceConfig::PG(PGSourceConfig {
-                name: "".into(),
-                database,
-                host,
-                port,
-                username,
-                password,
-            });
-
-            backup_source(source_config).await?;
-        }
-        Commands::RestorePostgres {
-            database,
-            host,
-            port,
-            username,
-            password,
-            key,
-            latest,
-            force_docker,
-            drop_db,
-        } => {
-            let source_config = SourceConfig::PG(PGSourceConfig {
-                name: "".into(),
-                database,
-                host,
-                port,
-                username,
-                password,
-            });
-
-            restore_source(source_config, dump_data)
-
-            info!("PostgreSQL database restore completed successfully");
-        }
-        Commands::List {
-            backup_type,
-            database,
-            latest_only,
-            limit,
-        } => {
-            info!("Listing backups in bucket: {}/{}", cli.bucket, cli.prefix);
-
-            let backups = list_backups(
-                &s3_client,
-                &cli.bucket,
-                &cli.prefix,
-                backup_type.as_deref(),
-                database.as_deref(),
-                limit,
-            )
-            .await?;
-
-            if backups.is_empty() {
-                info!("No backups found matching the criteria");
-                return Ok(());
-            }
-
-            let backups_to_display = if latest_only {
-                info!("Showing only the latest backup per database");
-                get_latest_backups_by_db(&backups)
+            // If compression is specified and using Postgres, use custom compression logic
+            if let (Some(comp_level), "postgres") =
+                (args.compression, args.source.source_type.as_str())
+            {
+                match &source_config {
+                    SourceConfig::PG(pg_config) => {
+                        println!(
+                            "Backing up PostgreSQL database '{}' with compression level {}...",
+                            pg_config.database, comp_level
+                        );
+                        let bytes = backup_postgres(
+                            &pg_config.database,
+                            &pg_config.host,
+                            pg_config.port,
+                            &pg_config.username,
+                            pg_config.password.as_deref(),
+                            Some(comp_level),
+                        )
+                        .await?;
+                        let storage = Storage::new(&storage_config).await?;
+                        let filename = get_filename(&source_config);
+                        let path = storage.write(&filename, bytes).await?;
+                        println!("Backup completed successfully: {}", path);
+                    }
+                }
             } else {
-                backups.iter().collect()
-            };
-
-            // Find the maximum width needed for each column
-            let mut max_key_width = 4; // "Key".len()
-            let mut max_db_width = 8; // "Database".len()
-            let mut max_type_width = 4; // "Type".len()
-            let date_width = 16; // Fixed width for "YYYY-MM-DD HH:MM" format
-
-            // Calculate the required width for each column based on actual data
-            for backup in &backups_to_display {
-                max_key_width = max_key_width.max(backup.key.len());
-                max_db_width = max_db_width.max(backup.db_name.len());
-                max_type_width = max_type_width.max(backup.backup_type.len());
+                // Use the standard backup function
+                let path = backup(&source_config, &storage_config).await?;
+                println!("Backup completed successfully: {}", path);
             }
+        }
 
-            // Cap maximum widths to keep table reasonable
-            max_key_width = max_key_width.min(60); // Cap key length at 60 chars
-            max_db_width = max_db_width.min(20); // Cap db name at 20 chars
-            max_type_width = max_type_width.min(15); // Cap type at 15 chars
+        Commands::Restore(args) => {
+            let source_config = source_from_cli(&args.source)?;
+            let storage_config = storage_from_cli(&args.storage)?;
 
-            // Calculate the total width of the table
-            let total_width = max_key_width + max_db_width + max_type_width + date_width + 9; // 9 for separators and padding
+            if args.latest {
+                // If latest flag is set, find the most recent backup for this database
+                let entries = list(&storage_config).await?;
+                let storage = Storage::new(&storage_config).await?;
 
-            println!("\nAvailable backups:");
-            println!("{:-<width$}", "", width = total_width);
-            println!(
-                "{:<key_width$} | {:<db_width$} | {:<type_width$} | {:<date_width$}",
-                "Key",
-                "Database",
-                "Type",
-                "Date",
-                key_width = max_key_width,
-                db_width = max_db_width,
-                type_width = max_type_width,
-                date_width = date_width
-            );
-            println!("{:-<width$}", "", width = total_width);
-
-            for backup in &backups_to_display {
-                // Handle potential truncation for the key (if we capped max width)
-                let display_key = if backup.key.len() > max_key_width {
-                    // Show beginning and end with ellipsis in the middle
-                    let start = &backup.key[..max_key_width / 3];
-                    let end = &backup.key[backup.key.len() - max_key_width / 3..];
-                    format!("{}...{}", start, end)
-                } else {
-                    backup.key.clone()
+                // Find files that match the database name pattern
+                let db_name = match &source_config {
+                    SourceConfig::PG(pg) => {
+                        format!("{}-{}", pg.name, pg.database)
+                    }
                 };
 
-                // Format the timestamp in a friendly way
-                let friendly_date = format_timestamp(&backup.timestamp);
+                let matching_entries = entries
+                    .iter()
+                    .filter(|e| {
+                        let path = e.path();
+                        let filename = storage.get_filename_from_path(path);
+                        filename.starts_with(&db_name)
+                    })
+                    .collect::<Vec<_>>();
 
-                println!(
-                    "{:<key_width$} | {:<db_width$} | {:<type_width$} | {:<date_width$}",
-                    display_key,
-                    backup.db_name,
-                    backup.backup_type,
-                    friendly_date,
-                    key_width = max_key_width,
-                    db_width = max_db_width,
-                    type_width = max_type_width,
-                    date_width = date_width
-                );
+                if matching_entries.is_empty() {
+                    return Err(anyhow::anyhow!("No backups found for database {}", db_name));
+                }
+
+                // Sort by path (which should have timestamps) to get most recent
+                let mut sorted_entries = matching_entries.clone();
+                sorted_entries.sort_by(|a, b| b.path().cmp(a.path()));
+
+                let latest_path = sorted_entries[0].path();
+                let latest_filename = storage.get_filename_from_path(latest_path);
+
+                println!("Restoring the latest backup: {}", latest_filename);
+                restore(&source_config, &storage_config, &latest_filename).await?;
+            } else if let Some(filename) = &args.filename {
+                // Use the provided filename
+                println!("Restoring from backup: {}", filename);
+                restore(&source_config, &storage_config, filename).await?;
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Either --filename or --latest must be specified for restore"
+                ));
             }
 
-            println!("{:-<width$}", "", width = total_width);
-            println!("Total: {} backups", backups_to_display.len());
+            println!("Restore completed successfully");
+        }
+
+        Commands::List(args) => {
+            let storage_config = storage_from_cli(&args.storage)?;
+
+            let entries = crate::list(&storage_config).await?;
+            let storage = Storage::new(&storage_config).await?;
+
+            // Filter entries if database is specified
+            let mut filtered_entries = if let Some(db_name) = &args.database {
+                entries
+                    .iter()
+                    .filter(|e| {
+                        let path = e.path();
+                        let filename = storage.get_filename_from_path(path);
+                        filename.contains(db_name)
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                entries.iter().collect::<Vec<_>>()
+            };
+
+            // Sort by path (most recent first)
+            filtered_entries.sort_by(|a, b| b.path().cmp(a.path()));
+
+            if args.latest_only && !filtered_entries.is_empty() {
+                // For latest only, we can just take the first entry since they're already sorted
+                filtered_entries = vec![filtered_entries[0]];
+            }
+
+            // Limit number of results
+            let limited_entries = filtered_entries.iter().take(args.limit);
+
+            println!("Available backups:");
+            for entry in limited_entries {
+                let path = entry.path();
+                let filename = storage.get_filename_from_path(path);
+                let size = entry.metadata().content_length();
+                let size_str = if size < 1024 {
+                    format!("{}B", size)
+                } else if size < 1024 * 1024 {
+                    format!("{:.2}KB", size as f64 / 1024.0)
+                } else if size < 1024 * 1024 * 1024 {
+                    format!("{:.2}MB", size as f64 / (1024.0 * 1024.0))
+                } else {
+                    format!("{:.2}GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
+                };
+
+                println!("  {} ({})", filename, size_str);
+            }
         }
     }
 
