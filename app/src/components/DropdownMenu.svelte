@@ -32,6 +32,9 @@
     {/snippet}
   </DropdownMenu.Trigger>
   <DropdownMenu.Portal>
+    {#if open}
+      <div class="dropdown__overlay"></div>
+    {/if}
     <DropdownMenu.Content sideOffset={10} {align}>
       <div class="dropdown__content">
         {#each items || [] as it}
@@ -46,7 +49,20 @@
 
 <style lang="scss">
   .dropdown {
+    &__overlay {
+      position: fixed;
+      z-index: 0;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--color-light);
+      opacity: 0.7;
+    }
+
     &__content {
+      position: relative;
+      z-index: 30;
       display: flex;
       flex-direction: column;
       gap: 4px;
