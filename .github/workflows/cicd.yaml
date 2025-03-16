@@ -19,7 +19,7 @@ on:
           - major
 env:
   CARGO_TERM_COLOR: always
-  BINARY_NAME: vprs3bkp-cli
+  BINARY_NAME: cli # Changed to match your actual binary name
 jobs:
   version:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -40,7 +40,7 @@ jobs:
       - name: Get Current Version
         id: current_version
         run: |
-          # Update to check version from the workspace Cargo.toml
+          # Check version from the cli/Cargo.toml
           CURRENT_VERSION=$(grep -m 1 "version" cli/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $CURRENT_VERSION"
@@ -63,18 +63,18 @@ jobs:
       - name: Update install.sh Version
         run: |
           NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
-          if [ -f install.sh ]; then
-            sed -i "s/^VERSION=\".*\"/VERSION=\"$NEW_VERSION\"/" install.sh
-            echo "Updated install.sh to version $NEW_VERSION"
+          if [ -f cli/install.sh ]; then
+            sed -i "s/^VERSION=\".*\"/VERSION=\"$NEW_VERSION\"/" cli/install.sh
+            echo "Updated cli/install.sh to version $NEW_VERSION"
           else
-            echo "Warning: install.sh not found, skipping version update"
+            echo "Warning: cli/install.sh not found, skipping version update"
           fi
 
       - name: Commit and Push Changes
         run: |
           git add cli/Cargo.toml core/Cargo.toml
-          if [ -f install.sh ]; then
-            git add install.sh
+          if [ -f cli/install.sh ]; then
+            git add cli/install.sh
           fi
           git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
           git push origin main
@@ -126,21 +126,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools
 
+      - name: Add size optimizations for release build
+        run: |
+          # Add size optimization settings to cli/Cargo.toml
+          echo '
+          [profile.release]
+          opt-level = "z"
+          lto = true
+          codegen-units = 1
+          panic = "abort"
+          strip = true
+          debug = false' >> cli/Cargo.toml
+
       - name: Build Release
         run: |
-          # Build CLI binary specifically
-          cargo build --package cli --target ${{ matrix.target }} --release --verbose
+          # Navigate to cli directory and build
+          cd cli
+          cargo build --target ${{ matrix.target }} --release --verbose
 
       - name: Prepare Artifact
         run: |
           mkdir -p artifacts
-          cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} artifacts/${{ env.BINARY_NAME }}-${{ matrix.artifact-name }}
+          # Rename binary to vprs3bkp for release
+          cp cli/target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} artifacts/vprs3bkp-${{ matrix.artifact-name }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: artifacts/${{ env.BINARY_NAME }}-${{ matrix.artifact-name }}
+          path: artifacts/vprs3bkp-${{ matrix.artifact-name }}
           retention-days: 7
 
   release:
