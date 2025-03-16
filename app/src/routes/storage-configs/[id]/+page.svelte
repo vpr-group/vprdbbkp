@@ -8,25 +8,36 @@
   import Separation from "../../../components/Separation.svelte";
   import Button from "../../../components/Button.svelte";
   import RestoreDropdown from "../../../components/RestoreDropdown.svelte";
+  import { notificationsStore } from "../../../components/Notifications.svelte";
 
+  const { addNotification, removeNotification } = notificationsStore;
   const storeService = new StoreService();
   const actionsService = new ActionsService();
 
-  let storageProvider = $state<StorageConfig | null>(null);
+  let storageConfig = $state<StorageConfig | null>(null);
   let backups = $state<Entry[]>([]);
 
-  const loadStorageProvider = async () => {
+  const loadStorageConfig = async () => {
     await storeService.waitForInitialized();
-    storageProvider = await storeService.getStorageConfig(page.params.id);
+    storageConfig = await storeService.getStorageConfig(page.params.id);
   };
 
   const loadBackups = async () => {
-    if (!storageProvider) return;
-    backups = await actionsService.list(storageProvider);
+    if (!storageConfig) return;
+
+    try {
+      backups = await actionsService.list(storageConfig);
+    } catch (error) {
+      addNotification({
+        title: "Failed to load backups",
+        message: `${error}`,
+        status: "error",
+      });
+    }
   };
 
   onMount(async () => {
-    loadStorageProvider();
+    loadStorageConfig();
   });
 
   $effect(() => {
@@ -35,32 +46,58 @@
 </script>
 
 {#snippet sideSection()}
-  {#if storageProvider}
+  {#if storageConfig}
     <Button onclick={() => loadBackups()} icon="cross">Delete</Button>
     <StorageProviderDialog
-      storageConfig={storageProvider}
+      {storageConfig}
       onsubmit={async (storageProvider) => {
         await storeService.saveStorageConfig(storageProvider);
-        loadStorageProvider();
+        loadStorageConfig();
       }}
     />
     <Button onclick={() => loadBackups()} icon="reload">Refresh</Button>
   {/if}
 {/snippet}
 
-{#if storageProvider}
+{#if storageConfig}
   <Separation
-    label={storageProvider.name}
-    subLabel={`${storageProvider.type} - ${storageProvider.name}`}
+    label={storageConfig.name}
+    subLabel={`${storageConfig.type} - ${storageConfig.name}`}
     {sideSection}
   />
 
   {#snippet actions(cell: Cell, row?: Row)}
     <RestoreDropdown
       backupKey={cell.label || ""}
-      onrestore={(backupSource) => {
-        if (!storageProvider) return;
-        actionsService.restore(cell.label || "", backupSource, storageProvider);
+      onrestore={async (backupSource) => {
+        if (!storageConfig) return;
+
+        const progressNotifications = addNotification({
+          title: "Restore in progress...",
+          status: "info",
+          dismissTimeout: null,
+        });
+
+        try {
+          await actionsService.restore(
+            cell.label || "",
+            backupSource,
+            storageConfig
+          );
+
+          removeNotification(progressNotifications.id);
+          addNotification({
+            title: "Restore successful",
+            status: "success",
+          });
+        } catch (error) {
+          removeNotification(progressNotifications.id);
+          addNotification({
+            title: "Failed to restore",
+            message: `${error}`,
+            status: "error",
+          });
+        }
       }}
     />
   {/snippet}

@@ -26,47 +26,31 @@ export interface BackupSourceConnection {
 
 export class ActionsService {
   async list(storageConfig: StorageConfig): Promise<Entry[]> {
-    try {
-      const entries = await invoke<Entry[]>("list", {
-        storageConfig,
-      });
+    const entries = await invoke<Entry[]>("list", {
+      storageConfig,
+    });
 
-      return entries;
-    } catch (error) {
-      console.error("Failed to list backups:", error);
-      throw new Error(`Failed to list backups: ${error}`);
-    }
+    return entries;
   }
 
   async verifySourceConnection(
     sourceConfig: SourceConfig
   ): Promise<BackupSourceConnection> {
-    try {
-      const result = await invoke<BackupSourceConnection>("verify_connection", {
-        sourceConfig,
-      });
-      return result;
-    } catch (error) {
-      console.error("Failed to test backup source connection:", error);
-      return {
-        connected: false,
-      };
-    }
+    const result = await invoke<BackupSourceConnection>("verify_connection", {
+      sourceConfig,
+    });
+
+    return result;
   }
 
   async backup(
     sourceConfig: SourceConfig,
     storageConfig: StorageConfig
   ): Promise<void> {
-    try {
-      const result = await invoke<string>("backup", {
-        sourceConfig,
-        storageConfig,
-      });
-      console.log(result);
-    } catch (error) {
-      console.error("Failed to backup source:", error);
-    }
+    await invoke<string>("backup", {
+      sourceConfig,
+      storageConfig,
+    });
   }
 
   async restore(
@@ -74,15 +58,10 @@ export class ActionsService {
     sourceConfig: SourceConfig,
     storageConfig: StorageConfig
   ): Promise<void> {
-    try {
-      const result = await invoke<string>("restore", {
-        filename,
-        sourceConfig,
-        storageConfig,
-      });
-      console.log(result);
-    } catch (error) {
-      console.error("Failed to restore backup:", error);
-    }
+    await invoke<string>("restore", {
+      filename,
+      sourceConfig,
+      storageConfig,
+    });
   }
 }

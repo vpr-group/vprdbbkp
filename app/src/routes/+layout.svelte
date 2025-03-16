@@ -3,6 +3,7 @@
   import PageContent from "../components/PageContent.svelte";
   import Button from "../components/Button.svelte";
   import { page } from "$app/state";
+  import Notifications from "../components/Notifications.svelte";
 
   interface Props {
     children: Snippet;
@@ -19,6 +20,8 @@
   <PageContent>
     {@render children()}
   </PageContent>
+
+  <Notifications />
 </div>
 
 <style lang="scss">
@@ -77,7 +80,7 @@
   }
 
   :global(body) {
-    padding: 2rem;
+    padding: 1.5rem;
   }
 
   .layout {

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import BackupSourceCard from "../components/SourceConfigCard.svelte";
-  import BackupSourceDialog from "../components/SourceConfigDialog.svelte";
+  import SourceConfigCard from "../components/SourceConfigCard.svelte";
+  import SourceConfigDialog from "../components/SourceConfigDialog.svelte";
   import Grid from "../components/Grid.svelte";
   import Separation from "../components/Separation.svelte";
-  import StorageProviderCard from "../components/StorageConfigCard.svelte";
-  import StorageProviderDialog from "../components/StorageConfigDialog.svelte";
+  import StorageConfigCard from "../components/StorageConfigCard.svelte";
+  import StorageConfigDialog from "../components/StorageConfigDialog.svelte";
   import {
     StoreService,
     type SourceConfig,
@@ -15,20 +15,20 @@
   const storeService = new StoreService();
 
   let isLoading = $state(true);
-  let storageProviders = $state<StorageConfig[]>([]);
-  let backupSources = $state<SourceConfig[]>([]);
+  let storageConfigs = $state<StorageConfig[]>([]);
+  let sourceConfigs = $state<SourceConfig[]>([]);
 
   const loadProjects = async () => {
     await storeService.waitForInitialized();
     storeService.getStorageConfigs().then((res) => {
-      storageProviders = res;
+      storageConfigs = res;
     });
   };
 
   const loadBackupSources = async () => {
     await storeService.waitForInitialized();
     storeService.getSourceConfigs().then((res) => {
-      backupSources = res;
+      sourceConfigs = res;
     });
   };
 
@@ -42,8 +42,8 @@
 {#if isLoading}
   <span>Is Loading</span>
 {:else}
-  {#snippet storageProviderActions()}
-    <StorageProviderDialog
+  {#snippet storageActions()}
+    <StorageConfigDialog
       onsubmit={async (storageProvider) => {
         await storeService.saveStorageConfig(storageProvider);
         loadProjects();
@@ -52,19 +52,19 @@
   {/snippet}
 
   <Separation
-    label="Storage Providers"
-    subLabel={`${storageProviders.length} items`}
-    sideSection={storageProviderActions}
+    label="Storages"
+    subLabel={`${storageConfigs.length} items`}
+    sideSection={storageActions}
   />
 
   <Grid>
-    {#each storageProviders as storageProvider}
-      <StorageProviderCard storageConfig={storageProvider} />
+    {#each storageConfigs as storageProvider}
+      <StorageConfigCard storageConfig={storageProvider} />
     {/each}
   </Grid>
 
-  {#snippet backupSourcesActions()}
-    <BackupSourceDialog
+  {#snippet sourcesActions()}
+    <SourceConfigDialog
       onsubmit={async (backupSource) => {
         await storeService.saveSourceConfig(backupSource);
         loadBackupSources();
@@ -73,14 +73,14 @@
   {/snippet}
 
   <Separation
-    label="Backup Sources"
-    subLabel={`${backupSources.length} items`}
-    sideSection={backupSourcesActions}
+    label="Sources"
+    subLabel={`${sourceConfigs.length} items`}
+    sideSection={sourcesActions}
   />
 
   <Grid>
-    {#each backupSources as backupSource}
-      <BackupSourceCard sourceConfig={backupSource} />
+    {#each sourceConfigs as backupSource}
+      <SourceConfigCard sourceConfig={backupSource} />
     {/each}
   </Grid>
 {/if}

@@ -31,7 +31,7 @@
 {/snippet}
 
 <Card
-  href={`/backup-sources/${sourceConfig.id}`}
+  href={`/source-configs/${sourceConfig.id}`}
   subTitle={`${sourceConfig.type.toLowerCase()}`}
   {title}
 ></Card>

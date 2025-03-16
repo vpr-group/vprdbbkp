@@ -11,14 +11,19 @@
   import { ActionsService } from "../../../services/actions";
   import StatusDot from "../../../components/StatusDot.svelte";
   import BackupDropdown from "../../../components/BackupDropdown.svelte";
+  import {
+    notificationsStore,
+    type Notification,
+  } from "../../../components/Notifications.svelte";
 
+  const { addNotification, removeNotification } = notificationsStore;
   const actionService = new ActionsService();
   const storeService = new StoreService();
 
   let sourceConfig = $state<SourceConfig | null>(null);
   let connected = $state(false);
 
-  const loadBackupSource = async () => {
+  const loadSourceConfig = async () => {
     await storeService.waitForInitialized();
     sourceConfig = await storeService.getSourceConfig(page.params.id);
   };
@@ -28,14 +33,36 @@
   };
 
   onMount(async () => {
-    loadBackupSource();
+    loadSourceConfig();
   });
 
   $effect(() => {
     if (!sourceConfig) return;
+    let notification: Notification | undefined = undefined;
+
     actionService.verifySourceConnection(sourceConfig).then((res) => {
       connected = res.connected;
+
+      if (connected) {
+        notification = addNotification({
+          title: "Source Connected",
+          status: "success",
+          dismissTimeout: 3000,
+        });
+      } else {
+        notification = addNotification({
+          title: "Source Not Connected",
+          status: "warning",
+          dismissTimeout: 3000,
+        });
+      }
     });
+
+    return () => {
+      if (notification) {
+        removeNotification(notification.id);
+      }
+    };
   });
 </script>
 
@@ -51,15 +78,36 @@
     >
     <BackupSourceDialog
       {sourceConfig}
-      onsubmit={async (backupSource) => {
-        await storeService.saveSourceConfig(backupSource);
-        loadBackupSource();
+      onsubmit={async (sourceConfig) => {
+        await storeService.saveSourceConfig(sourceConfig);
+        loadSourceConfig();
       }}
     />
     <BackupDropdown
-      onbackup={(storageProvider) => {
+      onbackup={async (storageConfig) => {
         if (!sourceConfig) return;
-        actionService.backup(sourceConfig, storageProvider);
+
+        const backupInProgressNotification = addNotification({
+          title: "Backup in progress...",
+          status: "info",
+          dismissTimeout: null,
+        });
+
+        try {
+          await actionService.backup(sourceConfig, storageConfig);
+          removeNotification(backupInProgressNotification.id);
+          addNotification({
+            title: "Backup successful",
+            status: "success",
+          });
+        } catch (error) {
+          removeNotification(backupInProgressNotification.id);
+          addNotification({
+            title: "Backup failed",
+            message: `${error}`,
+            status: "error",
+          });
+        }
       }}
     />
   {/if}

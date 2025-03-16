@@ -29,7 +29,7 @@
 </script>
 
 <Card
-  href={`/storage-providers/${storageConfig.id}`}
+  href={`/storage-configs/${storageConfig.id}`}
   title={storageConfig.name}
   subTitle={`${backups.length} backups`}
 ></Card>
