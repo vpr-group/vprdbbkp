@@ -126,18 +126,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools
 
-      - name: Add size optimizations for release build
-        run: |
-          # Add size optimization settings to cli/Cargo.toml
-          echo '
-          [profile.release]
-          opt-level = "z"
-          lto = true
-          codegen-units = 1
-          panic = "abort"
-          strip = true
-          debug = false' >> cli/Cargo.toml
-
       - name: Build Release
         run: |
           # Navigate to cli directory and build
