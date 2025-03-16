@@ -4,7 +4,7 @@ set -e
 
 # Configuration
 VERSION="0.3.2"  # Update this with your latest version
-BINARY_NAME="vprs3bkp"
+BINARY_NAME="cli"
 INSTALL_DIR="/usr/local/bin"
 GITHUB_REPO="vpr-group/vprs3bkp"  # Updated with your actual repo
 
@@ -17,7 +17,7 @@ print_usage() {
   echo "Usage: $0 [OPTIONS]"
   echo "Options:"
   echo "  --from-source    Install from source code (requires Rust toolchain)"
-  echo "  --with-deps      Install dependencies (pg_dump, mysqldump, gzip)"
+  echo "  --with-deps      Install dependencies (pg_dump, gzip)"
   echo "  --musl           Use statically linked MUSL build (better compatibility)"
   echo "  --help           Display this help message and exit"
 }
@@ -70,7 +70,7 @@ if [ "$INSTALL_DEPENDENCIES" = true ]; then
       echo "Updating package repositories (ignoring errors)..."
       sudo apt-get update 2>/dev/null || true
       echo "Installing required packages..."
-      sudo apt-get install -y --no-install-recommends postgresql-client mysql-client gzip curl
+      sudo apt-get install -y --no-install-recommends postgresql-client gzip curl
       if [ $? -ne 0 ]; then
         echo "Warning: Some packages may not have installed correctly."
         echo "Continuing with installation anyway..."
@@ -78,25 +78,25 @@ if [ "$INSTALL_DEPENDENCIES" = true ]; then
       ;;
     centos|rhel|fedora)
       if command -v dnf &> /dev/null; then
-        sudo dnf install -y postgresql mysql gzip curl
+        sudo dnf install -y postgresql gzip curl
       else
-        sudo yum install -y postgresql mysql gzip curl
+        sudo yum install -y postgresql gzip curl
       fi
       ;;
     macos)
       if command -v brew &> /dev/null; then
         echo "Installing dependencies with Homebrew..."
-        brew install postgresql mysql gzip curl
+        brew install postgresql gzip curl
       else
         echo "Homebrew not found. Please install Homebrew first:"
         echo "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-        echo "Then install the dependencies with: brew install postgresql mysql"
+        echo "Then install the dependencies with: brew install postgresql"
         echo "Continuing with installation anyway..."
       fi
       ;;
     *)
       echo "Unsupported OS for automatic dependency installation"
-      echo "Please install postgresql-client, mysql-client and gzip manually"
+      echo "Please install postgresql-client and gzip manually"
       ;;
   esac
 fi
@@ -133,12 +133,23 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
     curl -L "https://github.com/$GITHUB_REPO/archive/v$VERSION.tar.gz" | tar xz --strip-components=1
   fi
 
-  # Build the project
-  echo "Building project..."
+  # Build the project with optimizations for small binary size
+  echo "Building optimized release..."
+  cat > Cargo.toml <<EOF
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+EOF
+
   cargo build --release
 
   # Install the binary
   $SUDO_CMD cp target/release/$BINARY_NAME $INSTALL_DIR/
+  $SUDO_CMD mv $INSTALL_DIR/$BINARY_NAME $INSTALL_DIR/vprs3bkp
 
   # Clean up
   cd - > /dev/null
@@ -175,16 +186,16 @@ else
   fi
   
   # New GitHub release asset URL format
-  BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/$BINARY_NAME-$ARTIFACT_NAME"
+  BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/vprs3bkp-$ARTIFACT_NAME"
   
   echo "Downloading pre-built binary from $BINARY_URL..."
   # Create a temporary directory
   TMP_DIR=$(mktemp -d)
   
   # Download the binary to the temporary location
-  if curl -L "$BINARY_URL" -o "$TMP_DIR/$BINARY_NAME"; then
+  if curl -L "$BINARY_URL" -o "$TMP_DIR/vprs3bkp"; then
     # Move to final location
-    $SUDO_CMD mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+    $SUDO_CMD mv "$TMP_DIR/vprs3bkp" "$INSTALL_DIR/vprs3bkp"
     # Clean up
     rm -rf "$TMP_DIR"
   else
@@ -196,15 +207,18 @@ else
 fi
 
 # Make binary executable
-$SUDO_CMD chmod +x $INSTALL_DIR/$BINARY_NAME
+$SUDO_CMD chmod +x $INSTALL_DIR/vprs3bkp
 
 # Verify installation
-if [ -x "$INSTALL_DIR/$BINARY_NAME" ]; then
+if [ -x "$INSTALL_DIR/vprs3bkp" ]; then
   echo "Installation successful!"
-  echo "The $BINARY_NAME tool is now available at $INSTALL_DIR/$BINARY_NAME"
+  echo "The vprs3bkp tool is now available at $INSTALL_DIR/vprs3bkp"
   echo ""
   echo "Example usage:"
-  echo "$BINARY_NAME --bucket my-backup-bucket --region us-west-2 postgres --database mydb --username dbuser"
+  echo "vprs3bkp backup --database mydb --host localhost --username postgres \\"
+  echo "  --storage-type s3 --bucket my-backup-bucket --region us-west-2"
+  echo ""
+  echo "For more options, run: vprs3bkp --help"
 else
   echo "Installation failed."
   exit 1
