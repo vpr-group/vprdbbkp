@@ -140,6 +140,10 @@
       width: 100%;
       padding: 0 0.5rem;
 
+      &:hover {
+        background-color: var(--color-light);
+      }
+
       &#{$root}--borders {
         & + & {
           &::before {

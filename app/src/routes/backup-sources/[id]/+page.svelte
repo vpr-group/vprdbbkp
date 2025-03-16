@@ -33,7 +33,7 @@
 
   $effect(() => {
     if (!sourceConfig) return;
-    actionService.verifySourceonnection(sourceConfig).then((res) => {
+    actionService.verifySourceConnection(sourceConfig).then((res) => {
       connected = res.connected;
     });
   });
@@ -59,7 +59,7 @@
     <BackupDropdown
       onbackup={(storageProvider) => {
         if (!sourceConfig) return;
-        actionService.backupSource(sourceConfig, storageProvider);
+        actionService.backup(sourceConfig, storageProvider);
       }}
     />
   {/if}

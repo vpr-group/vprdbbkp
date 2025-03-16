@@ -17,7 +17,7 @@
 
   onMount(async () => {
     await storeService.waitForInitialized();
-    actionService.verifySourceonnection(sourceConfig).then((res) => {
+    actionService.verifySourceConnection(sourceConfig).then((res) => {
       connected = res.connected;
     });
   });

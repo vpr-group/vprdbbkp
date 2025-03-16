@@ -60,13 +60,7 @@
       backupKey={cell.label || ""}
       onrestore={(backupSource) => {
         if (!storageProvider) return;
-        actionsService.restoreBackup(
-          cell.label || "",
-          backupSource,
-          storageProvider
-        );
-        console.log(cell.label);
-        console.log(backupSource);
+        actionsService.restore(cell.label || "", backupSource, storageProvider);
       }}
     />
   {/snippet}

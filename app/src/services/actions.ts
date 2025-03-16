@@ -38,7 +38,7 @@ export class ActionsService {
     }
   }
 
-  async verifySourceonnection(
+  async verifySourceConnection(
     sourceConfig: SourceConfig
   ): Promise<BackupSourceConnection> {
     try {
@@ -54,7 +54,7 @@ export class ActionsService {
     }
   }
 
-  async backupSource(
+  async backup(
     sourceConfig: SourceConfig,
     storageConfig: StorageConfig
   ): Promise<void> {
@@ -69,16 +69,16 @@ export class ActionsService {
     }
   }
 
-  async restoreBackup(
-    backupKey: string,
-    backupSource: SourceConfig,
-    storageProvider: StorageConfig
+  async restore(
+    filename: string,
+    sourceConfig: SourceConfig,
+    storageConfig: StorageConfig
   ): Promise<void> {
     try {
-      const result = await invoke<string>("restore_backup", {
-        backupKey,
-        backupSource,
-        storageProvider,
+      const result = await invoke<string>("restore", {
+        filename,
+        sourceConfig,
+        storageConfig,
       });
       console.log(result);
     } catch (error) {
