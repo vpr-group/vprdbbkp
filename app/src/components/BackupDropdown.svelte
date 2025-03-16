@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { StoreService, type StorageProvider } from "../services/store";
+  import { StoreService, type StorageConfig } from "../services/store";
   import DropdownMenu from "./DropdownMenu.svelte";
   import Button from "./Button.svelte";
   import Dialog from "./Dialog.svelte";
@@ -8,18 +8,18 @@
   import DialogActions from "./DialogActions.svelte";
 
   interface Props {
-    onbackup?: (storageProvider: StorageProvider) => void;
+    onbackup?: (storageProvider: StorageConfig) => void;
   }
 
   const { onbackup }: Props = $props();
   const storeService = new StoreService();
 
-  let storageProviders = $state<StorageProvider[]>([]);
+  let storageProviders = $state<StorageConfig[]>([]);
   let open = $state(false);
 
   const loadStorageProviders = async () => {
     await storeService.waitForInitialized();
-    storageProviders = await storeService.getStorageProviders();
+    storageProviders = await storeService.getStorageConfigs();
   };
 
   onMount(() => {

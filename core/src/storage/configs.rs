@@ -10,6 +10,7 @@ pub trait BaseStorageConfig: std::fmt::Debug {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalStorageConfig {
     pub name: String,
     pub root: PathBuf,
@@ -27,6 +28,7 @@ impl BaseStorageConfig for LocalStorageConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct S3StorageConfig {
     pub name: String,
     pub bucket: String,
@@ -48,7 +50,7 @@ impl BaseStorageConfig for S3StorageConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum StorageConfig {
     #[serde(rename = "local")]
     Local(LocalStorageConfig),

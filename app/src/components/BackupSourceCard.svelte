@@ -1,23 +1,23 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { StoreService, type BackupSource } from "../services/store";
+  import { StoreService, type SourceConfig } from "../services/store";
   import Card from "./Card.svelte";
   import { ActionsService } from "../services/actions";
   import StatusDot from "./StatusDot.svelte";
 
   interface Props {
-    backupSource: BackupSource;
+    sourceConfig: SourceConfig;
   }
 
   const actionService = new ActionsService();
   const storeService = new StoreService();
-  const { backupSource }: Props = $props();
+  const { sourceConfig }: Props = $props();
 
   let connected = $state(false);
 
   onMount(async () => {
     await storeService.waitForInitialized();
-    actionService.verifyBackupSourceConnection(backupSource).then((res) => {
+    actionService.verifyBackupSourceConnection(sourceConfig).then((res) => {
       connected = res.connected;
     });
   });
@@ -26,13 +26,13 @@
 {#snippet title()}
   <div class="backup-source-card__title">
     <StatusDot status={connected ? "success" : undefined} />
-    {backupSource.name}
+    {sourceConfig.name}
   </div>
 {/snippet}
 
 <Card
-  href={`/backup-sources/${backupSource.id}`}
-  subTitle={`${backupSource.type.toLowerCase()}`}
+  href={`/backup-sources/${sourceConfig.id}`}
+  subTitle={`${sourceConfig.type.toLowerCase()}`}
   {title}
 ></Card>
 

@@ -5,6 +5,7 @@ pub trait BaseBackupSourceConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PGSourceConfig {
     pub name: String,
     pub database: String,
@@ -21,7 +22,7 @@ impl BaseBackupSourceConfig for PGSourceConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum SourceConfig {
     #[serde(rename = "pg")]
     PG(PGSourceConfig),

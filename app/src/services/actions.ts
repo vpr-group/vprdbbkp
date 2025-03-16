@@ -1,13 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { StorageProvider, BackupSource } from "./store";
+import type { StorageConfig, SourceConfig } from "./store";
 
-export interface BackupListItem {
-  backupType: string;
-  dbName: string;
-  key: string;
-  lastModified: string;
-  size: number;
-  timestamp: string;
+export interface Entry {
+  path: string;
+  metadata: {
+    cache_control?: string;
+    content_disposition?: string;
+    content_encoding?: string;
+    content_length?: number;
+    content_md5?: string;
+    content_type?: string;
+    etag?: string;
+    is_current?: boolean;
+    is_deleted?: boolean;
+    last_modified?: string;
+    mode?: string;
+    user_metadata?: unknown;
+    version?: string;
+  };
 }
 
 export interface BackupSourceConnection {
@@ -15,14 +25,13 @@ export interface BackupSourceConnection {
 }
 
 export class ActionsService {
-  async listBackups(
-    storageProvider: StorageProvider
-  ): Promise<BackupListItem[]> {
+  async list(storageConfig: StorageConfig): Promise<Entry[]> {
     try {
-      const backups = await invoke<BackupListItem[]>("list_backups", {
-        storageProvider,
+      const entries = await invoke<Entry[]>("list", {
+        storageConfig,
       });
-      return backups;
+
+      return entries;
     } catch (error) {
       console.error("Failed to list backups:", error);
       throw new Error(`Failed to list backups: ${error}`);
@@ -30,7 +39,7 @@ export class ActionsService {
   }
 
   async verifyBackupSourceConnection(
-    backupSource: BackupSource
+    backupSource: SourceConfig
   ): Promise<BackupSourceConnection> {
     try {
       const result = await invoke<BackupSourceConnection>(
@@ -47,8 +56,8 @@ export class ActionsService {
   }
 
   async backupSource(
-    backupSource: BackupSource,
-    storageProvider: StorageProvider
+    backupSource: SourceConfig,
+    storageProvider: StorageConfig
   ): Promise<void> {
     try {
       const result = await invoke<string>("backup_source", {
@@ -63,8 +72,8 @@ export class ActionsService {
 
   async restoreBackup(
     backupKey: string,
-    backupSource: BackupSource,
-    storageProvider: StorageProvider
+    backupSource: SourceConfig,
+    storageProvider: StorageConfig
   ): Promise<void> {
     try {
       const result = await invoke<string>("restore_backup", {

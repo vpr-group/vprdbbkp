@@ -1,23 +1,23 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { StorageProvider } from "../services/store";
+  import type { StorageConfig } from "../services/store";
   import Card from "./Card.svelte";
-  import { ActionsService, type BackupListItem } from "../services/actions";
+  import { ActionsService, type Entry } from "../services/actions";
 
   interface Props {
-    storageProvider: StorageProvider;
+    storageConfig: StorageConfig;
   }
 
   const actionsService = new ActionsService();
-  const { storageProvider }: Props = $props();
+  const { storageConfig }: Props = $props();
 
   let loadingBackups = $state(true);
-  let backups = $state<BackupListItem[]>([]);
+  let backups = $state<Entry[]>([]);
 
   const loadBackups = async () => {
     try {
-      if (!storageProvider) return;
-      backups = await actionsService.listBackups(storageProvider);
+      if (!storageConfig) return;
+      backups = await actionsService.list(storageConfig);
     } finally {
       loadingBackups = false;
     }
@@ -29,7 +29,7 @@
 </script>
 
 <Card
-  href={`/storage-providers/${storageProvider.id}`}
-  title={storageProvider.name}
+  href={`/storage-providers/${storageConfig.id}`}
+  title={storageConfig.name}
   subTitle={`${backups.length} backups`}
 ></Card>

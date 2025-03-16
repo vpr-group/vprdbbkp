@@ -7,27 +7,27 @@
   import StorageProviderDialog from "../components/StorageProviderDialog.svelte";
   import {
     StoreService,
-    type BackupSource,
-    type StorageProvider,
+    type SourceConfig,
+    type StorageConfig,
   } from "../services/store";
   import { onMount } from "svelte";
 
   const storeService = new StoreService();
 
   let isLoading = $state(true);
-  let storageProviders = $state<StorageProvider[]>([]);
-  let backupSources = $state<BackupSource[]>([]);
+  let storageProviders = $state<StorageConfig[]>([]);
+  let backupSources = $state<SourceConfig[]>([]);
 
   const loadProjects = async () => {
     await storeService.waitForInitialized();
-    storeService.getStorageProviders().then((res) => {
+    storeService.getStorageConfigs().then((res) => {
       storageProviders = res;
     });
   };
 
   const loadBackupSources = async () => {
     await storeService.waitForInitialized();
-    storeService.getBackupSources().then((res) => {
+    storeService.getSourceConfigs().then((res) => {
       backupSources = res;
     });
   };
@@ -45,7 +45,7 @@
   {#snippet storageProviderActions()}
     <StorageProviderDialog
       onsubmit={async (storageProvider) => {
-        await storeService.saveStorageProvider(storageProvider);
+        await storeService.saveStorageConfig(storageProvider);
         loadProjects();
       }}
     />
@@ -59,14 +59,14 @@
 
   <Grid>
     {#each storageProviders as storageProvider}
-      <StorageProviderCard {storageProvider} />
+      <StorageProviderCard storageConfig={storageProvider} />
     {/each}
   </Grid>
 
   {#snippet backupSourcesActions()}
     <BackupSourceDialog
       onsubmit={async (backupSource) => {
-        await storeService.saveBackupSource(backupSource);
+        await storeService.saveSourceConfig(backupSource);
         loadBackupSources();
       }}
     />
@@ -80,7 +80,7 @@
 
   <Grid>
     {#each backupSources as backupSource}
-      <BackupSourceCard {backupSource} />
+      <BackupSourceCard sourceConfig={backupSource} />
     {/each}
   </Grid>
 {/if}

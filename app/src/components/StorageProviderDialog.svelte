@@ -1,26 +1,28 @@
 <script lang="ts">
   import { createId } from "@paralleldrive/cuid2";
-  import type { StorageProvider } from "../services/store";
+  import type { StorageConfig } from "../services/store";
   import Dialog from "./Dialog.svelte";
   import Input from "./Input.svelte";
   import Button from "./Button.svelte";
   import DialogActions from "./DialogActions.svelte";
   import Separation from "./Separation.svelte";
+  import DropdownMenu from "./DropdownMenu.svelte";
 
   interface Props {
-    storageProvider?: StorageProvider;
-    onchange?: (storageProvider: StorageProvider) => void;
-    onsubmit?: (storageProvider: StorageProvider) => void;
+    storageConfig?: StorageConfig;
+    onchange?: (storageConfig: StorageConfig) => void;
+    onsubmit?: (storageConfig: StorageConfig) => void;
   }
 
-  const { storageProvider, onchange, onsubmit }: Props = $props();
+  const { storageConfig, onchange, onsubmit }: Props = $props();
   let open = $state(false);
+  const storageConfigTypes: StorageConfig["type"][] = ["s3", "local"];
 
-  let currentStorageProvider = $state<StorageProvider>(
-    storageProvider || {
+  let currentStorageConfig = $state<StorageConfig>(
+    storageConfig || {
+      type: "s3",
       id: createId(),
       name: "",
-      type: "s3",
       accessKey: "",
       bucket: "",
       endpoint: "",
@@ -29,107 +31,128 @@
     }
   );
 
+  const updateStorageConfigData = (data: Partial<StorageConfig>) => {
+    currentStorageConfig = {
+      ...currentStorageConfig,
+      ...data,
+    } as StorageConfig;
+  };
+
   $effect(() => {
-    onchange?.(currentStorageProvider);
+    onchange?.(currentStorageConfig);
   });
 </script>
 
-<Dialog
-  bind:open
-  label={storageProvider ? "Edit" : "Create"}
-  icon={storageProvider ? "pencil" : "plus"}
->
-  <div class="project">
-    <Separation
-      label={storageProvider
-        ? "Edit Storage Provider"
-        : "Create Storage Provider"}
-    />
-    <div class="project__form">
-      <Input
-        type="text"
-        name="Name"
-        value={currentStorageProvider.name}
-        oninput={(e) => {
-          currentStorageProvider = {
-            ...currentStorageProvider,
-            name: e.currentTarget.value,
-          };
+{#snippet s3Dialog(storageConfig?: StorageConfig)}
+  <Dialog
+    bind:open
+    label={storageConfig ? "Edit" : "S3 Storage"}
+    icon={storageConfig ? "pencil" : undefined}
+    buttonStyle={storageConfig
+      ? undefined
+      : {
+          backgroundColor: "var(--color-light-grey)",
+          color: "black",
         }}
+  >
+    <div class="project">
+      <Separation
+        label={storageConfig
+          ? "Edit S3 Storage Config"
+          : "Create S3 Storage Config"}
       />
+      <div class="project__form">
+        <Input
+          type="text"
+          name="Name"
+          value={currentStorageConfig.name}
+          oninput={(e) => {
+            updateStorageConfigData({
+              name: e.currentTarget.value,
+            });
+          }}
+        />
 
-      {#if currentStorageProvider.type === "s3"}
-        <Input
-          type="text"
-          name="Endpoint"
-          value={currentStorageProvider.endpoint}
-          oninput={(e) => {
-            const endpoint = e.currentTarget.value;
-            currentStorageProvider = {
-              ...currentStorageProvider,
-              endpoint,
-            };
-          }}
-        />
-        <Input
-          type="text"
-          name="Region"
-          value={currentStorageProvider.region}
-          oninput={(e) => {
-            const region = e.currentTarget.value;
-            currentStorageProvider = {
-              ...currentStorageProvider,
-              region,
-            };
-          }}
-        />
-        <Input
-          type="text"
-          name="Bucket"
-          value={currentStorageProvider.bucket}
-          oninput={(e) => {
-            const bucket = e.currentTarget.value;
-            currentStorageProvider = {
-              ...currentStorageProvider,
-              bucket,
-            };
-          }}
-        />
-        <Input
-          type="text"
-          name="Access Key"
-          value={currentStorageProvider.accessKey}
-          oninput={(e) => {
-            const accessKey = e.currentTarget.value;
-            currentStorageProvider = {
-              ...currentStorageProvider,
-              accessKey,
-            };
-          }}
-        />
-        <Input
-          type="text"
-          name="Secret Key"
-          value={currentStorageProvider.secretKey}
-          oninput={(e) => {
-            const secretKey = e.currentTarget.value;
-            currentStorageProvider = {
-              ...currentStorageProvider,
-              secretKey,
-            };
-          }}
-        />
-      {/if}
+        {#if currentStorageConfig.type === "s3"}
+          <Input
+            type="text"
+            name="Endpoint"
+            value={currentStorageConfig.endpoint}
+            oninput={(e) => {
+              updateStorageConfigData({
+                endpoint: e.currentTarget.value,
+              });
+            }}
+          />
+          <Input
+            type="text"
+            name="Region"
+            value={currentStorageConfig.region}
+            oninput={(e) => {
+              updateStorageConfigData({
+                region: e.currentTarget.value,
+              });
+            }}
+          />
+          <Input
+            type="text"
+            name="Bucket"
+            value={currentStorageConfig.bucket}
+            oninput={(e) => {
+              updateStorageConfigData({
+                bucket: e.currentTarget.value,
+              });
+            }}
+          />
+          <Input
+            type="text"
+            name="Access Key"
+            value={currentStorageConfig.accessKey}
+            oninput={(e) => {
+              updateStorageConfigData({
+                accessKey: e.currentTarget.value,
+              });
+            }}
+          />
+          <Input
+            type="text"
+            name="Secret Key"
+            value={currentStorageConfig.secretKey}
+            oninput={(e) => {
+              updateStorageConfigData({
+                secretKey: e.currentTarget.value,
+              });
+            }}
+          />
+        {/if}
 
-      <DialogActions>
-        <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
-        <Button icon="plus" onclick={() => onsubmit?.(currentStorageProvider)}>
-          {storageProvider ? "Update" : "Create"}
-        </Button>
-      </DialogActions>
+        <DialogActions>
+          <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
+          <Button icon="plus" onclick={() => onsubmit?.(currentStorageConfig)}>
+            {storageConfig ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </div>
     </div>
-  </div>
-</Dialog>
+  </Dialog>
+{/snippet}
+
+{#if storageConfig}
+  {@render s3Dialog(storageConfig)}
+{:else}
+  <DropdownMenu
+    label="Create"
+    icon="plus"
+    items={storageConfigTypes}
+    align="end"
+  >
+    {#snippet item(item)}
+      {#if item === "s3"}
+        {@render s3Dialog()}
+      {/if}
+    {/snippet}
+  </DropdownMenu>
+{/if}
 
 <style lang="scss">
   .project {

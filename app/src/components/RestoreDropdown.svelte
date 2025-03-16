@@ -2,8 +2,8 @@
   import { onMount } from "svelte";
   import {
     StoreService,
-    type BackupSource,
-    type StorageProvider,
+    type SourceConfig,
+    type StorageConfig,
   } from "../services/store";
   import DropdownMenu from "./DropdownMenu.svelte";
   import Button from "./Button.svelte";
@@ -13,19 +13,19 @@
 
   interface Props {
     backupKey: string;
-    onrestore?: (backupSrouce: BackupSource) => void;
+    onrestore?: (backupSrouce: SourceConfig) => void;
   }
 
   const { backupKey, onrestore }: Props = $props();
   const storeService = new StoreService();
 
-  let backupSources = $state<BackupSource[]>([]);
+  let backupSources = $state<SourceConfig[]>([]);
   let openMenu = $state(false);
   let openDialog = $state(false);
 
   const loadBackupSources = async () => {
     await storeService.waitForInitialized();
-    backupSources = await storeService.getBackupSources();
+    backupSources = await storeService.getSourceConfigs();
   };
 
   onMount(() => {

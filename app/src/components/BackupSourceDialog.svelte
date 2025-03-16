@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createId } from "@paralleldrive/cuid2";
-  import type { BackupSource } from "../services/store";
+  import type { SourceConfig } from "../services/store";
   import Dialog from "./Dialog.svelte";
   import Input from "./Input.svelte";
   import Separation from "./Separation.svelte";
@@ -8,15 +8,15 @@
   import DialogActions from "./DialogActions.svelte";
 
   interface Props {
-    backupSource?: BackupSource;
-    onchange?: (backupSource: BackupSource) => void;
-    onsubmit?: (backupSource: BackupSource) => void;
+    backupSource?: SourceConfig;
+    onchange?: (backupSource: SourceConfig) => void;
+    onsubmit?: (backupSource: SourceConfig) => void;
   }
 
   const { backupSource, onchange, onsubmit }: Props = $props();
   let open = $state(false);
 
-  let currentBackupSource = $state<BackupSource>(
+  let currentBackupSource = $state<SourceConfig>(
     backupSource || {
       id: createId(),
       name: "",

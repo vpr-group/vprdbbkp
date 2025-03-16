@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { StoreService, type BackupSource } from "../../../services/store";
+  import { StoreService, type SourceConfig } from "../../../services/store";
   import Separation from "../../../components/Separation.svelte";
   import BackupSourceDialog from "../../../components/BackupSourceDialog.svelte";
   import Button from "../../../components/Button.svelte";
@@ -15,12 +15,12 @@
   const actionService = new ActionsService();
   const storeService = new StoreService();
 
-  let backupSource = $state<BackupSource | null>(null);
+  let backupSource = $state<SourceConfig | null>(null);
   let connected = $state(false);
 
   const loadBackupSource = async () => {
     await storeService.waitForInitialized();
-    backupSource = await storeService.getBackupSource(page.params.id);
+    backupSource = await storeService.getSourceConfig(page.params.id);
   };
 
   const cellLabelStyle: CSSProperties = {
@@ -44,7 +44,7 @@
     <Button
       onclick={async () => {
         if (!backupSource) return;
-        await storeService.deleteBackupSource(backupSource?.id);
+        await storeService.deleteSourceConfig(backupSource?.id);
         goto("/");
       }}
       icon="cross">Delete</Button
@@ -52,7 +52,7 @@
     <BackupSourceDialog
       {backupSource}
       onsubmit={async (backupSource) => {
-        await storeService.saveBackupSource(backupSource);
+        await storeService.saveSourceConfig(backupSource);
         loadBackupSource();
       }}
     />
