@@ -2,7 +2,9 @@ use anyhow::Result;
 use bytes::Bytes;
 use pg_tools::PgTools;
 
+pub mod pg_installer;
 pub mod pg_tools;
+pub mod pg_utils;
 pub mod pg_versions;
 
 pub async fn is_postgres_connected(

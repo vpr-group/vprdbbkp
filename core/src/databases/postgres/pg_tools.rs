@@ -1,11 +1,15 @@
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 use bytes::Bytes;
+use std::path::Path;
 use std::process::Stdio;
 use std::{env, fs, path::PathBuf};
 use tempfile::TempDir;
 use tokio::process::Command;
 
+use crate::databases::postgres::pg_installer::PgInstaller;
+
+use super::pg_utils::get_postgres_base_directory;
 use super::pg_versions::{PostgresVersion, DEFAULT_POSTGRES_VERSION};
 
 pub struct PgTools {
@@ -28,32 +32,69 @@ impl PgTools {
         Self::new(DEFAULT_POSTGRES_VERSION)
     }
 
-    pub fn get_psql_path(&self) -> PathBuf {
-        self.cache_dir
-            .join(format!("{}/bin/psql", self.version.as_str()))
-    }
+    pub async fn get_pg_base_path(&self) -> Result<PathBuf> {
+        let default_path = get_postgres_base_directory();
 
-    pub fn get_psql_command(&self) -> Result<Command> {
-        let psql_path = self.get_psql_path();
+        // Check if version is installed in default folder
+        if let Ok(path) = default_path {
+            let default_version_path = &path.join(format!("{}/bin", self.version.as_str()));
 
-        if !std::path::Path::new(&psql_path).exists() {
-            return Err(anyhow!(
-                "psql executable not found at {}. Make sure PostgreSQL {} is properly installed.",
-                psql_path.display(),
-                self.version.as_str()
-            ));
+            if Path::new(default_version_path).exists() {
+                return Ok(path);
+            }
         }
 
+        // Check if there is a version available from cache dir
+        if Path::new(
+            &self
+                .cache_dir
+                .join(format!("{}/bin", self.version.as_str())),
+        )
+        .exists()
+        {
+            return Ok(self.cache_dir.clone());
+        } else {
+            // If there is no available version try to install one
+            let installer = PgInstaller::new(self.version);
+            match installer.install(self.cache_dir.clone()).await {
+                Ok(_) => {
+                    return Ok(self.cache_dir.clone());
+                }
+                Err(_) => {
+                    return Err(anyhow!(
+                        "Failed to install PostgreSQL {}",
+                        self.version.as_str()
+                    ))
+                }
+            };
+        }
+    }
+
+    pub async fn get_psql_path(&self) -> Result<PathBuf> {
+        let path = self
+            .get_pg_base_path()
+            .await?
+            .join(format!("{}/bin/psql", self.version.as_str()));
+
+        Ok(path)
+    }
+
+    pub async fn get_psql_command(&self) -> Result<Command> {
+        let psql_path = self.get_psql_path().await?;
         Ok(Command::new(&psql_path))
     }
 
-    pub fn get_pg_dump_path(&self) -> PathBuf {
-        self.cache_dir
-            .join(format!("{}/bin/pg_dump", self.version.as_str()))
+    pub async fn get_pg_dump_path(&self) -> Result<PathBuf> {
+        let path = self
+            .get_pg_base_path()
+            .await?
+            .join(format!("{}/bin/pg_dump", self.version.as_str()));
+
+        Ok(path)
     }
 
-    pub fn get_pg_dump_command(&self) -> Result<Command> {
-        let pg_dump_path = self.get_pg_dump_path();
+    pub async fn get_pg_dump_command(&self) -> Result<Command> {
+        let pg_dump_path = self.get_pg_dump_path().await?;
 
         if !std::path::Path::new(&pg_dump_path).exists() {
             return Err(anyhow!(
@@ -66,13 +107,17 @@ impl PgTools {
         Ok(Command::new(&pg_dump_path))
     }
 
-    pub fn get_pg_restore_path(&self) -> PathBuf {
-        self.cache_dir
-            .join(format!("{}/bin/pg_restore", self.version.as_str()))
+    pub async fn get_pg_restore_path(&self) -> Result<PathBuf> {
+        let path = self
+            .get_pg_base_path()
+            .await?
+            .join(format!("{}/bin/pg_restore", self.version.as_str()));
+
+        Ok(path)
     }
 
-    pub fn get_pg_restore_command(&self) -> Result<Command> {
-        let pg_restore_path = self.get_pg_restore_path();
+    pub async fn get_pg_restore_command(&self) -> Result<Command> {
+        let pg_restore_path = self.get_pg_restore_path().await?;
 
         if !std::path::Path::new(&pg_restore_path).exists() {
             return Err(anyhow!(
@@ -111,7 +156,7 @@ impl PgTools {
         username: &str,
         password: Option<&str>,
     ) -> Result<PostgresVersion> {
-        let mut cmd = self.get_psql_command()?;
+        let mut cmd = self.get_psql_command().await?;
 
         // Add connection parameters
         cmd.arg("-h")
@@ -173,7 +218,7 @@ impl PgTools {
         username: &str,
         password: Option<&str>,
     ) -> Result<bool> {
-        let mut cmd = self.get_psql_command()?;
+        let mut cmd = self.get_psql_command().await?;
 
         // Add connection parameters
         cmd.arg("-h")
@@ -256,11 +301,11 @@ impl PgTools {
             ));
         }
 
-        let pg_dump_path = self.get_pg_dump_path();
+        let pg_dump_path = self.get_pg_dump_path().await?;
 
         if let Some(compression) = compression {
             // Set up pg_dump command
-            let mut pg_dump_cmd = self.get_pg_dump_command()?;
+            let mut pg_dump_cmd = self.get_pg_dump_command().await?;
             pg_dump_cmd
                 .arg("--format=custom")
                 .arg(format!("--host={}", host))
@@ -347,7 +392,7 @@ impl PgTools {
 
             Ok(Bytes::from(output.stdout))
         } else {
-            let mut cmd = self.get_pg_dump_command()?;
+            let mut cmd = self.get_pg_dump_command().await?;
             cmd.arg("--format=custom")
                 .arg("--compress=9") // PostgreSQL's internal compression
                 .arg(format!("--host={}", host))
@@ -432,7 +477,7 @@ impl PgTools {
         ));
         }
 
-        let pg_restore_path = self.get_pg_restore_path();
+        let pg_restore_path = self.get_pg_restore_path().await?;
 
         if compressed {
             // Create a temporary file to store the compressed data
@@ -482,7 +527,7 @@ impl PgTools {
             }
 
             // Set up pg_restore command
-            let mut pg_restore_cmd = self.get_pg_restore_command()?;
+            let mut pg_restore_cmd = self.get_pg_restore_command().await?;
             pg_restore_cmd
                 .arg(format!("--host={}", host))
                 .arg(format!("--port={}", port))
@@ -550,7 +595,7 @@ impl PgTools {
                 .context("Failed to write dump data to temporary file")?;
 
             // Set up pg_restore command
-            let mut cmd = self.get_pg_restore_command()?;
+            let mut cmd = self.get_pg_restore_command().await?;
             cmd.arg(format!("--host={}", host))
                 .arg(format!("--port={}", port))
                 .arg(format!("--username={}", username))
@@ -612,10 +657,19 @@ impl PgTools {
 
 #[cfg(test)]
 mod tests {
+    use log::LevelFilter;
+
     use super::*;
+
+    fn initialize_test() {
+        env_logger::Builder::new()
+            .filter_level(LevelFilter::Info)
+            .init();
+    }
 
     #[test]
     fn test_pg_tools_initialization() {
+        initialize_test();
         let pg_tools = PgTools::default().expect("Failed to initialize PgTools");
         assert!(pg_tools.cache_dir.exists());
         assert_eq!(pg_tools.version, PostgresVersion::V15);
@@ -623,6 +677,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pg_connection() {
+        initialize_test();
         let pg_tools = PgTools::default().expect("Failed to initialize PgTools");
         let is_connected = pg_tools
             .is_postgres_connected("api", "localhost", 5432, "postgres", Some("postgres"))
@@ -634,6 +689,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pg_tool_detect_version() {
+        initialize_test();
         let pg_tools = PgTools::default().expect("Failed to initialize PgTools");
         let version = pg_tools
             .get_postgres_version("api", "localhost", 5432, "postgres", Some("postgres"))
@@ -645,6 +701,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pg_dump() {
+        initialize_test();
         let mut pg_tools = PgTools::default().expect("Failed to initialize PgTools");
 
         let version = pg_tools
