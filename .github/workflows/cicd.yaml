@@ -135,6 +135,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools
 
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: "build-${{ matrix.target }}"
+
       - name: Build Release
         run: |
           # Navigate to cli directory and build
@@ -197,6 +203,12 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: "tauri-${{ matrix.platform }}"
 
       - name: Install app dependencies and build
         run: |
