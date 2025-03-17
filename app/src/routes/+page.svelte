@@ -18,14 +18,14 @@
   let storageConfigs = $state<StorageConfig[]>([]);
   let sourceConfigs = $state<SourceConfig[]>([]);
 
-  const loadProjects = async () => {
+  const loadStorageConfigs = async () => {
     await storeService.waitForInitialized();
     storeService.getStorageConfigs().then((res) => {
       storageConfigs = res;
     });
   };
 
-  const loadBackupSources = async () => {
+  const loadSourceConfigs = async () => {
     await storeService.waitForInitialized();
     storeService.getSourceConfigs().then((res) => {
       sourceConfigs = res;
@@ -33,7 +33,7 @@
   };
 
   onMount(() => {
-    Promise.all([loadProjects(), loadBackupSources()]).finally(() => {
+    Promise.all([loadStorageConfigs(), loadSourceConfigs()]).finally(() => {
       isLoading = false;
     });
   });
@@ -46,7 +46,7 @@
     <StorageConfigDialog
       onsubmit={async (storageProvider) => {
         await storeService.saveStorageConfig(storageProvider);
-        loadProjects();
+        loadStorageConfigs();
       }}
     />
   {/snippet}
@@ -67,7 +67,7 @@
     <SourceConfigDialog
       onsubmit={async (backupSource) => {
         await storeService.saveSourceConfig(backupSource);
-        loadBackupSources();
+        loadSourceConfigs();
       }}
     />
   {/snippet}

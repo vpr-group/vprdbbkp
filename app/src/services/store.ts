@@ -1,4 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
+import { path } from "@tauri-apps/api";
 import { load, Store } from "@tauri-apps/plugin-store";
 
 const STORAGE_CONFIGS_KEY = "storage-configs";
@@ -53,6 +54,21 @@ export class StoreService {
 
   private async initialize() {
     this.internalStore = await load("store.json", { autoSave: false });
+
+    const storageConfigs = await this.getStorageConfigs();
+    const defaultStorageConfig = storageConfigs.find(
+      (it) => it.name === "Default Local Storage",
+    );
+
+    if (!defaultStorageConfig) {
+      const documentsDir = await path.documentDir();
+      this.saveStorageConfig({
+        id: createId(),
+        name: "Default Local Storage",
+        type: "local",
+        root: `${documentsDir}/vprdbbkp`,
+      });
+    }
   }
 
   async waitForInitialized(): Promise<void> {
@@ -154,6 +170,7 @@ export class StoreService {
   async deleteSourceConfig(id: string): Promise<void> {
     const sourceConfigs = await this.getRawSourceConfigs();
     if (sourceConfigs[id]) {
+      console.log("deleting")
       delete sourceConfigs[id];
       await this.store.set(SOURCE_CONFIGS_KEY, sourceConfigs);
     }

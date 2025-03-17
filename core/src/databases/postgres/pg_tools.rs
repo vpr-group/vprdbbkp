@@ -1,3 +1,6 @@
+use super::pg_utils::get_postgres_base_directory;
+use super::pg_versions::{PostgresVersion, DEFAULT_POSTGRES_VERSION};
+use crate::databases::postgres::pg_installer::PgInstaller;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 use bytes::Bytes;
@@ -6,11 +9,6 @@ use std::process::Stdio;
 use std::{env, fs, path::PathBuf};
 use tempfile::TempDir;
 use tokio::process::Command;
-
-use crate::databases::postgres::pg_installer::PgInstaller;
-
-use super::pg_utils::get_postgres_base_directory;
-use super::pg_versions::{PostgresVersion, DEFAULT_POSTGRES_VERSION};
 
 pub struct PgTools {
     cache_dir: PathBuf,

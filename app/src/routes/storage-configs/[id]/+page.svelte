@@ -9,6 +9,7 @@
   import Button from "../../../components/Button.svelte";
   import RestoreDropdown from "../../../components/RestoreDropdown.svelte";
   import { notificationsStore } from "../../../components/Notifications.svelte";
+  import { goto } from "$app/navigation";
 
   const { addNotification, removeNotification } = notificationsStore;
   const storeService = new StoreService();
@@ -47,7 +48,15 @@
 
 {#snippet sideSection()}
   {#if storageConfig}
-    <Button onclick={() => loadBackups()} icon="cross">Delete</Button>
+    <Button
+      icon="cross"
+      onclick={async () => {
+        if (!storageConfig) return;
+        await storeService.deleteStorageConfig(storageConfig.id);
+        goto("/");
+      }}>Delete</Button
+    >
+
     <StorageProviderDialog
       {storageConfig}
       onsubmit={async (storageProvider) => {
@@ -82,7 +91,7 @@
           await actionsService.restore(
             cell.label || "",
             backupSource,
-            storageConfig
+            storageConfig,
           );
 
           removeNotification(progressNotifications.id);

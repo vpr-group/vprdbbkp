@@ -30,7 +30,9 @@ export class ActionsService {
       storageConfig,
     });
 
-    return entries;
+    return entries.filter(
+      (it) => it.metadata.mode === "FILE",
+    );
   }
 
   async verifySourceConnection(
