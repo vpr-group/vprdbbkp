@@ -55,6 +55,7 @@
     padding: 1rem;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
+    line-height: 1.5;
 
     &__pre-title,
     &__sub-title {
