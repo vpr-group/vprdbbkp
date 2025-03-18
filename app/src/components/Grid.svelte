@@ -29,6 +29,6 @@
 <style lang="scss">
   .grid {
     display: grid;
-    gap: 0.5rem;
+    gap: 1rem;
   }
 </style>
