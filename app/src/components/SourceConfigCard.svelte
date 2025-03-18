@@ -24,24 +24,70 @@
 </script>
 
 {#snippet title()}
-  <div class="backup-source-card__title">
+  <div class="source-config-card__title">
     <StatusDot status={connected ? "success" : undefined} />
     {sourceConfig.name}
   </div>
 {/snippet}
 
-<Card
-  href={`/source-configs/${sourceConfig.id}`}
-  subTitle={`${sourceConfig.type.toLowerCase()}`}
-  {title}
-></Card>
+<Card href={`/source-configs/${sourceConfig.id}`} {title}>
+  <div class="source-config-card__content">
+    <span class="source-config-card__type">
+      {#if sourceConfig.type === "pg"}
+        PostgreSQL
+      {/if}
+    </span>
+
+    {#if sourceConfig.type === "pg"}
+      <div class="source-config-card__row">
+        <span>Host:</span>
+        <span>{sourceConfig.host}</span>
+      </div>
+      <div class="source-config-card__row">
+        <span>Port:</span>
+        <span>{sourceConfig.port}</span>
+      </div>
+      <div class="source-config-card__row">
+        <span>Database:</span>
+        <span>{sourceConfig.database}</span>
+      </div>
+    {/if}
+  </div>
+</Card>
 
 <style lang="scss">
-  .backup-source-card {
+  .source-config-card {
     &__title {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+
+    &__content {
+      display: flex;
+      flex-direction: column;
+      font-family: var(--mono-font-family);
+    }
+
+    &__type {
+      margin-bottom: 1rem;
+      color: var(--color-grey);
+    }
+
+    &__row {
+      display: flex;
+      justify-content: space-between;
+      gap: 2rem;
+
+      span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        &:first-child {
+          flex: 0 0 auto;
+        }
+      }
     }
   }
 </style>

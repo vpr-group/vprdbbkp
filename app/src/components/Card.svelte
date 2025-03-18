@@ -39,7 +39,7 @@
 {/snippet}
 
 {#if href}
-  <a class="card" {href}>{@render cardInner()}</a>
+  <a class="card card--link" {href}>{@render cardInner()}</a>
 {:else}
   <div class="card">
     {@render cardInner()}
@@ -56,6 +56,12 @@
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
     line-height: 1.5;
+
+    &--link {
+      &:hover {
+        background-color: var(--color-light-grey);
+      }
+    }
 
     &__pre-title,
     &__sub-title {

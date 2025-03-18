@@ -58,7 +58,7 @@
     --main-font-family: TeX Gyre Heros, Arial, Helvetica, sans-serif;
     --mono-font-family: Liberation Mono, monospace;
 
-    --color-light: hsl(0, 0%, calc(94% + 0%));
+    --color-light: hsl(0, 0%, calc(95% + 0%));
     --color-light-grey: hsl(0, 0%, calc(80% + 0%));
     --color-grey: hsl(0, 0%, calc(50% + 0%));
     --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.025);
