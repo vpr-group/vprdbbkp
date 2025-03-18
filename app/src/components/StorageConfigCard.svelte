@@ -14,6 +14,10 @@
   let loadingBackups = $state(true);
   let backups = $state<Entry[]>([]);
 
+  const entriesLabel = $derived(
+    backups.length > 1 ? `${backups.length} Entries` : `${backups.length} Entry`
+  );
+
   const loadBackups = async () => {
     try {
       if (!storageConfig) return;
@@ -32,9 +36,9 @@
   <div class="storage-config-card__content">
     <span class="storage-config-card__type">
       {#if storageConfig.type === "local"}
-        Local • {backups.length} Entries
+        Local • {entriesLabel}
       {:else if storageConfig.type === "s3"}
-        S3 • {backups.length} Entries
+        S3 • {entriesLabel}
       {/if}
     </span>
 
