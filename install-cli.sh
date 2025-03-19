@@ -3,7 +3,7 @@
 set -e
 
 # Configuration
-VERSION="1.1.2"  # Update this with your latest version
+VERSION="1.2.0"  # Update this with your latest version
 BINARY_NAME="cli"
 INSTALL_DIR="/usr/local/bin"
 GITHUB_REPO="vpr-group/vprs3bkp"  # Updated with your actual repo
