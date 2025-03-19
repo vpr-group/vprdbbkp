@@ -1,4 +1,4 @@
-# vprdbbkp - Database Backup & Restore Utility
+# VPR DB Backup - Database Backup & Restore Utility
 
 A robust, efficient tool written in Rust to backup databases directly to different kind cloud storage or local filesystem.
 
