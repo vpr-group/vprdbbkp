@@ -449,6 +449,124 @@ impl PgTools {
         }
     }
 
+    async fn drop_and_recreate_database(
+        &self,
+        database: &str,
+        host: &str,
+        port: u16,
+        username: &str,
+        password: Option<&str>,
+    ) -> Result<()> {
+        // Connect to postgres database (default system database) to drop/create the target database
+        let postgres_db = "postgres";
+
+        // Get psql command path
+        let psql_path = self.get_psql_path().await?;
+
+        // First, terminate all connections to the database
+        let terminate_sql = format!(
+            "SELECT pg_terminate_backend(pg_stat_activity.pid) 
+             FROM pg_stat_activity 
+             WHERE pg_stat_activity.datname = '{}' 
+             AND pid <> pg_backend_pid();",
+            database
+        );
+
+        let mut terminate_cmd = Command::new(&psql_path);
+        terminate_cmd
+            .arg(format!("--host={}", host))
+            .arg(format!("--port={}", port))
+            .arg(format!("--username={}", username))
+            .arg(format!("--dbname={}", postgres_db))
+            .arg("--no-psqlrc")
+            .arg("-v")
+            .arg("ON_ERROR_STOP=1")
+            .arg("-c")
+            .arg(&terminate_sql);
+
+        // Set up psql command for dropping the database
+        let mut drop_cmd = Command::new(&psql_path);
+        drop_cmd
+            .arg(format!("--host={}", host))
+            .arg(format!("--port={}", port))
+            .arg(format!("--username={}", username))
+            .arg(format!("--dbname={}", postgres_db))
+            .arg("--no-psqlrc")
+            .arg("-v")
+            .arg("ON_ERROR_STOP=1")
+            .arg("-c")
+            .arg(&format!("DROP DATABASE IF EXISTS \"{}\";", database));
+
+        // Set up psql command for creating the database
+        let mut create_cmd = Command::new(&psql_path);
+        create_cmd
+            .arg(format!("--host={}", host))
+            .arg(format!("--port={}", port))
+            .arg(format!("--username={}", username))
+            .arg(format!("--dbname={}", postgres_db))
+            .arg("--no-psqlrc")
+            .arg("-v")
+            .arg("ON_ERROR_STOP=1")
+            .arg("-c")
+            .arg(&format!("CREATE DATABASE \"{}\";", database));
+
+        // Set the PGPASSWORD environment variable if password is provided
+        if let Some(pass) = password {
+            terminate_cmd.env("PGPASSWORD", pass);
+            drop_cmd.env("PGPASSWORD", pass);
+            create_cmd.env("PGPASSWORD", pass);
+        }
+
+        // Execute the terminate connections command
+        let terminate_output = terminate_cmd.output().await.context(format!(
+            "Failed to execute connection termination command at {}",
+            psql_path.display()
+        ))?;
+
+        // We don't need to check the success of the terminate command - it's ok if there were no connections
+
+        // Execute the drop command
+        let drop_output = drop_cmd.output().await.context(format!(
+            "Failed to execute psql drop command at {}",
+            psql_path.display()
+        ))?;
+
+        // Check if the drop command executed successfully
+        if !drop_output.status.success() {
+            let stderr = String::from_utf8_lossy(&drop_output.stderr);
+            let exit_code = drop_output.status.code().unwrap_or(-1);
+
+            return Err(anyhow!(
+                "Failed to drop database with exit code {}.\nError details: {}",
+                exit_code,
+                stderr.trim()
+            ));
+        }
+
+        // Execute the create command
+        let create_output = create_cmd.output().await.context(format!(
+            "Failed to execute psql create command at {}",
+            psql_path.display()
+        ))?;
+
+        // Check if the create command executed successfully
+        if !create_output.status.success() {
+            let stderr = String::from_utf8_lossy(&create_output.stderr);
+            let exit_code = create_output.status.code().unwrap_or(-1);
+
+            return Err(anyhow!(
+                "Failed to create database with exit code {}.\nError details: {}",
+                exit_code,
+                stderr.trim()
+            ));
+        }
+
+        // Wait a moment to ensure the database is ready
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        Ok(())
+    }
+
     pub async fn restore(
         &self,
         database: &str,
@@ -458,6 +576,7 @@ impl PgTools {
         password: Option<&str>,
         dump_data: Bytes,
         compressed: bool,
+        drop_database: bool,
     ) -> Result<()> {
         let target_version = self
             .get_postgres_version(database, host, port, username, password)
@@ -473,6 +592,12 @@ impl PgTools {
             self.version.as_str(),
             target_version.as_str(),
         ));
+        }
+
+        // If drop_database is true, drop and recreate the database
+        if drop_database {
+            self.drop_and_recreate_database(database, host, port, username, password)
+                .await?;
         }
 
         let pg_restore_path = self.get_pg_restore_path().await?;
@@ -532,9 +657,16 @@ impl PgTools {
                 .arg(format!("--username={}", username))
                 .arg("--dbname=".to_string() + database)
                 .arg("--no-owner")
-                .arg("--no-privileges")
-                .arg("--clean") // Drop objects before recreating them
-                .arg("--if-exists") // Add IF EXISTS for cleaner drops
+                .arg("--no-privileges");
+
+            // Only add --clean and --if-exists if not dropping the entire database
+            if !drop_database {
+                pg_restore_cmd
+                    .arg("--clean") // Drop objects before recreating them
+                    .arg("--if-exists"); // Add IF EXISTS for cleaner drops
+            }
+
+            pg_restore_cmd
                 .arg("--no-comments") // Skip comments to avoid warnings
                 .arg("--exit-on-error") // Continue on error
                 .arg(&decompressed_file_path);
@@ -599,10 +731,15 @@ impl PgTools {
                 .arg(format!("--username={}", username))
                 .arg("--dbname=".to_string() + database)
                 .arg("--no-owner")
-                .arg("--no-privileges")
-                .arg("--clean") // Drop objects before recreating them
-                .arg("--if-exists") // Add IF EXISTS for cleaner drops
-                .arg("--no-comments") // Skip comments to avoid warnings
+                .arg("--no-privileges");
+
+            // Only add --clean and --if-exists if not dropping the entire database
+            if !drop_database {
+                cmd.arg("--clean") // Drop objects before recreating them
+                    .arg("--if-exists"); // Add IF EXISTS for cleaner drops
+            }
+
+            cmd.arg("--no-comments") // Skip comments to avoid warnings
                 .arg("--exit-on-error") // Continue on error
                 .arg(&dump_file_path);
 

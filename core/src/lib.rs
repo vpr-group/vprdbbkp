@@ -30,7 +30,12 @@ where
     Ok(path)
 }
 
-pub async fn restore<SO, ST>(source_config: SO, storage_config: ST, filename: &str) -> Result<()>
+pub async fn restore<SO, ST>(
+    source_config: SO,
+    storage_config: ST,
+    filename: &str,
+    drop_database: bool,
+) -> Result<()>
 where
     SO: Borrow<SourceConfig>,
     ST: Borrow<StorageConfig>,
@@ -40,7 +45,7 @@ where
 
     let storage = Storage::new(borrowed_storage_config).await?;
     let bytes = storage.read(filename).await?;
-    restore_source(borrowed_source_config, bytes).await?;
+    restore_source(borrowed_source_config, bytes, drop_database).await?;
     Ok(())
 }
 
@@ -118,12 +123,12 @@ mod tests {
             host: "localhost".into(),
             port: 5432,
             username: "postgres".into(),
-            password: Some("postgres".into()),
+            password: Some("Gwt2tmrGtN4OZ3oL577E".into()),
         });
 
         let filename = "test-api-2025-03-15-100759-1853fe65.gz";
 
-        restore(&source_config, &storage_config, &filename)
+        restore(&source_config, &storage_config, &filename, true)
             .await
             .expect("Unable to restore")
     }
@@ -167,7 +172,7 @@ mod tests {
 
         let filename = storage.get_filename_from_path(&dump_path);
 
-        restore(&source_config, &storage_config, &filename)
+        restore(&source_config, &storage_config, &filename, true)
             .await
             .expect("Unable to restore")
     }

@@ -30,9 +30,7 @@ export class ActionsService {
       storageConfig,
     });
 
-    return entries.filter(
-      (it) => it.metadata.mode === "FILE",
-    );
+    return entries.filter((it) => it.metadata.mode === "FILE");
   }
 
   async verifySourceConnection(
@@ -58,12 +56,14 @@ export class ActionsService {
   async restore(
     filename: string,
     sourceConfig: SourceConfig,
-    storageConfig: StorageConfig
+    storageConfig: StorageConfig,
+    dropDatabase: boolean
   ): Promise<void> {
     await invoke<string>("restore", {
       filename,
       sourceConfig,
       storageConfig,
+      dropDatabase,
     });
   }
 }

@@ -13,23 +13,27 @@
 
   interface Props {
     backupKey: string;
-    onrestore?: (backupSrouce: SourceConfig) => void;
+    onrestore?: (value: {
+      sourceConfig: SourceConfig;
+      dropDatabase: boolean;
+    }) => void;
   }
 
   const { backupKey, onrestore }: Props = $props();
   const storeService = new StoreService();
 
-  let backupSources = $state<SourceConfig[]>([]);
+  let sourcesConfig = $state<SourceConfig[]>([]);
   let openMenu = $state(false);
   let openDialog = $state(false);
+  let dropDatabase = $state(false);
 
-  const loadBackupSources = async () => {
+  const loadSourceConfigs = async () => {
     await storeService.waitForInitialized();
-    backupSources = await storeService.getSourceConfigs();
+    sourcesConfig = await storeService.getSourceConfigs();
   };
 
   onMount(() => {
-    loadBackupSources();
+    loadSourceConfigs();
   });
 </script>
 
@@ -37,13 +41,13 @@
   bind:open={openMenu}
   icon="arrow-right"
   label="Restore"
-  items={backupSources}
+  items={sourcesConfig}
   align="end"
 >
-  {#snippet item(backupSource)}
+  {#snippet item(sourceConfig)}
     <Dialog
       icon="arrow-right"
-      label={backupSource.name}
+      label={sourceConfig.name}
       buttonStyle={{
         backgroundColor: "var(--color-light-grey)",
         color: "black",
@@ -54,9 +58,14 @@
 
         <p>
           You are about ro override the following database: <strong>
-            {backupSource.database}
+            {sourceConfig.database}
           </strong>
         </p>
+
+        <fieldset>
+          <label for="">Drop Database & Terminate connections</label>
+          <input type="checkbox" bind:checked={dropDatabase} />
+        </fieldset>
 
         <DialogActions>
           <Button icon="cross" onclick={() => (openMenu = false)}>
@@ -66,7 +75,7 @@
             icon="arrow-right"
             onclick={() => {
               openMenu = false;
-              onrestore?.(backupSource);
+              onrestore?.({ sourceConfig, dropDatabase });
             }}>Continue</Button
           >
         </DialogActions>

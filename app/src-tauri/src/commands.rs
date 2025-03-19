@@ -36,8 +36,9 @@ pub async fn restore(
     filename: String,
     source_config: SourceConfig,
     storage_config: StorageConfig,
+    drop_database: bool,
 ) -> Result<String, String> {
-    vprs3bkp_core::restore(source_config, storage_config, &filename)
+    vprs3bkp_core::restore(source_config, storage_config, &filename, drop_database)
         .await
         .map_err(|e| format!("Failed to restore backup: {}", e))?;
 

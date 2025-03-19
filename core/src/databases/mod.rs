@@ -29,7 +29,11 @@ where
     }
 }
 
-pub async fn restore_source<B>(source_config: B, dump_data: Bytes) -> Result<()>
+pub async fn restore_source<B>(
+    source_config: B,
+    dump_data: Bytes,
+    drop_database: bool,
+) -> Result<()>
 where
     B: Borrow<SourceConfig>,
 {
@@ -43,6 +47,7 @@ where
                 Some(config.password.as_deref().unwrap_or("")),
                 dump_data,
                 true,
+                drop_database,
             )
             .await?;
             Ok(())

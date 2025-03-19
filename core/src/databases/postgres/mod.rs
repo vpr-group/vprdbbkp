@@ -55,6 +55,7 @@ pub async fn restore_postgres(
     password: Option<&str>,
     dump_data: Bytes,
     compressed: bool,
+    drop_database: bool,
 ) -> Result<()> {
     let mut pg_tools = PgTools::default()?;
 
@@ -67,7 +68,14 @@ pub async fn restore_postgres(
 
     pg_tools
         .restore(
-            database, host, port, username, password, dump_data, compressed,
+            database,
+            host,
+            port,
+            username,
+            password,
+            dump_data,
+            compressed,
+            drop_database,
         )
         .await?;
 

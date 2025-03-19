@@ -37,6 +37,9 @@ pub struct RestoreArgs {
     #[arg(short, long)]
     pub filename: Option<String>,
 
+    #[arg(short, long)]
+    pub drop_database: Option<bool>,
+
     #[arg(long)]
     pub latest: bool,
 

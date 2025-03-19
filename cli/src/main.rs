@@ -58,6 +58,11 @@ async fn main() -> Result<()> {
             let source_config = source_from_cli(&args.source)?;
             let storage_config = storage_from_cli(&args.storage)?;
 
+            let drop_database = match args.drop_database {
+                Some(value) => value,
+                None => false,
+            };
+
             if args.latest {
                 // If latest flag is set, find the most recent backup for this database
                 let entries = list(&storage_config).await?;
@@ -91,11 +96,17 @@ async fn main() -> Result<()> {
                 let latest_filename = storage.get_filename_from_path(latest_path);
 
                 println!("Restoring the latest backup: {}", latest_filename);
-                restore(&source_config, &storage_config, &latest_filename).await?;
+                restore(
+                    &source_config,
+                    &storage_config,
+                    &latest_filename,
+                    drop_database,
+                )
+                .await?;
             } else if let Some(filename) = &args.filename {
                 // Use the provided filename
                 println!("Restoring from backup: {}", filename);
-                restore(&source_config, &storage_config, filename).await?;
+                restore(&source_config, &storage_config, filename, drop_database).await?;
             } else {
                 return Err(anyhow::anyhow!(
                     "Either --filename or --latest must be specified for restore"

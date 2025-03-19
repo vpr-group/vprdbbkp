@@ -78,7 +78,7 @@
   {#snippet actions(cell: Cell, row?: Row)}
     <RestoreDropdown
       backupKey={cell.label || ""}
-      onrestore={async (backupSource) => {
+      onrestore={async ({ sourceConfig, dropDatabase }) => {
         if (!storageConfig) return;
 
         const progressNotifications = addNotification({
@@ -90,8 +90,9 @@
         try {
           await actionsService.restore(
             cell.label || "",
-            backupSource,
+            sourceConfig,
             storageConfig,
+            dropDatabase
           );
 
           removeNotification(progressNotifications.id);
