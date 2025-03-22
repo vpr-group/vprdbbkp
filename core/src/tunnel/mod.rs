@@ -58,7 +58,7 @@ impl Tunnel {
                 local_port, remote_host, remote_port
             ))
             .arg("-N")
-            .arg(format!("{}@{}", self.config.username, remote_host))
+            .arg(format!("{}@{}", &self.config.username, remote_host))
             // Add options for a stable connection
             .arg("-o")
             .arg("StrictHostKeyChecking=no")
