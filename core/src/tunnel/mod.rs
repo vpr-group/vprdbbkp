@@ -46,10 +46,6 @@ impl Tunnel {
             SourceConfig::PG(config) => config.port,
         };
 
-        let username = match source_config {
-            SourceConfig::PG(config) => &config.username,
-        };
-
         // Build the SSH command - using standard Command since TokioCommand doesn't
         // work well for long-running processes like SSH tunnels
         let mut command = Command::new("ssh");
@@ -62,7 +58,7 @@ impl Tunnel {
                 local_port, remote_host, remote_port
             ))
             .arg("-N")
-            .arg(format!("{}@{}", username, remote_host))
+            .arg(format!("{}@{}", self.config.username, remote_host))
             // Add options for a stable connection
             .arg("-o")
             .arg("StrictHostKeyChecking=no")
@@ -129,5 +125,60 @@ impl Drop for Tunnel {
         if self.process.is_some() {
             let _ = self.close_tunnel();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::env;
+
+    use dotenv::dotenv;
+    use log::LevelFilter;
+
+    use crate::{
+        databases::configs::{PGSourceConfig, SourceConfig},
+        tunnel::{config::TunnelConfig, Tunnel},
+    };
+
+    fn initialize_test() {
+        env_logger::Builder::new()
+            .filter_level(LevelFilter::Info)
+            .init();
+
+        dotenv().ok();
+    }
+
+    #[tokio::test]
+    async fn test_tunnel_connection() {
+        initialize_test();
+
+        let tunnel_config = TunnelConfig {
+            username: "ubuntu".into(),
+            key_path: env::var("TUNNEL_KEY_PATH").unwrap_or_default(),
+            use_tunnel: true,
+        };
+
+        let port_str = env::var("DB_PORT").unwrap_or_else(|_| "5432".to_string());
+        let port = port_str.parse::<u16>().unwrap_or(5432); // Default to 5432 if parsing fails
+
+        let pg_source_config = SourceConfig::PG(PGSourceConfig {
+            name: "test".into(),
+            database: env::var("DB_NAME").unwrap_or_default(),
+            host: env::var("DB_HOST").unwrap_or_default(),
+            password: Some(env::var("DB_PASSWORD").unwrap_or_default()),
+            username: env::var("DB_USERNAME").unwrap_or_default(),
+            port,
+            tunnel_config: None,
+        });
+
+        let mut tunnel = Tunnel::new(tunnel_config);
+
+        let local_port = tunnel
+            .establish_tunnel(&pg_source_config)
+            .await
+            .expect("Unable to establih tunnel connection");
+
+        assert!(local_port > 0);
     }
 }

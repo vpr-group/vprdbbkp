@@ -4,5 +4,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct TunnelConfig {
     pub use_tunnel: bool,
+    pub username: String,
     pub key_path: String,
 }
