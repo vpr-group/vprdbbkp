@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createId } from "@paralleldrive/cuid2";
-  import type { SourceConfig } from "../services/store";
+  import type { SourceConfig, TunnelConfig } from "../services/store";
   import Dialog from "./Dialog.svelte";
   import Input from "./Input.svelte";
   import Separation from "./Separation.svelte";
@@ -18,6 +18,12 @@
   const { sourceConfig, onchange, onsubmit }: Props = $props();
   let open = $state(false);
 
+  const defaultTunnelConfig: TunnelConfig = {
+    useTunnel: false,
+    username: "",
+    keyPath: "",
+  };
+
   let currentSourceConfig = $state<SourceConfig>(
     sourceConfig || {
       id: createId(),
@@ -28,6 +34,7 @@
       password: "",
       port: 0,
       username: "",
+      tunnelConfig: defaultTunnelConfig,
     }
   );
 
@@ -125,6 +132,44 @@
               currentSourceConfig = {
                 ...currentSourceConfig,
                 password,
+              };
+            }}
+          />
+
+          <Input
+            name="Host Username"
+            value={currentSourceConfig.tunnelConfig?.username || ""}
+            oninput={(e) => {
+              const username = e.currentTarget.value;
+              const useTunnel = Boolean(
+                currentSourceConfig.tunnelConfig?.keyPath && username
+              );
+              currentSourceConfig = {
+                ...currentSourceConfig,
+                tunnelConfig: {
+                  ...(currentSourceConfig.tunnelConfig || defaultTunnelConfig),
+                  username,
+                  useTunnel,
+                },
+              };
+            }}
+          />
+
+          <Input
+            name="Tunnel Key File"
+            value={currentSourceConfig.tunnelConfig?.keyPath || ""}
+            oninput={(e) => {
+              const keyPath = e.currentTarget.value;
+              const useTunnel = Boolean(
+                currentSourceConfig.tunnelConfig?.username && keyPath
+              );
+              currentSourceConfig = {
+                ...currentSourceConfig,
+                tunnelConfig: {
+                  ...(currentSourceConfig.tunnelConfig || defaultTunnelConfig),
+                  keyPath,
+                  useTunnel,
+                },
               };
             }}
           />

@@ -184,6 +184,7 @@ pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
             port: source.port,
             username: source.username.clone(),
             password: source.password.clone(),
+            tunnel_config: None,
         })),
         _ => Err(anyhow!("Unsupported source type: {}", source.source_type)),
     }
