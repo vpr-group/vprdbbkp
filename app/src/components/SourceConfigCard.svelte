@@ -51,6 +51,10 @@
         <span>Database:</span>
         <span>{sourceConfig.database}</span>
       </div>
+      <div class="source-config-card__row">
+        <span>Use Tunnel:</span>
+        <span>{Boolean(sourceConfig.tunnelConfig?.useTunnel)}</span>
+      </div>
     {/if}
   </div>
 </Card>
