@@ -6,6 +6,7 @@ pub mod databases;
 pub mod folders;
 pub mod platform;
 pub mod storage;
+pub mod tunnel;
 pub mod utils;
 
 use databases::{backup_source, configs::SourceConfig, restore_source};
@@ -90,6 +91,7 @@ mod tests {
             port: 5432,
             username: "postgres".into(),
             password: Some("postgres".into()),
+            tunnel_config: None,
         });
 
         let dump_path = backup(&source_config, &storage_config)
@@ -124,6 +126,7 @@ mod tests {
             port: 5432,
             username: "postgres".into(),
             password: Some("Gwt2tmrGtN4OZ3oL577E".into()),
+            tunnel_config: None,
         });
 
         let filename = "test-api-2025-03-15-100759-1853fe65.gz";
@@ -155,6 +158,7 @@ mod tests {
             port: 5432,
             username: "postgres".into(),
             password: Some("postgres".into()),
+            tunnel_config: None,
         });
 
         let dump_path = backup(&source_config, &storage_config)

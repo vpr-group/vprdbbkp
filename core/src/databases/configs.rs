@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-pub trait BaseBackupSourceConfig {
+use crate::tunnel::config::TunnelConfig;
+
+pub trait BaseSourceConfig {
     fn name(&self) -> &str;
 }
 
@@ -13,9 +15,10 @@ pub struct PGSourceConfig {
     pub port: u16,
     pub username: String,
     pub password: Option<String>,
+    pub tunnel_config: Option<TunnelConfig>,
 }
 
-impl BaseBackupSourceConfig for PGSourceConfig {
+impl BaseSourceConfig for PGSourceConfig {
     fn name(&self) -> &str {
         &self.name
     }
