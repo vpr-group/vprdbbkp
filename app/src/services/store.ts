@@ -27,6 +27,12 @@ export interface LocalStorageConfig extends BaseStorageConfig {
 
 export type StorageConfig = S3StorageConfig | LocalStorageConfig;
 
+export interface TunnelConfig {
+  useTunnel: boolean;
+  username: string;
+  keyPath: string;
+}
+
 export interface BaseSourceConfig {
   id: string;
   name: string;
@@ -40,6 +46,7 @@ export interface PostgresSourceConfig extends BaseSourceConfig {
   username: string;
   password: string;
   database: string;
+  tunnelConfig?: TunnelConfig;
 }
 
 export type SourceConfig = PostgresSourceConfig;
@@ -57,7 +64,7 @@ export class StoreService {
 
     const storageConfigs = await this.getStorageConfigs();
     const defaultStorageConfig = storageConfigs.find(
-      (it) => it.name === "Default Local Storage",
+      (it) => it.name === "Default Local Storage"
     );
 
     if (!defaultStorageConfig) {
@@ -170,7 +177,7 @@ export class StoreService {
   async deleteSourceConfig(id: string): Promise<void> {
     const sourceConfigs = await this.getRawSourceConfigs();
     if (sourceConfigs[id]) {
-      console.log("deleting")
+      console.log("deleting");
       delete sourceConfigs[id];
       await this.store.set(SOURCE_CONFIGS_KEY, sourceConfigs);
     }
