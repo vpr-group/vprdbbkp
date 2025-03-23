@@ -3,6 +3,7 @@
   import type { StorageConfig } from "../services/store";
   import Card from "./Card.svelte";
   import { ActionsService, type Entry } from "../services/actions";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     storageConfig: StorageConfig;
@@ -32,7 +33,14 @@
   });
 </script>
 
-<Card href={`/storage-configs/${storageConfig.id}`} title={storageConfig.name}>
+{#snippet title()}
+  <div class="storage-config-card__title">
+    <Icon icon={storageConfig.type === "s3" ? "cloud" : "hard-drive"} />
+    <span>{storageConfig.name}</span>
+  </div>
+{/snippet}
+
+<Card href={`/storage-configs/${storageConfig.id}`} {title}>
   <div class="storage-config-card__content">
     <span class="storage-config-card__type">
       {#if storageConfig.type === "local"}
@@ -63,6 +71,8 @@
 <style lang="scss">
   .storage-config-card {
     &__content {
+      flex: 1 1 auto;
+      justify-content: space-between;
       display: flex;
       flex-direction: column;
       font-family: var(--mono-font-family);

@@ -61,6 +61,8 @@
     --color-light: hsl(0, 0%, calc(95% + 0%));
     --color-light-grey: hsl(0, 0%, calc(80% + 0%));
     --color-grey: hsl(0, 0%, calc(50% + 0%));
+    --color-green: rgb(109, 248, 109);
+    --color-light-green: rgba(109, 248, 109, 0.4);
     --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.025);
     --border-radius: 0.3rem;
   }

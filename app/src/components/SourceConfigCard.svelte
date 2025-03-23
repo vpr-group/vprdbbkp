@@ -3,7 +3,8 @@
   import { StoreService, type SourceConfig } from "../services/store";
   import Card from "./Card.svelte";
   import { ActionsService } from "../services/actions";
-  import StatusDot from "./StatusDot.svelte";
+  import Icon from "./Icon.svelte";
+  import { getCss } from "../utils/css";
 
   interface Props {
     sourceConfig: SourceConfig;
@@ -25,7 +26,8 @@
 
 {#snippet title()}
   <div class="source-config-card__title">
-    <StatusDot status={connected ? "success" : undefined} />
+    <Icon icon="database" />
+
     {sourceConfig.name}
   </div>
 {/snippet}
@@ -34,8 +36,18 @@
   <div class="source-config-card__content">
     <span class="source-config-card__type">
       {#if sourceConfig.type === "pg"}
-        PostgreSQL
+        PostgreSQL •
       {/if}
+
+      <div
+        class="source-config-card__badge"
+        style={getCss({
+          backgroundColor: connected ? "var(--color-light-green)" : undefined,
+        })}
+      >
+        {connected ? "Connected" : "Offline"}
+      </div>
+      <!-- <StatusDot status={connected ? "success" : undefined} /> -->
     </span>
 
     {#if sourceConfig.type === "pg"}
@@ -74,8 +86,20 @@
     }
 
     &__type {
+      margin-top: 0.2rem;
       margin-bottom: 1rem;
       color: var(--color-grey);
+      display: flex;
+      align-items: center;
+      gap: 0.7em;
+      line-height: 1;
+    }
+
+    &__badge {
+      background-color: var(--color-light);
+      padding: 0.35rem 0.5rem 0.2rem 0.5rem;
+      transform: translate(0, -0.15rem);
+      border-radius: 1rem;
     }
 
     &__row {

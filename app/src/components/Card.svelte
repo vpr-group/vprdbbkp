@@ -48,7 +48,8 @@
 
 <style lang="scss">
   .card {
-    display: block;
+    display: flex;
+    flex-direction: column;
     color: black;
     background-color: white;
     text-decoration: none;
