@@ -4,13 +4,13 @@
 
 <div class="sidebar">
   <div class="sidebar__inner">
-    <!-- <img src="/logo.png" alt="" /> -->
     <span></span>
+    <img src="/logo_vprs3bkp.svg" alt="" />
 
-    <div class="sidebar__buttons">
+    <!-- <div class="sidebar__buttons">
       <Button style={{ width: "100%" }} icon="reload"></Button>
       <Button style={{ width: "100%" }} icon="plus"></Button>
-    </div>
+    </div> -->
     <!-- <Button icon="database">+</Button> -->
     <!-- <span>Storage</span> -->
   </div>
@@ -45,6 +45,9 @@
 
     img {
       width: 100%;
+      background-color: var(--color-light-grey);
+      border-radius: var(--border-radius);
+      padding: 0.3rem;
     }
   }
 </style>

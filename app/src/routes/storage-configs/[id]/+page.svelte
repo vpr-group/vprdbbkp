@@ -93,7 +93,11 @@
 
   <StorageConfigCard {storageConfig} hideTitle />
 
-  <Separation label="Entries" />
+  <Separation label="Entries">
+    {#snippet sideSection()}
+      <!-- <Button icon="arrow-right">Restore Latest</Button> -->
+    {/snippet}
+  </Separation>
 
   {#snippet actions(cell: Cell, row?: Row)}
     <RestoreDropdown
