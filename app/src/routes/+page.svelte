@@ -52,7 +52,7 @@
   {/snippet}
 
   <Separation
-    label="Storages"
+    label="File Storage"
     subLabel={`${storageConfigs.length} items`}
     sideSection={storageActions}
   />
@@ -63,20 +63,16 @@
     {/each}
   </Grid>
 
-  {#snippet sourcesActions()}
-    <SourceConfigDialog
-      onsubmit={async (backupSource) => {
-        await storeService.saveSourceConfig(backupSource);
-        loadSourceConfigs();
-      }}
-    />
-  {/snippet}
-
-  <Separation
-    label="Sources"
-    subLabel={`${sourceConfigs.length} items`}
-    sideSection={sourcesActions}
-  />
+  <Separation label="Data Source" subLabel={`${sourceConfigs.length} items`}>
+    {#snippet sideSection()}
+      <SourceConfigDialog
+        onsubmit={async (backupSource) => {
+          await storeService.saveSourceConfig(backupSource);
+          loadSourceConfigs();
+        }}
+      />
+    {/snippet}
+  </Separation>
 
   <Grid>
     {#each sourceConfigs as backupSource}

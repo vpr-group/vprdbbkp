@@ -6,7 +6,6 @@
   import Separation from "./Separation.svelte";
   import Button from "./Button.svelte";
   import DialogActions from "./DialogActions.svelte";
-  import DropdownMenu from "./DropdownMenu.svelte";
   import Checkbox from "./Checkbox.svelte";
 
   interface Props {
@@ -17,7 +16,8 @@
 
   const sourceConfigTypes: SourceConfig["type"][] = ["pg"];
   const { sourceConfig, onchange, onsubmit }: Props = $props();
-  let open = $state(false);
+  let isConfigDialogOpen = $state(false);
+  let isCreateDialogOpen = $state(false);
 
   let showTunnelConfig = $state(sourceConfig?.tunnelConfig?.useTunnel || false);
 
@@ -48,24 +48,19 @@
 
 {#snippet pgDialog(sourceConfig?: SourceConfig)}
   <Dialog
-    bind:open
-    label={sourceConfig ? "Edit" : "PostgreSQL Source"}
-    icon={sourceConfig ? "pencil" : undefined}
-    buttonStyle={sourceConfig
-      ? undefined
-      : {
-          backgroundColor: "var(--color-light-grey)",
-          color: "black",
-        }}
+    bind:open={isConfigDialogOpen}
+    label={sourceConfig ? "" : "PostgreSQL"}
+    icon={sourceConfig ? "pencil" : "arrow-right"}
+    buttonStyle={{
+      justifyContent: "space-between",
+      backgroundColor: sourceConfig ? undefined : "var(--color-light-grey)",
+      color: sourceConfig ? undefined : "black",
+    }}
   >
-    <div class="project">
-      <Separation
-        label={sourceConfig
-          ? "Edit PostgreSQL Source"
-          : "Create PostgreSQL Source"}
-      />
+    <div class="source-config-dialog">
+      <Separation label={sourceConfig ? "Edit" : "Create"} />
 
-      <div class="project__form">
+      <div class="source-config-dialog__form">
         <Input
           type="text"
           name="Name"
@@ -199,12 +194,19 @@
         {/if}
 
         <DialogActions>
-          <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
+          <Button
+            icon="cross"
+            onclick={() => {
+              isConfigDialogOpen = false;
+              isCreateDialogOpen = false;
+            }}>Cancel</Button
+          >
           <Button
             icon="plus"
             onclick={() => {
               onsubmit?.(currentSourceConfig);
-              open = false;
+              isConfigDialogOpen = false;
+              isCreateDialogOpen = false;
             }}
           >
             {sourceConfig ? "Update" : "Create"}
@@ -220,22 +222,16 @@
     {@render pgDialog(sourceConfig)}
   {/if}
 {:else}
-  <DropdownMenu
-    items={sourceConfigTypes}
-    label="Create"
-    icon="plus"
-    align="end"
-  >
-    {#snippet item(type)}
-      {#if type === "pg"}
-        {@render pgDialog()}
-      {/if}
-    {/snippet}
-  </DropdownMenu>
+  <Dialog icon="plus" bind:open={isCreateDialogOpen}>
+    <Separation label="Create Data Source" />
+    <div class="source-config-dialog__data-sources">
+      {@render pgDialog()}
+    </div>
+  </Dialog>
 {/if}
 
 <style lang="scss">
-  .project {
+  .source-config-dialog {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -245,6 +241,12 @@
       flex-direction: column;
       gap: 0.5rem;
       min-width: 30rem;
+    }
+
+    &__data-sources {
+      display: flex;
+      flex-direction: column;
+      padding: 1rem 0;
     }
   }
 </style>

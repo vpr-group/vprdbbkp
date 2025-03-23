@@ -7,13 +7,15 @@
   import Table, { type Cell, type Row } from "../../../components/Table.svelte";
   import Separation from "../../../components/Separation.svelte";
   import Button from "../../../components/Button.svelte";
-  import RestoreDropdown from "../../../components/RestoreDropdown.svelte";
+  import RestoreDropdown from "../../../components/RestoreDialog.svelte";
   import { notificationsStore } from "../../../components/Notifications.svelte";
   import { goto } from "$app/navigation";
   import {
     extractDateTimeFromEntryName,
     formatDate,
   } from "../../../utils/dates";
+  import Icon from "../../../components/Icon.svelte";
+  import StorageConfigCard from "../../../components/StorageConfigCard.svelte";
 
   const { addNotification, removeNotification } = notificationsStore;
   const storeService = new StoreService();
@@ -67,8 +69,8 @@
         if (!storageConfig) return;
         await storeService.deleteStorageConfig(storageConfig.id);
         goto("/");
-      }}>Delete</Button
-    >
+      }}
+    />
 
     <StorageProviderDialog
       {storageConfig}
@@ -77,16 +79,21 @@
         loadStorageConfig();
       }}
     />
-    <Button onclick={() => loadBackups()} icon="reload">Refresh</Button>
+    <Button onclick={() => loadBackups()} icon="reload" />
   {/if}
 {/snippet}
 
 {#if storageConfig}
-  <Separation
-    label={storageConfig.name}
-    subLabel={`${storageConfig.type} - ${storageConfig.name}`}
-    {sideSection}
-  />
+  <Separation subLabel={`${storageConfig.type}`} {sideSection}>
+    {#snippet label()}
+      <Icon icon={storageConfig?.type === "s3" ? "cloud" : "hard-drive"} />
+      {storageConfig?.name}
+    {/snippet}
+  </Separation>
+
+  <StorageConfigCard {storageConfig} hideTitle />
+
+  <Separation label="Entries" />
 
   {#snippet actions(cell: Cell, row?: Row)}
     <RestoreDropdown
@@ -133,7 +140,7 @@
     ]}
     rows={sortedBackups.map((row, index) => ({
       cells: [
-        { label: (index + 1).toString().padStart(2, "0") },
+        { label: (index + 1).toString() },
         { label: row.entry.path },
         { label: row.date ? formatDate(row.date) : "-" },
         {

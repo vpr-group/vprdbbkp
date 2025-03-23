@@ -6,7 +6,6 @@
   import Button from "./Button.svelte";
   import DialogActions from "./DialogActions.svelte";
   import Separation from "./Separation.svelte";
-  import DropdownMenu from "./DropdownMenu.svelte";
 
   interface Props {
     storageConfig?: StorageConfig;
@@ -15,8 +14,8 @@
   }
 
   const { storageConfig, onchange, onsubmit }: Props = $props();
-  let open = $state(false);
-  const storageConfigTypes: StorageConfig["type"][] = ["s3", "local"];
+  let isConfigDialogOpen = $state(false);
+  let isCreateDialogOpen = $state(false);
 
   let currentStorageConfig = $state<StorageConfig>(
     storageConfig || {
@@ -45,23 +44,18 @@
 
 {#snippet s3Dialog(storageConfig?: StorageConfig)}
   <Dialog
-    bind:open
-    label={storageConfig ? "Edit" : "S3 Storage"}
-    icon={storageConfig ? "pencil" : undefined}
-    buttonStyle={storageConfig
-      ? undefined
-      : {
-          backgroundColor: "var(--color-light-grey)",
-          color: "black",
-        }}
+    bind:open={isConfigDialogOpen}
+    label={storageConfig ? "" : "S3"}
+    icon={storageConfig ? "pencil" : "arrow-right"}
+    buttonStyle={{
+      justifyContent: "space-between",
+      backgroundColor: storageConfig ? undefined : "var(--color-light-grey)",
+      color: storageConfig ? undefined : "black",
+    }}
   >
-    <div class="project">
-      <Separation
-        label={storageConfig
-          ? "Edit S3 Storage Config"
-          : "Create S3 Storage Config"}
-      />
-      <div class="project__form">
+    <div class="storage-config-dialog">
+      <Separation label={storageConfig ? "Edit " : "Create "} />
+      <div class="storage-config-dialog__form">
         <Input
           type="text"
           name="Name"
@@ -127,12 +121,19 @@
         {/if}
 
         <DialogActions>
-          <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
+          <Button
+            icon="cross"
+            onclick={() => {
+              isConfigDialogOpen = false;
+              isCreateDialogOpen = false;
+            }}>Cancel</Button
+          >
           <Button
             icon="plus"
             onclick={() => {
               onsubmit?.(currentStorageConfig);
-              open = false;
+              isConfigDialogOpen = false;
+              isCreateDialogOpen = false;
             }}
           >
             {storageConfig ? "Update" : "Create"}
@@ -146,22 +147,16 @@
 {#if storageConfig}
   {@render s3Dialog(storageConfig)}
 {:else}
-  <DropdownMenu
-    label="Create"
-    icon="plus"
-    items={storageConfigTypes}
-    align="end"
-  >
-    {#snippet item(item)}
-      {#if item === "s3"}
-        {@render s3Dialog()}
-      {/if}
-    {/snippet}
-  </DropdownMenu>
+  <Dialog icon="plus" bind:open={isCreateDialogOpen}>
+    <Separation label="Create File Storage" />
+    <div class="storage-config-dialog__storages">
+      {@render s3Dialog()}
+    </div>
+  </Dialog>
 {/if}
 
 <style lang="scss">
-  .project {
+  .storage-config-dialog {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -171,6 +166,12 @@
       flex-direction: column;
       gap: 0.5rem;
       min-width: 30rem;
+    }
+
+    &__storages {
+      display: flex;
+      flex-direction: column;
+      padding: 1rem 0;
     }
   }
 </style>

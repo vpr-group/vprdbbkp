@@ -11,6 +11,7 @@
     children?: Snippet;
     icon?: IconName;
     buttonStyle?: CSSProperties;
+    onopenchange?: (open: boolean) => void;
   }
 
   let {
@@ -19,10 +20,11 @@
     children,
     icon,
     buttonStyle,
+    onopenchange,
   }: Props = $props();
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root bind:open onOpenChange={onopenchange}>
   <Dialog.Trigger>
     {#snippet child({ props })}
       <Button {...props} {icon} style={buttonStyle}>{label}</Button>
@@ -60,9 +62,10 @@
       z-index: 30;
       top: 50%;
       left: 50%;
+      min-width: 25rem;
       transform: translate(-50%, -50%);
       background-color: white;
-      padding: 1rem;
+      padding: 0.5rem 1rem;
       border-radius: 0.5rem;
       box-shadow: var(--shadow);
     }

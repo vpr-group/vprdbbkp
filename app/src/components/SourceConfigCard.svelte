@@ -27,7 +27,6 @@
 {#snippet title()}
   <div class="source-config-card__title">
     <Icon icon="database" />
-
     {sourceConfig.name}
   </div>
 {/snippet}
@@ -64,7 +63,7 @@
         <span>{sourceConfig.database}</span>
       </div>
       <div class="source-config-card__row">
-        <span>Use Tunnel:</span>
+        <span>SSH Tunnel:</span>
         <span>{Boolean(sourceConfig.tunnelConfig?.useTunnel)}</span>
       </div>
     {/if}
@@ -87,7 +86,7 @@
 
     &__type {
       margin-top: 0.2rem;
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
       color: var(--color-grey);
       display: flex;
       align-items: center;

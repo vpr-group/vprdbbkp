@@ -6,11 +6,12 @@
   import Icon from "./Icon.svelte";
 
   interface Props {
+    hideTitle?: boolean;
     storageConfig: StorageConfig;
   }
 
   const actionsService = new ActionsService();
-  const { storageConfig }: Props = $props();
+  const { storageConfig, hideTitle }: Props = $props();
 
   let loadingBackups = $state(true);
   let backups = $state<Entry[]>([]);
@@ -34,21 +35,25 @@
 </script>
 
 {#snippet title()}
-  <div class="storage-config-card__title">
-    <Icon icon={storageConfig.type === "s3" ? "cloud" : "hard-drive"} />
-    <span>{storageConfig.name}</span>
-  </div>
+  {#if !hideTitle}
+    <div class="storage-config-card__title">
+      <Icon icon={storageConfig.type === "s3" ? "cloud" : "hard-drive"} />
+      <span>{storageConfig.name}</span>
+    </div>
+  {/if}
 {/snippet}
 
 <Card href={`/storage-configs/${storageConfig.id}`} {title}>
   <div class="storage-config-card__content">
-    <span class="storage-config-card__type">
-      {#if storageConfig.type === "local"}
-        Local • {entriesLabel}
-      {:else if storageConfig.type === "s3"}
-        S3 • {entriesLabel}
-      {/if}
-    </span>
+    {#if !hideTitle}
+      <span class="storage-config-card__type">
+        {#if storageConfig.type === "local"}
+          Local • {entriesLabel}
+        {:else if storageConfig.type === "s3"}
+          S3 • {entriesLabel}
+        {/if}
+      </span>
+    {/if}
 
     {#if storageConfig.type === "local"}
       <div class="storage-config-card__row">

@@ -4,7 +4,7 @@
   interface Props {
     preLabel?: string;
     label?: string | Snippet;
-    subLabel?: string;
+    subLabel?: string | Snippet;
     sideSection?: Snippet;
   }
 
@@ -37,12 +37,21 @@
   {/if}
 
   {#if subLabel}
-    <span class="separation__sub-label">{subLabel}</span>
+    <span class="separation__sub-label">
+      {#if typeof subLabel === "string"}
+        {subLabel}
+      {:else}
+        {@render subLabel()}
+      {/if}
+    </span>
   {/if}
 </div>
 
 <style lang="scss">
   .separation {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
     width: 100%;
     border-bottom: solid 1px var(--color-light-grey);
     /* border-top: solid 1px var(--color-light-grey); */

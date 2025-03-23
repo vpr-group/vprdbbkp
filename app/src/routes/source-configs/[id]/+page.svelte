@@ -9,12 +9,13 @@
   import { goto } from "$app/navigation";
   import type { CSSProperties } from "../../../utils/css";
   import { ActionsService } from "../../../services/actions";
-  import StatusDot from "../../../components/StatusDot.svelte";
-  import BackupDropdown from "../../../components/BackupDropdown.svelte";
+  import BackupDialog from "../../../components/BackupDialog.svelte";
   import {
     notificationsStore,
     type Notification,
   } from "../../../components/Notifications.svelte";
+  import Badge from "../../../components/Badge.svelte";
+  import Icon from "../../../components/Icon.svelte";
 
   const { addNotification, removeNotification } = notificationsStore;
   const actionService = new ActionsService();
@@ -76,64 +77,83 @@
   });
 </script>
 
-{#snippet sideSection()}
-  {#if sourceConfig}
-    <Button
-      onclick={async () => {
-        if (!sourceConfig) return;
-        await storeService.deleteSourceConfig(sourceConfig?.id);
-        goto("/");
-      }}
-      icon="cross">Delete</Button
-    >
-    <BackupSourceDialog
-      {sourceConfig}
-      onsubmit={async (sourceConfig) => {
-        await storeService.saveSourceConfig(sourceConfig);
-        loadSourceConfig();
-      }}
-    />
-    <BackupDropdown
-      onbackup={async (storageConfig) => {
-        if (!sourceConfig) return;
-
-        const backupInProgressNotification = addNotification({
-          title: "Backup in progress...",
-          status: "info",
-          dismissTimeout: null,
-        });
-
-        try {
-          await actionService.backup(sourceConfig, storageConfig);
-          removeNotification(backupInProgressNotification.id);
-          addNotification({
-            title: "Backup successful",
-            status: "success",
-          });
-        } catch (error) {
-          removeNotification(backupInProgressNotification.id);
-          addNotification({
-            title: "Backup failed",
-            message: `${error}`,
-            status: "error",
-          });
-        }
-      }}
-    />
-  {/if}
-{/snippet}
-
-{#snippet label()}
-  {#if sourceConfig}
-    <div class="backup-source__label">
-      <StatusDot status={connected ? "success" : undefined} />
-      {sourceConfig.name}
-    </div>
-  {/if}
-{/snippet}
-
 {#if sourceConfig}
-  <Separation {label} subLabel={sourceConfig.type} {sideSection} />
+  <Separation>
+    {#snippet label()}
+      {#if sourceConfig}
+        <div class="source-config__label">
+          <Icon icon="database" />
+          <!-- <StatusDot status={connected ? "success" : undefined} /> -->
+          {sourceConfig.name}
+        </div>
+      {/if}
+    {/snippet}
+
+    {#snippet subLabel()}
+      <div class="source-config__sub-label">
+        {#if sourceConfig?.type === "pg"}
+          PostgreSQL •
+          <Badge
+            style={{
+              backgroundColor: connected
+                ? "var(--color-light-green)"
+                : "var(--color-light-grey)",
+              color: "black",
+            }}
+          >
+            {connected ? "Connected" : "Offline"}
+          </Badge>
+        {/if}
+      </div>
+    {/snippet}
+
+    {#snippet sideSection()}
+      {#if sourceConfig}
+        <Button
+          onclick={async () => {
+            if (!sourceConfig) return;
+            await storeService.deleteSourceConfig(sourceConfig?.id);
+            goto("/");
+          }}
+          icon="cross"
+        ></Button>
+        <BackupSourceDialog
+          {sourceConfig}
+          onsubmit={async (sourceConfig) => {
+            await storeService.saveSourceConfig(sourceConfig);
+            loadSourceConfig();
+          }}
+        />
+        <BackupDialog
+          onbackup={async (storageConfig) => {
+            if (!sourceConfig) return;
+
+            const backupInProgressNotification = addNotification({
+              title: "Backup in progress...",
+              status: "info",
+              dismissTimeout: null,
+            });
+
+            try {
+              await actionService.backup(sourceConfig, storageConfig);
+              removeNotification(backupInProgressNotification.id);
+              addNotification({
+                title: "Backup successful",
+                status: "success",
+              });
+            } catch (error) {
+              removeNotification(backupInProgressNotification.id);
+              addNotification({
+                title: "Backup failed",
+                message: `${error}`,
+                status: "error",
+              });
+            }
+          }}
+        />
+      {/if}
+    {/snippet}
+  </Separation>
 
   <Table
     rows={[
@@ -184,11 +204,17 @@
 {/if}
 
 <style lang="scss">
-  .backup-source {
+  .source-config {
     &__label {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+
+    &__sub-label {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
     }
   }
 </style>

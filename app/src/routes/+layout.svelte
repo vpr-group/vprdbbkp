@@ -4,6 +4,7 @@
   import Button from "../components/Button.svelte";
   import { page } from "$app/state";
   import Notifications from "../components/Notifications.svelte";
+  import Sidebar from "../components/Sidebar.svelte";
 
   interface Props {
     children: Snippet;
@@ -13,11 +14,15 @@
 </script>
 
 <div class="layout">
-  {#if page.url.pathname !== "/"}
-    <Button href="/" preIcon="arrow-left">Back</Button>
-  {/if}
+  <Sidebar />
 
   <PageContent>
+    {#if page.url.pathname !== "/"}
+      <div class="layout__header">
+        <Button href="/" preIcon="arrow-left" />
+      </div>
+    {/if}
+
     {@render children()}
   </PageContent>
 
@@ -82,14 +87,20 @@
   }
 
   :global(body) {
-    padding: 1.5rem;
+    /* padding: 1.5rem; */
   }
 
   .layout {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
     width: 100%;
-    gap: 1rem;
+    /* gap: 1rem; */
+
+    &__header {
+      padding-bottom: 1rem;
+      border-bottom: solid 1px var(--color-light-grey);
+      display: flex;
+    }
   }
 </style>

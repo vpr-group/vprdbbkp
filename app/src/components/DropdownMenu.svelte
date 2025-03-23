@@ -28,7 +28,7 @@
 <DropdownMenu.Root bind:open>
   <DropdownMenu.Trigger>
     {#snippet child({ props })}
-      <Button {...props} {icon}>{label || "Dropdown"}</Button>
+      <Button {...props} {icon}>{label || ""}</Button>
     {/snippet}
   </DropdownMenu.Trigger>
   <DropdownMenu.Portal>
@@ -57,6 +57,8 @@
       width: 100%;
       height: 100%;
       background-color: var(--color-light);
+      -webkit-backdrop-filter: blur(10px); /* For Safari */
+      backdrop-filter: blur(10px); /* Standard syntax */
       opacity: 0.7;
     }
 
