@@ -10,6 +10,10 @@
   import RestoreDropdown from "../../../components/RestoreDropdown.svelte";
   import { notificationsStore } from "../../../components/Notifications.svelte";
   import { goto } from "$app/navigation";
+  import {
+    extractDateTimeFromEntryName,
+    formatDate,
+  } from "../../../utils/dates";
 
   const { addNotification, removeNotification } = notificationsStore;
   const storeService = new StoreService();
@@ -17,6 +21,15 @@
 
   let storageConfig = $state<StorageConfig | null>(null);
   let backups = $state<Entry[]>([]);
+
+  const sortedBackups = $derived<{ entry: Entry; date: Date | null }[]>(
+    backups
+      .map((it) => ({
+        entry: it,
+        date: extractDateTimeFromEntryName(it.path),
+      }))
+      .sort((a, b) => (a.date && b.date ? (a.date > b.date ? -1 : 1) : -1))
+  );
 
   const loadStorageConfig = async () => {
     await storeService.waitForInitialized();
@@ -116,15 +129,15 @@
     headers={[
       { label: "#", width: "3rem" },
       { label: "key", width: "40%" },
-      // { label: "type", width: "10%" },
-      // { label: "Timestamp" },
+      { label: "date", width: "20%" },
     ]}
-    rows={backups.map((row, index) => ({
+    rows={sortedBackups.map((row, index) => ({
       cells: [
         { label: (index + 1).toString().padStart(2, "0") },
-        { label: row.path },
+        { label: row.entry.path },
+        { label: row.date ? formatDate(row.date) : "-" },
         {
-          label: row.path,
+          label: row.entry.path,
           renderHandler: actions,
           style: {
             padding: "0 0.5rem",
