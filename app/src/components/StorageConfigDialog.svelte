@@ -128,7 +128,13 @@
 
         <DialogActions>
           <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
-          <Button icon="plus" onclick={() => onsubmit?.(currentStorageConfig)}>
+          <Button
+            icon="plus"
+            onclick={() => {
+              onsubmit?.(currentStorageConfig);
+              open = false;
+            }}
+          >
             {storageConfig ? "Update" : "Create"}
           </Button>
         </DialogActions>

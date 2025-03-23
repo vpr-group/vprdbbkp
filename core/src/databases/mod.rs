@@ -1,9 +1,10 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, time::Duration};
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use configs::SourceConfig;
 use postgres::{backup_postgres, is_postgres_connected, restore_postgres};
+use tokio::time::timeout;
 
 use crate::tunnel::Tunnel;
 
@@ -104,24 +105,28 @@ pub async fn is_database_connected<B>(source_config: B) -> Result<bool>
 where
     B: Borrow<SourceConfig>,
 {
-    let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
-
-    match source_config.borrow() {
-        SourceConfig::PG(config) => {
-            let is_connected = is_postgres_connected(
-                &config.database,
-                &config.host,
-                config.port,
-                &config.username,
-                Some(config.password.as_deref().unwrap_or("")),
-            )
-            .await?;
-
-            if let Some(mut tunnel) = tunnel {
-                tunnel.close_tunnel().await?;
+    match timeout(Duration::from_secs(5), async {
+        let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
+        match source_config.borrow() {
+            SourceConfig::PG(config) => {
+                let is_connected = is_postgres_connected(
+                    &config.database,
+                    &config.host,
+                    config.port,
+                    &config.username,
+                    Some(config.password.as_deref().unwrap_or("")),
+                )
+                .await?;
+                if let Some(mut tunnel) = tunnel {
+                    tunnel.close_tunnel().await?;
+                }
+                Ok(is_connected)
             }
-
-            Ok(is_connected)
         }
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Ok(false),
     }
 }

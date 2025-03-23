@@ -10,6 +10,7 @@
   import Dialog from "./Dialog.svelte";
   import Separation from "./Separation.svelte";
   import DialogActions from "./DialogActions.svelte";
+  import Checkbox from "./Checkbox.svelte";
 
   interface Props {
     backupKey: string;
@@ -62,10 +63,7 @@
           </strong>
         </p>
 
-        <fieldset>
-          <label for="">Drop Database & Terminate connections</label>
-          <input type="checkbox" bind:checked={dropDatabase} />
-        </fieldset>
+        <Checkbox bind:checked={dropDatabase} label="Drop Database" />
 
         <DialogActions>
           <Button icon="cross" onclick={() => (openMenu = false)}>

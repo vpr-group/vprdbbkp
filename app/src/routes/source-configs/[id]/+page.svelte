@@ -40,23 +40,33 @@
     if (!sourceConfig) return;
     let notification: Notification | undefined = undefined;
 
-    actionService.verifySourceConnection(sourceConfig).then((res) => {
-      connected = res.connected;
+    actionService
+      .verifySourceConnection(sourceConfig)
+      .then((res) => {
+        connected = res.connected;
 
-      if (connected) {
+        if (connected) {
+          notification = addNotification({
+            title: "Source Connected",
+            status: "success",
+            dismissTimeout: 3000,
+          });
+        } else {
+          notification = addNotification({
+            title: "Source Not Connected",
+            status: "warning",
+            dismissTimeout: 3000,
+          });
+        }
+      })
+      .catch((error) => {
         notification = addNotification({
-          title: "Source Connected",
-          status: "success",
-          dismissTimeout: 3000,
+          title: "Source Connection Failed",
+          status: "error",
+          message: error,
+          dismissTimeout: 6000,
         });
-      } else {
-        notification = addNotification({
-          title: "Source Not Connected",
-          status: "warning",
-          dismissTimeout: 3000,
-        });
-      }
-    });
+      });
 
     return () => {
       if (notification) {

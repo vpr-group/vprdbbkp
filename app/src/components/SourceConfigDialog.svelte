@@ -7,6 +7,7 @@
   import Button from "./Button.svelte";
   import DialogActions from "./DialogActions.svelte";
   import DropdownMenu from "./DropdownMenu.svelte";
+  import Checkbox from "./Checkbox.svelte";
 
   interface Props {
     sourceConfig?: SourceConfig;
@@ -17,6 +18,8 @@
   const sourceConfigTypes: SourceConfig["type"][] = ["pg"];
   const { sourceConfig, onchange, onsubmit }: Props = $props();
   let open = $state(false);
+
+  let showTunnelConfig = $state(sourceConfig?.tunnelConfig?.useTunnel || false);
 
   const defaultTunnelConfig: TunnelConfig = {
     useTunnel: false,
@@ -136,48 +139,74 @@
             }}
           />
 
-          <Input
-            name="Host Username"
-            value={currentSourceConfig.tunnelConfig?.username || ""}
-            oninput={(e) => {
-              const username = e.currentTarget.value;
-              const useTunnel = Boolean(
-                currentSourceConfig.tunnelConfig?.keyPath && username
-              );
-              currentSourceConfig = {
-                ...currentSourceConfig,
-                tunnelConfig: {
-                  ...(currentSourceConfig.tunnelConfig || defaultTunnelConfig),
-                  username,
-                  useTunnel,
-                },
-              };
+          <Checkbox
+            label="Use SSH Tunnel"
+            bind:checked={showTunnelConfig}
+            oncheckedchange={(checked) => {
+              if (!checked) {
+                currentSourceConfig = {
+                  ...currentSourceConfig,
+                  tunnelConfig: defaultTunnelConfig,
+                };
+              }
+            }}
+            style={{
+              padding: showTunnelConfig ? "2rem 0 1rem 0" : "2rem 0 0 0",
             }}
           />
 
-          <Input
-            name="Tunnel Key File"
-            value={currentSourceConfig.tunnelConfig?.keyPath || ""}
-            oninput={(e) => {
-              const keyPath = e.currentTarget.value;
-              const useTunnel = Boolean(
-                currentSourceConfig.tunnelConfig?.username && keyPath
-              );
-              currentSourceConfig = {
-                ...currentSourceConfig,
-                tunnelConfig: {
-                  ...(currentSourceConfig.tunnelConfig || defaultTunnelConfig),
-                  keyPath,
-                  useTunnel,
-                },
-              };
-            }}
-          />
+          {#if showTunnelConfig}
+            <Input
+              name="Host Username"
+              value={currentSourceConfig.tunnelConfig?.username || ""}
+              oninput={(e) => {
+                const username = e.currentTarget.value;
+                const useTunnel = Boolean(
+                  currentSourceConfig.tunnelConfig?.keyPath && username
+                );
+                currentSourceConfig = {
+                  ...currentSourceConfig,
+                  tunnelConfig: {
+                    ...(currentSourceConfig.tunnelConfig ||
+                      defaultTunnelConfig),
+                    username,
+                    useTunnel,
+                  },
+                };
+              }}
+            />
+
+            <Input
+              name="Path to SSH Key"
+              value={currentSourceConfig.tunnelConfig?.keyPath || ""}
+              oninput={(e) => {
+                const keyPath = e.currentTarget.value;
+                const useTunnel = Boolean(
+                  currentSourceConfig.tunnelConfig?.username && keyPath
+                );
+                currentSourceConfig = {
+                  ...currentSourceConfig,
+                  tunnelConfig: {
+                    ...(currentSourceConfig.tunnelConfig ||
+                      defaultTunnelConfig),
+                    keyPath,
+                    useTunnel,
+                  },
+                };
+              }}
+            />
+          {/if}
         {/if}
 
         <DialogActions>
           <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
-          <Button icon="plus" onclick={() => onsubmit?.(currentSourceConfig)}>
+          <Button
+            icon="plus"
+            onclick={() => {
+              onsubmit?.(currentSourceConfig);
+              open = false;
+            }}
+          >
             {sourceConfig ? "Update" : "Create"}
           </Button>
         </DialogActions>
