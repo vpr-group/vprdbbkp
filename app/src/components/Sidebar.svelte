@@ -20,9 +20,10 @@
   .sidebar {
     position: sticky;
     top: 0;
-    width: 5rem;
+    width: 5em;
     height: 100vh;
     padding: 1rem 0;
+    flex: 0 0 auto;
     /* background-color: var(--color-light-grey); */
     /* box-shadow: var(--shadow); */
 
@@ -44,10 +45,13 @@
     }
 
     img {
-      width: 100%;
+      display: flex;
+      width: 3rem;
+      height: 3rem;
       background-color: var(--color-light-grey);
       border-radius: var(--border-radius);
       padding: 0.3rem;
+      box-sizing: border-box;
     }
   }
 </style>
