@@ -1,14 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    StoreService,
-    type SourceConfig,
-    type StorageConfig,
-  } from "../services/store";
-  import DropdownMenu from "./DropdownMenu.svelte";
+  import { StoreService, type SourceConfig } from "../services/store";
   import Button from "./Button.svelte";
   import Dialog from "./Dialog.svelte";
-  import Separation from "./Separation.svelte";
   import DialogActions from "./DialogActions.svelte";
   import Checkbox from "./Checkbox.svelte";
 
