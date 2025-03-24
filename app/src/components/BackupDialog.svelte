@@ -13,7 +13,8 @@
   const storeService = new StoreService();
 
   let storageConfigs = $state<StorageConfig[]>([]);
-  let open = $state(false);
+  let isMainDialogOpen = $state(false);
+  let isConfirmationOpen = $state(false);
 
   const loadStorageProviders = async () => {
     await storeService.waitForInitialized();
@@ -25,10 +26,10 @@
   });
 </script>
 
-<Dialog icon="upload" title="Backup to">
+<Dialog bind:open={isMainDialogOpen} icon="upload" title="Backup to">
   {#each storageConfigs as storageConfig}
     <Dialog
-      bind:open
+      bind:open={isConfirmationOpen}
       icon="arrow-right"
       title="Backup"
       label={storageConfig.name}
@@ -45,11 +46,14 @@
       </p>
 
       <DialogActions>
-        <Button icon="cross" onclick={() => (open = false)}>Cancel</Button>
+        <Button icon="cross" onclick={() => (isConfirmationOpen = false)}>
+          Cancel
+        </Button>
         <Button
           icon="arrow-right"
           onclick={() => {
-            open = false;
+            isConfirmationOpen = false;
+            isMainDialogOpen = false;
             onbackup?.(storageConfig);
           }}
         >

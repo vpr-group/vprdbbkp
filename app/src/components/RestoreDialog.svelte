@@ -20,12 +20,12 @@
     }) => void;
   }
 
-  const { backupKey, onrestore }: Props = $props();
+  const { onrestore }: Props = $props();
   const storeService = new StoreService();
 
   let sourcesConfig = $state<SourceConfig[]>([]);
-  let openMenu = $state(false);
-  let openDialog = $state(false);
+  let isConfirmationOpen = $state(false);
+  let isMainDialogOpen = $state(false);
   let dropDatabase = $state(false);
 
   const loadSourceConfigs = async () => {
@@ -38,10 +38,10 @@
   });
 </script>
 
-<Dialog title="Restore Source" icon="arrow-right">
+<Dialog bind:open={isMainDialogOpen} title="Restore Source" icon="arrow-right">
   {#each sourcesConfig as sourceConfig}
     <Dialog
-      bind:open={openMenu}
+      bind:open={isConfirmationOpen}
       icon="arrow-right"
       label={sourceConfig.name}
       title="Restoration"
@@ -60,11 +60,14 @@
       <Checkbox bind:checked={dropDatabase} label="Drop Database" />
 
       <DialogActions>
-        <Button icon="cross" onclick={() => (openMenu = false)}>Cancel</Button>
+        <Button icon="cross" onclick={() => (isConfirmationOpen = false)}>
+          Cancel
+        </Button>
         <Button
           icon="arrow-right"
           onclick={() => {
-            openMenu = false;
+            isConfirmationOpen = false;
+            isMainDialogOpen = false;
             onrestore?.({ sourceConfig, dropDatabase });
           }}>Continue</Button
         >
