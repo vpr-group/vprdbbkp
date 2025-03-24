@@ -16,6 +16,7 @@
   } from "../../../components/Notifications.svelte";
   import Badge from "../../../components/Badge.svelte";
   import Icon from "../../../components/Icon.svelte";
+  import Dialog from "../../../components/Dialog.svelte";
 
   const { addNotification, removeNotification } = notificationsStore;
   const actionService = new ActionsService();
@@ -109,14 +110,22 @@
 
     {#snippet sideSection()}
       {#if sourceConfig}
-        <Button
-          onclick={async () => {
-            if (!sourceConfig) return;
-            await storeService.deleteSourceConfig(sourceConfig?.id);
-            goto("/");
-          }}
-          icon="cross"
-        ></Button>
+        <Dialog title="Delete Data Source" icon="cross">
+          <Button
+            onclick={async () => {
+              if (!sourceConfig) return;
+              await storeService.deleteSourceConfig(sourceConfig?.id);
+              goto("/");
+            }}
+            icon="cross"
+            style={{
+              justifyContent: "space-between",
+              backgroundColor: "var(--color-light-grey)",
+              color: "black",
+            }}>Delete</Button
+          >
+        </Dialog>
+
         <BackupSourceDialog
           {sourceConfig}
           onsubmit={async (sourceConfig) => {

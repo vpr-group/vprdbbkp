@@ -4,7 +4,7 @@
     type?: "text";
     value?: string;
     oninput?: (
-      event: Event & { currentTarget: EventTarget & HTMLInputElement }
+      event: Event & { currentTarget: EventTarget & HTMLInputElement },
     ) => void;
   }
 

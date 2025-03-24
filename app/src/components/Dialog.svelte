@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { Dialog } from "bits-ui";
   import type { Snippet } from "svelte";
   import Button from "./Button.svelte";
   import type { IconName } from "./Icon.svelte";
   import type { CSSProperties } from "../utils/css";
+  import { dialogsStore, type Dialog } from "./Dialogs.svelte";
 
   interface Props {
     open?: boolean;
     label?: string;
+    title?: Snippet | string;
     children?: Snippet;
     icon?: IconName;
     buttonStyle?: CSSProperties;
@@ -21,53 +22,36 @@
     icon,
     buttonStyle,
     onopenchange,
+    title,
   }: Props = $props();
+
+  let dialog: Dialog | undefined = undefined;
+
+  $effect(() => {
+    if (open && !dialog) {
+      dialog = dialogsStore.addDialog({
+        title,
+        children,
+        onopenchange: (_open) => (open = _open),
+      });
+    } else if (!open && dialog) {
+      dialogsStore.removeDialog(dialog.id);
+    }
+
+    // Cleanup
+    const existingDialog = dialogsStore.dialogs.find(
+      (it) => it.id === dialog?.id,
+    );
+
+    if (!existingDialog) {
+      open = false;
+      dialog = undefined;
+    }
+
+    onopenchange?.(open);
+  });
 </script>
 
-<Dialog.Root bind:open onOpenChange={onopenchange}>
-  <Dialog.Trigger>
-    {#snippet child({ props })}
-      <Button {...props} {icon} style={buttonStyle}>{label}</Button>
-    {/snippet}
-  </Dialog.Trigger>
-  <Dialog.Portal>
-    <Dialog.Overlay>
-      <div class="dialog__overlay"></div>
-    </Dialog.Overlay>
-    <Dialog.Content>
-      <div class="dialog__content">
-        {#if children}
-          {@render children()}
-        {/if}
-      </div>
-    </Dialog.Content>
-  </Dialog.Portal>
-</Dialog.Root>
-
-<style lang="scss">
-  .dialog {
-    &__overlay {
-      position: fixed;
-      z-index: 20;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: var(--color-light);
-      opacity: 0.95;
-    }
-
-    &__content {
-      position: fixed;
-      z-index: 30;
-      top: 50%;
-      left: 50%;
-      min-width: 25rem;
-      transform: translate(-50%, -50%);
-      background-color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      box-shadow: var(--shadow);
-    }
-  }
-</style>
+<Button {icon} style={buttonStyle} onclick={() => (open = !open)}>
+  {label}
+</Button>

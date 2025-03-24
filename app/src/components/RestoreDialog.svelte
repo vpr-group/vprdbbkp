@@ -38,66 +38,43 @@
   });
 </script>
 
-<Dialog bind:open={openMenu} icon="arrow-right">
-  <Separation label="Restore Source" />
-  <div class="restore-dialog__sources">
-    {#each sourcesConfig as sourceConfig}
-      <Dialog
-        icon="arrow-right"
-        label={sourceConfig.name}
-        buttonStyle={{
-          justifyContent: "space-between",
-          backgroundColor: "var(--color-light-grey)",
-          color: "black",
-        }}
-      >
-        <div class="restore-dialog__content">
-          <Separation label="Restoration" subLabel={backupKey} />
+<Dialog title="Restore Source" icon="arrow-right">
+  {#each sourcesConfig as sourceConfig}
+    <Dialog
+      bind:open={openMenu}
+      icon="arrow-right"
+      label={sourceConfig.name}
+      title="Restoration"
+      buttonStyle={{
+        justifyContent: "space-between",
+        backgroundColor: "var(--color-light-grey)",
+        color: "black",
+      }}
+    >
+      <p>
+        You are about ro override the following database: <strong>
+          {sourceConfig.database}
+        </strong>
+      </p>
 
-          <p>
-            You are about ro override the following database: <strong>
-              {sourceConfig.database}
-            </strong>
-          </p>
+      <Checkbox bind:checked={dropDatabase} label="Drop Database" />
 
-          <Checkbox bind:checked={dropDatabase} label="Drop Database" />
-
-          <DialogActions>
-            <Button icon="cross" onclick={() => (openMenu = false)}>
-              Cancel
-            </Button>
-            <Button
-              icon="arrow-right"
-              onclick={() => {
-                openMenu = false;
-                onrestore?.({ sourceConfig, dropDatabase });
-              }}>Continue</Button
-            >
-          </DialogActions>
-        </div>
-      </Dialog>
-    {/each}
-  </div>
+      <DialogActions>
+        <Button icon="cross" onclick={() => (openMenu = false)}>Cancel</Button>
+        <Button
+          icon="arrow-right"
+          onclick={() => {
+            openMenu = false;
+            onrestore?.({ sourceConfig, dropDatabase });
+          }}>Continue</Button
+        >
+      </DialogActions>
+    </Dialog>
+  {/each}
 </Dialog>
 
 <style lang="scss">
-  .restore-dialog {
-    &__content {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 1rem;
-
-      p {
-        margin: 0;
-      }
-    }
-
-    &__sources {
-      padding: 1rem 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
+  p {
+    margin: 0;
   }
 </style>

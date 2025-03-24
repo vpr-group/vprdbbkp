@@ -5,6 +5,7 @@
   import { page } from "$app/state";
   import Notifications from "../components/Notifications.svelte";
   import Sidebar from "../components/Sidebar.svelte";
+  import Dialogs from "../components/Dialogs.svelte";
 
   interface Props {
     children: Snippet;
@@ -27,6 +28,7 @@
   </PageContent>
 
   <Notifications />
+  <Dialogs />
 </div>
 
 <style lang="scss">

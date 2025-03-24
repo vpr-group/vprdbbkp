@@ -42,20 +42,16 @@
 {#if isLoading}
   <span>Is Loading</span>
 {:else}
-  {#snippet storageActions()}
-    <StorageConfigDialog
-      onsubmit={async (storageProvider) => {
-        await storeService.saveStorageConfig(storageProvider);
-        loadStorageConfigs();
-      }}
-    />
-  {/snippet}
-
-  <Separation
-    label="File Storage"
-    subLabel={`${storageConfigs.length} items`}
-    sideSection={storageActions}
-  />
+  <Separation label="File Storage" subLabel={`${storageConfigs.length} items`}>
+    {#snippet sideSection()}
+      <StorageConfigDialog
+        onsubmit={async (storageProvider) => {
+          await storeService.saveStorageConfig(storageProvider);
+          loadStorageConfigs();
+        }}
+      />
+    {/snippet}
+  </Separation>
 
   <Grid>
     {#each storageConfigs as storageProvider}

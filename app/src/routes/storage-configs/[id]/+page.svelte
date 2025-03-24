@@ -16,6 +16,7 @@
   } from "../../../utils/dates";
   import Icon from "../../../components/Icon.svelte";
   import StorageConfigCard from "../../../components/StorageConfigCard.svelte";
+  import Dialog from "../../../components/Dialog.svelte";
 
   const { addNotification, removeNotification } = notificationsStore;
   const storeService = new StoreService();
@@ -30,7 +31,7 @@
         entry: it,
         date: extractDateTimeFromEntryName(it.path),
       }))
-      .sort((a, b) => (a.date && b.date ? (a.date > b.date ? -1 : 1) : -1))
+      .sort((a, b) => (a.date && b.date ? (a.date > b.date ? -1 : 1) : -1)),
   );
 
   const loadStorageConfig = async () => {
@@ -63,14 +64,21 @@
 
 {#snippet sideSection()}
   {#if storageConfig}
-    <Button
-      icon="cross"
-      onclick={async () => {
-        if (!storageConfig) return;
-        await storeService.deleteStorageConfig(storageConfig.id);
-        goto("/");
-      }}
-    />
+    <Dialog title="Delete File Storage" icon="cross">
+      <Button
+        onclick={async () => {
+          if (!storageConfig) return;
+          await storeService.deleteStorageConfig(storageConfig.id);
+          goto("/");
+        }}
+        icon="cross"
+        style={{
+          justifyContent: "space-between",
+          backgroundColor: "var(--color-light-grey)",
+          color: "black",
+        }}>Delete</Button
+      >
+    </Dialog>
 
     <StorageProviderDialog
       {storageConfig}
@@ -116,7 +124,7 @@
             cell.label || "",
             sourceConfig,
             storageConfig,
-            dropDatabase
+            dropDatabase,
           );
 
           removeNotification(progressNotifications.id);
