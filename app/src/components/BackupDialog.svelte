@@ -14,11 +14,15 @@
 
   let storageConfigs = $state<StorageConfig[]>([]);
   let isMainDialogOpen = $state(false);
-  let isConfirmationOpen = $state(false);
+  const dialogStates = $state<Record<string, boolean>>({});
 
   const loadStorageProviders = async () => {
     await storeService.waitForInitialized();
     storageConfigs = await storeService.getStorageConfigs();
+
+    storageConfigs.forEach((config) => {
+      dialogStates[config.id] = false;
+    });
   };
 
   onMount(() => {
@@ -29,7 +33,10 @@
 <Dialog bind:open={isMainDialogOpen} icon="upload" title="Backup to">
   {#each storageConfigs as storageConfig}
     <Dialog
-      bind:open={isConfirmationOpen}
+      open={dialogStates[storageConfig.id]}
+      onopenchange={(open) => {
+        dialogStates[storageConfig.id] = open;
+      }}
       icon="arrow-right"
       title="Backup"
       label={storageConfig.name}
@@ -40,19 +47,22 @@
       }}
     >
       <p>
-        You are about backup in the following bucket: <strong>
-          {storageConfig.bucket}
+        You are about backup in the following storage: <strong>
+          {storageConfig.name}
         </strong>
       </p>
 
       <DialogActions>
-        <Button icon="cross" onclick={() => (isConfirmationOpen = false)}>
+        <Button
+          icon="cross"
+          onclick={() => (dialogStates[storageConfig.id] = false)}
+        >
           Cancel
         </Button>
         <Button
           icon="arrow-right"
           onclick={() => {
-            isConfirmationOpen = false;
+            dialogStates[storageConfig.id] = false;
             isMainDialogOpen = false;
             onbackup?.(storageConfig);
           }}

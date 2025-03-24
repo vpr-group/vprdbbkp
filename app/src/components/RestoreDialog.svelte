@@ -18,13 +18,17 @@
   const storeService = new StoreService();
 
   let sourcesConfig = $state<SourceConfig[]>([]);
-  let isConfirmationOpen = $state(false);
+  const dialogStates = $state<Record<string, boolean>>({});
   let isMainDialogOpen = $state(false);
   let dropDatabase = $state(false);
 
   const loadSourceConfigs = async () => {
     await storeService.waitForInitialized();
     sourcesConfig = await storeService.getSourceConfigs();
+
+    sourcesConfig.forEach((config) => {
+      dialogStates[config.id] = false;
+    });
   };
 
   onMount(() => {
@@ -35,7 +39,7 @@
 <Dialog bind:open={isMainDialogOpen} title="Restore Source" icon="arrow-right">
   {#each sourcesConfig as sourceConfig}
     <Dialog
-      bind:open={isConfirmationOpen}
+      bind:open={dialogStates[sourceConfig.id]}
       icon="arrow-right"
       label={sourceConfig.name}
       title="Restoration"
@@ -46,21 +50,24 @@
       }}
     >
       <p>
-        You are about ro override the following database: <strong>
-          {sourceConfig.database}
+        You are about ro override the following data source: <strong>
+          {sourceConfig.name}
         </strong>
       </p>
 
       <Checkbox bind:checked={dropDatabase} label="Drop Database" />
 
       <DialogActions>
-        <Button icon="cross" onclick={() => (isConfirmationOpen = false)}>
+        <Button
+          icon="cross"
+          onclick={() => (dialogStates[sourceConfig.id] = false)}
+        >
           Cancel
         </Button>
         <Button
           icon="arrow-right"
           onclick={() => {
-            isConfirmationOpen = false;
+            dialogStates[sourceConfig.id] = false;
             isMainDialogOpen = false;
             onrestore?.({ sourceConfig, dropDatabase });
           }}>Continue</Button
