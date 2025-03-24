@@ -7,7 +7,7 @@
   import Table, { type Cell, type Row } from "../../../components/Table.svelte";
   import Separation from "../../../components/Separation.svelte";
   import Button from "../../../components/Button.svelte";
-  import RestoreDropdown from "../../../components/RestoreDialog.svelte";
+  import RestoreDialog from "../../../components/RestoreDialog.svelte";
   import { notificationsStore } from "../../../components/Notifications.svelte";
   import { goto } from "$app/navigation";
   import {
@@ -108,7 +108,7 @@
   </Separation>
 
   {#snippet actions(cell: Cell, row?: Row)}
-    <RestoreDropdown
+    <RestoreDialog
       backupKey={cell.label || ""}
       onrestore={async ({ sourceConfig, dropDatabase }) => {
         if (!storageConfig) return;

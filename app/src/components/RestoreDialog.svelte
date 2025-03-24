@@ -14,7 +14,7 @@
     }) => void;
   }
 
-  const { onrestore }: Props = $props();
+  const { onrestore, backupKey }: Props = $props();
   const storeService = new StoreService();
 
   let sourcesConfig = $state<SourceConfig[]>([]);
@@ -53,6 +53,7 @@
         You are about ro override the following data source: <strong>
           {sourceConfig.name}
         </strong>
+        with <strong>{backupKey}</strong>
       </p>
 
       <Checkbox bind:checked={dropDatabase} label="Drop Database" />
