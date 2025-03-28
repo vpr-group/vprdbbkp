@@ -89,7 +89,7 @@ pub struct SourceArgs {
     #[arg(long, env = "PGPASSWORD")]
     pub password: Option<String>,
 
-    #[arg(long, default_value = "false")]
+    #[arg(long)]
     pub use_ssh_tunnel: bool,
 
     #[arg(long)]
