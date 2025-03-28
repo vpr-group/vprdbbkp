@@ -1,6 +1,10 @@
 # VPR DB Backup - Database Backup & Restore Utility
 
-A robust, efficient tool written in Rust to backup databases directly to different kind cloud storage or local filesystem.
+A simple tool for backing up databases to various cloud storage providers or local filesystems.
+
+Designed to make database migrations easier, this project streamlines copying, backup, and restoration operations. It works both as a command-line tool for server automation and through a GUI for everyday development tasks like pulling production data into your local environment.
+
+**Important Note:** This is a side project. It is not industrial-grade and might struggle with massive databases. Works great for development, testing, and smaller projects, but maybe don't bet your mission-critical production systems on it just yet...
 
 ## Features
 
@@ -9,6 +13,9 @@ A robust, efficient tool written in Rust to backup databases directly to differe
 - **Compression**: Optional compression with configurable levels
 - **Flexible Restoration**: Restore from specific backups or automatically use the latest one
 - **Listing & Management**: List available backups with filtering options
+- **SSH Tunneling**: Connect to remote databases through SSH tunnels
+- **Environment Variable Support**: Configure via environment variables for seamless CI/CD integration
+- **Cross-Platform**: Available for Linux and macOS
 
 ## Installation
 
