@@ -31,7 +31,7 @@
         entry: it,
         date: extractDateTimeFromEntryName(it.path),
       }))
-      .sort((a, b) => (a.date && b.date ? (a.date > b.date ? -1 : 1) : -1)),
+      .sort((a, b) => (a.date && b.date ? (a.date > b.date ? -1 : 1) : -1))
   );
 
   const loadStorageConfig = async () => {
@@ -44,6 +44,7 @@
 
     try {
       backups = await actionsService.list(storageConfig);
+      console.log(sortedBackups);
     } catch (error) {
       addNotification({
         title: "Failed to load backups",
@@ -124,7 +125,7 @@
             cell.label || "",
             sourceConfig,
             storageConfig,
-            dropDatabase,
+            dropDatabase
           );
 
           removeNotification(progressNotifications.id);
@@ -149,12 +150,18 @@
       { label: "#", width: "3rem" },
       { label: "key", width: "40%" },
       { label: "date", width: "20%" },
+      { label: "size", width: "10%" },
     ]}
     rows={sortedBackups.map((row, index) => ({
       cells: [
         { label: (index + 1).toString() },
         { label: row.entry.path },
         { label: row.date ? formatDate(row.date) : "-" },
+        {
+          label: row.entry.metadata.content_length
+            ? (row.entry.metadata.content_length / 1048576).toFixed(2) + " MB"
+            : "N/A",
+        },
         {
           label: row.entry.path,
           renderHandler: actions,
