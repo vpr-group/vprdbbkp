@@ -89,8 +89,8 @@ pub struct SourceArgs {
     #[arg(long, env = "PGPASSWORD")]
     pub password: Option<String>,
 
-    #[arg(long)]
-    pub use_ssh_tunnel: Option<bool>,
+    #[arg(long, default_value = "false")]
+    pub use_ssh_tunnel: bool,
 
     #[arg(long)]
     pub ssh_key_path: Option<String>,
@@ -186,27 +186,26 @@ pub fn storage_from_cli(storage: &StorageArgs) -> Result<StorageConfig> {
 
 // Helper function to convert CLI arguments to source config
 pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
-    let tunnel_config = match source.use_ssh_tunnel {
-        Some(use_ssh_tunnel) => {
-            let ssh_key_path = source
-                .ssh_key_path
-                .as_ref()
-                .ok_or_else(|| anyhow!("SSH key path is required when using SSH tunnel"))?
-                .clone();
+    let tunnel_config = if source.use_ssh_tunnel {
+        let ssh_key_path = source
+            .ssh_key_path
+            .as_ref()
+            .ok_or_else(|| anyhow!("SSH key path is required when using SSH tunnel"))?
+            .clone();
 
-            let ssh_username = source
-                .ssh_username
-                .as_ref()
-                .ok_or_else(|| anyhow!("SSH username is required when using SSH tunnel"))?
-                .clone();
+        let ssh_username = source
+            .ssh_username
+            .as_ref()
+            .ok_or_else(|| anyhow!("SSH username is required when using SSH tunnel"))?
+            .clone();
 
-            Some(TunnelConfig {
-                use_tunnel: use_ssh_tunnel,
-                key_path: ssh_key_path,
-                username: ssh_username,
-            })
-        }
-        None => None,
+        Some(TunnelConfig {
+            use_tunnel: source.use_ssh_tunnel,
+            key_path: ssh_key_path,
+            username: ssh_username,
+        })
+    } else {
+        None
     };
 
     match source.source_type.as_str() {
