@@ -67,145 +67,160 @@ sudo cp target/release/cli /usr/local/bin/vprs3bkp
 
 ## CLI Usage
 
-The CLI provides a simple interface to backup, restore, and manage database backups.
+This CLI tool helps you back up, restore, and list PostgreSQL databases, with support for local or S3 storage and SSH tunneling.
 
-### Backup a PostgreSQL Database
+## Commands
+
+The CLI supports three main commands:
+
+- `backup`: Create a database backup
+- `restore`: Restore a database from backup
+- `list`: List available backups
+
+## Parameter Reference
+
+### Global Parameters
+
+| Parameter   | Description              | Default | Required | Environment Variable |
+| ----------- | ------------------------ | ------- | -------- | -------------------- |
+| `--help`    | Show help information    | -       | No       | -                    |
+| `--version` | Show version information | -       | No       | -                    |
+
+### Backup Command Parameters
+
+```
+cli backup [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--other-options]
+```
+
+### Restore Command Parameters
+
+```
+cli restore [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--filename <FILENAME> | --latest] [--other-options]
+```
+
+### List Command Parameters
+
+```
+cli list [OPTIONS] [--database <DATABASE>] [--storage-type <TYPE>] [--other-options]
+```
+
+### Source Parameters (Database Connection)
+
+| Parameter          | Description                    | Default     | Required                          | Environment Variable |
+| ------------------ | ------------------------------ | ----------- | --------------------------------- | -------------------- |
+| `--source-type`    | Database type                  | `postgres`  | No                                | -                    |
+| `--source-name`    | Name identifier for the source | `default`   | No                                | -                    |
+| `--database`, `-d` | Database name                  | -           | Yes                               | -                    |
+| `--host`, `-H`     | Database host                  | `localhost` | No                                | -                    |
+| `--port`, `-p`     | Database port                  | `5432`      | No                                | -                    |
+| `--username`, `-u` | Database username              | `postgres`  | No                                | -                    |
+| `--password`       | Database password              | -           | No                                | `PGPASSWORD`         |
+| `--use-ssh-tunnel` | Enable SSH tunneling           | `false`     | No                                | -                    |
+| `--ssh-key-path`   | Path to SSH private key        | -           | Only if `--use-ssh-tunnel` is set | -                    |
+| `--ssh-username`   | SSH username                   | -           | Only if `--use-ssh-tunnel` is set | -                    |
+
+### Storage Parameters
+
+| Parameter        | Description                            | Default   | Required | Environment Variable |
+| ---------------- | -------------------------------------- | --------- | -------- | -------------------- |
+| `--storage-type` | Storage backend type (`s3` or `local`) | `s3`      | No       | -                    |
+| `--storage-name` | Name identifier for storage            | `default` | No       | -                    |
+| `--prefix`       | Optional prefix for backup files       | -         | No       | -                    |
+
+#### S3 Storage Parameters
+
+| Parameter      | Description     | Default     | Required   | Environment Variable                    |
+| -------------- | --------------- | ----------- | ---------- | --------------------------------------- |
+| `--bucket`     | S3 bucket name  | -           | Yes for S3 | `S3_BUCKET`                             |
+| `--region`     | S3 region       | `us-east-1` | No         | `S3_REGION`                             |
+| `--endpoint`   | S3 endpoint URL | -           | Yes for S3 | `S3_ENDPOINT`                           |
+| `--access-key` | S3 access key   | -           | Yes for S3 | `S3_ACCESS_KEY_ID`, `S3_ACCESS_KEY`     |
+| `--secret-key` | S3 secret key   | -           | Yes for S3 | `S3_SECRET_ACCESS_KEY`, `S3_SECRET_KEY` |
+
+#### Local Storage Parameters
+
+| Parameter | Description                     | Default | Required      | Environment Variable |
+| --------- | ------------------------------- | ------- | ------------- | -------------------- |
+| `--root`  | Root directory path for backups | -       | Yes for local | -                    |
+
+### Backup-Specific Parameters
+
+| Parameter             | Description             | Default | Required | Environment Variable |
+| --------------------- | ----------------------- | ------- | -------- | -------------------- |
+| `--compression`, `-c` | Compression level (0-9) | -       | No       | -                    |
+
+### Restore-Specific Parameters
+
+| Parameter               | Description                               | Default | Required                                   | Environment Variable |
+| ----------------------- | ----------------------------------------- | ------- | ------------------------------------------ | -------------------- |
+| `--filename`, `-f`      | Specific backup file to restore           | -       | One of `--filename` or `--latest` required | -                    |
+| `--drop-database`, `-d` | Drop database if it exists before restore | -       | No                                         | -                    |
+| `--latest`              | Use the most recent backup                | `false` | One of `--filename` or `--latest` required | -                    |
+
+### List-Specific Parameters
+
+| Parameter          | Description                                   | Default | Required | Environment Variable |
+| ------------------ | --------------------------------------------- | ------- | -------- | -------------------- |
+| `--database`, `-d` | Filter backups for specific database          | -       | No       | -                    |
+| `--latest-only`    | Show only the latest backup for each database | `false` | No       | -                    |
+| `--limit`, `-l`    | Maximum number of backups to list             | `10`    | No       | -                    |
+
+## Examples
+
+### Create a backup to S3
 
 ```bash
-# Back up to S3
-vprs3bkp backup \
-  --database mydb \
+cli backup \
+  --database my_database \
   --host db.example.com \
-  --username postgres \
+  --username dbuser \
   --password mypassword \
-  --storage-type s3 \
   --bucket my-backups \
-  --region us-east-1 \
   --endpoint https://s3.amazonaws.com \
-  --access-key AKIAXXXXXXXX \
-  --secret-key XXXXXXXXX \
-  --prefix backups/postgres
+  --access-key AKIAIOSFODNN7EXAMPLE \
+  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
 
-# Back up to local storage
-vprs3bkp backup \
-  --database mydb \
-  --host localhost \
-  --username postgres \
-  --storage-type local \
-  --root /path/to/backups
+### Create a backup to local storage
 
-# Backup with compression (0-9)
-vprs3bkp backup \
-  --database mydb \
-  --compression 6 \
+```bash
+cli backup \
+  --database my_database \
   --storage-type local \
   --root /path/to/backups
 ```
 
-### List Available Backups
+### Backup with SSH tunnel
 
 ```bash
-# List all backups (limited to 10 by default)
-vprs3bkp list \
-  --storage-type s3 \
-  --bucket my-backups \
-  --region us-east-1 \
-  --endpoint https://s3.amazonaws.com \
-  --access-key AKIAXXXXXXXX \
-  --secret-key XXXXXXXXX
-
-# List backups for a specific database
-vprs3bkp list \
-  --database mydb \
+cli backup \
+  --database my_database \
+  --host 10.0.0.5 \
+  --use-ssh-tunnel \
+  --ssh-username ssh_user \
+  --ssh-key-path ~/.ssh/id_rsa \
   --storage-type local \
   --root /path/to/backups
-
-# Show only latest backup
-vprs3bkp list \
-  --database mydb \
-  --latest-only \
-  --storage-type local \
-  --root /path/to/backups
-
-# List more than the default 10 backups
-vprs3bkp list \
-  --limit 20 \
-  --storage-type s3 \
-  --bucket my-backups
 ```
 
-### Restore a Database
+### Restore the latest backup
 
 ```bash
-# Restore from a specific backup file
-vprs3bkp restore \
-  --database mydb \
-  --host localhost \
-  --username postgres \
-  --filename mydb-2023-10-14T14:30:00.dump \
-  --storage-type local \
-  --root /path/to/backups
-
-# Restore the most recent backup
-vprs3bkp restore \
-  --database mydb \
-  --host localhost \
-  --username postgres \
+cli restore \
+  --database my_database \
   --latest \
-  --storage-type s3 \
-  --bucket my-backups \
-  --region us-east-1 \
-  --endpoint https://s3.amazonaws.com
+  --storage-type local \
+  --root /path/to/backups
 ```
 
-## Environment Variables
-
-You can use environment variables instead of command-line arguments:
-
-- `PGPASSWORD` - PostgreSQL password
-- `S3_BUCKET` - S3 bucket name
-- `S3_REGION` - S3 region
-- `S3_ENDPOINT` - S3 endpoint URL
-- `S3_ACCESS_KEY_ID` or `S3_ACCESS_KEY` - S3 access key
-- `S3_SECRET_ACCESS_KEY` or `S3_SECRET_KEY` - S3 secret key
-
-Example:
+### List available backups
 
 ```bash
-export PGPASSWORD=mypassword
-export S3_BUCKET=my-backups
-export S3_REGION=us-east-1
-export S3_ENDPOINT=https://s3.amazonaws.com
-export S3_ACCESS_KEY=AKIAXXXXXXXX
-export S3_SECRET_KEY=XXXXXXXXX
-
-vprs3bkp backup --database mydb --storage-type s3
+cli list \
+  --storage-type local \
+  --root /path/to/backups \
+  --limit 20
 ```
-
-## Configuration
-
-| Option                    | Description            | Default     |
-| ------------------------- | ---------------------- | ----------- |
-| **Common Options**        |
-| `--source-type`           | Database type          | `postgres`  |
-| `--source-name`           | Source identifier      | `default`   |
-| `--storage-type`          | Storage backend        | `s3`        |
-| `--storage-name`          | Storage identifier     | `default`   |
-| `--prefix`                | Path prefix in storage | (none)      |
-| **PostgreSQL Options**    |
-| `--database`              | Database name          | (required)  |
-| `-H, --host`              | Database host          | `localhost` |
-| `--port`                  | Database port          | `5432`      |
-| `--username`              | Database user          | `postgres`  |
-| `--password`              | Database password      | (from env)  |
-| **S3 Options**            |
-| `--bucket`                | S3 bucket name         | (required)  |
-| `--region`                | S3 region              | `us-east-1` |
-| `--endpoint`              | S3 endpoint URL        | (required)  |
-| `--access-key`            | S3 access key          | (required)  |
-| `--secret-key`            | S3 secret key          | (required)  |
-| **Local Storage Options** |
-| `--root`                  | Local directory path   | (required)  |
 
 ## Backup Naming Convention
 
