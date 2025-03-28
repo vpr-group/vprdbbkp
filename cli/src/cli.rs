@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use vprs3bkp_core::{
     databases::configs::{PGSourceConfig, SourceConfig},
     storage::configs::{LocalStorageConfig, S3StorageConfig, StorageConfig},
+    tunnel::config::TunnelConfig,
 };
 
 #[derive(Parser)]
@@ -87,6 +88,15 @@ pub struct SourceArgs {
 
     #[arg(long, env = "PGPASSWORD")]
     pub password: Option<String>,
+
+    #[arg(long)]
+    pub use_ssh_tunnel: Option<bool>,
+
+    #[arg(long)]
+    pub ssh_key_path: Option<String>,
+
+    #[arg(long)]
+    pub ssh_username: Option<String>,
 }
 
 #[derive(Args)]
@@ -176,6 +186,29 @@ pub fn storage_from_cli(storage: &StorageArgs) -> Result<StorageConfig> {
 
 // Helper function to convert CLI arguments to source config
 pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
+    let tunnel_config = match source.use_ssh_tunnel {
+        Some(use_ssh_tunnel) => {
+            let ssh_key_path = source
+                .ssh_key_path
+                .as_ref()
+                .ok_or_else(|| anyhow!("SSH key path is required when using SSH tunnel"))?
+                .clone();
+
+            let ssh_username = source
+                .ssh_username
+                .as_ref()
+                .ok_or_else(|| anyhow!("SSH username is required when using SSH tunnel"))?
+                .clone();
+
+            Some(TunnelConfig {
+                use_tunnel: use_ssh_tunnel,
+                key_path: ssh_key_path,
+                username: ssh_username,
+            })
+        }
+        None => None,
+    };
+
     match source.source_type.as_str() {
         "postgres" => Ok(SourceConfig::PG(PGSourceConfig {
             name: source.source_name.clone(),
@@ -184,7 +217,7 @@ pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
             port: source.port,
             username: source.username.clone(),
             password: source.password.clone(),
-            tunnel_config: None,
+            tunnel_config,
         })),
         _ => Err(anyhow!("Unsupported source type: {}", source.source_type)),
     }
