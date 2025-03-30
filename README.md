@@ -13,6 +13,7 @@ Designed to make database migrations easier, this project streamlines copying, b
 - **Compression**: Optional compression with configurable levels
 - **Flexible Restoration**: Restore from specific backups or automatically use the latest one
 - **Listing & Management**: List available backups with filtering options
+- **Retention Management**: Define retention periods for automatic cleanup of old backups
 - **SSH Tunneling**: Connect to remote databases through SSH tunnels
 - **Environment Variable Support**: Configure via environment variables for seamless CI/CD integration
 - **Cross-Platform**: Available for Linux and macOS
@@ -78,11 +79,12 @@ This CLI tool helps you back up, restore, and list PostgreSQL databases, with su
 
 ## Commands
 
-The CLI supports three main commands:
+The CLI supports four main commands:
 
 - `backup`: Create a database backup
 - `restore`: Restore a database from backup
 - `list`: List available backups
+- `cleanup`: Delete backups older than a specified retention period
 
 ## Parameter Reference
 
@@ -96,7 +98,7 @@ The CLI supports three main commands:
 ### Backup Command Parameters
 
 ```
-cli backup [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--other-options]
+cli backup [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--retention <PERIOD>] [--other-options]
 ```
 
 ### Restore Command Parameters
@@ -109,6 +111,12 @@ cli restore [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--filename 
 
 ```
 cli list [OPTIONS] [--database <DATABASE>] [--storage-type <TYPE>] [--other-options]
+```
+
+### Cleanup Command Parameters
+
+```
+cli cleanup [OPTIONS] --retention <PERIOD> [--database <DATABASE>] [--storage-type <TYPE>] [--dry-run]
 ```
 
 ### Source Parameters (Database Connection)
@@ -152,9 +160,10 @@ cli list [OPTIONS] [--database <DATABASE>] [--storage-type <TYPE>] [--other-opti
 
 ### Backup-Specific Parameters
 
-| Parameter             | Description             | Default | Required | Environment Variable |
-| --------------------- | ----------------------- | ------- | -------- | -------------------- |
-| `--compression`, `-c` | Compression level (0-9) | -       | No       | -                    |
+| Parameter             | Description                                              | Default | Required | Environment Variable |
+| --------------------- | -------------------------------------------------------- | ------- | -------- | -------------------- |
+| `--compression`, `-c` | Compression level (0-9)                                  | -       | No       | -                    |
+| `--retention`, `-r`   | Retention period for the backup (e.g. '30d', '1w', '6m') | -       | No       | -                    |
 
 ### Restore-Specific Parameters
 
@@ -172,6 +181,23 @@ cli list [OPTIONS] [--database <DATABASE>] [--storage-type <TYPE>] [--other-opti
 | `--latest-only`    | Show only the latest backup for each database | `false` | No       | -                    |
 | `--limit`, `-l`    | Maximum number of backups to list             | `10`    | No       | -                    |
 
+### Cleanup-Specific Parameters
+
+| Parameter           | Description                                          | Default | Required | Environment Variable |
+| ------------------- | ---------------------------------------------------- | ------- | -------- | -------------------- |
+| `--retention`, `-r` | Retention period (e.g. '30d', '1w', '6m', '1y')      | -       | Yes      | -                    |
+| `--dry-run`         | Show what would be deleted without actually deleting | `false` | No       | -                    |
+| `--database`, `-d`  | Filter cleanup for specific database                 | -       | No       | -                    |
+
+## Retention Format
+
+The retention period defines how long backups should be kept before being automatically deleted. The format is:
+
+- `Nd`: N days (e.g., `30d` for 30 days)
+- `Nw`: N weeks (e.g., `4w` for 4 weeks)
+- `Nm`: N months (e.g., `6m` for 6 months, calculated as 30 days per month)
+- `Ny`: N years (e.g., `1y` for 1 year, calculated as 365 days)
+
 ## Examples
 
 ### Create a backup to S3
@@ -182,6 +208,18 @@ cli backup \
   --host db.example.com \
   --username dbuser \
   --password mypassword \
+  --bucket my-backups \
+  --endpoint https://s3.amazonaws.com \
+  --access-key AKIAIOSFODNN7EXAMPLE \
+  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+### Create a backup with retention period
+
+```bash
+cli backup \
+  --database my_database \
+  --retention 30d \
   --bucket my-backups \
   --endpoint https://s3.amazonaws.com \
   --access-key AKIAIOSFODNN7EXAMPLE \
@@ -229,18 +267,50 @@ cli list \
   --limit 20
 ```
 
+### Clean up old backups
+
+```bash
+cli cleanup \
+  --retention 30d \
+  --storage-type s3 \
+  --bucket my-backups \
+  --endpoint https://s3.amazonaws.com \
+  --access-key AKIAIOSFODNN7EXAMPLE \
+  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+### Preview which backups would be deleted (dry run)
+
+```bash
+cli cleanup \
+  --retention 14d \
+  --dry-run \
+  --storage-type local \
+  --root /path/to/backups
+```
+
+### Clean up old backups for a specific database
+
+```bash
+cli cleanup \
+  --retention 60d \
+  --database production_db \
+  --storage-type s3 \
+  --bucket my-backups
+```
+
 ## Backup Naming Convention
 
 Backups are automatically named using the format:
 
 ```
-{source-name}-{database}-{timestamp}.dump
+{source-name}-{database}-{timestamp}-{uuid}.gz
 ```
 
 For example:
 
 ```
-default-mydb-2023-10-15T08:45:31Z.dump
+default-mydb-2023-10-15-084531-a7bf34.gz
 ```
 
 ## Setting Up Cron Jobs
@@ -248,36 +318,11 @@ default-mydb-2023-10-15T08:45:31Z.dump
 Add to `/etc/cron.d/database-backups`:
 
 ```
-# Daily PostgreSQL backup at 2:00 AM
-0 2 * * * root S3_BUCKET=my-backup-bucket PGPASSWORD=secret /usr/local/bin/vprs3bkp backup --database mydb --username dbuser --host db.example.com --storage-type s3
-```
+# Daily PostgreSQL backup at 2:00 AM with 30-day retention
+0 2 * * * root S3_BUCKET=my-backup-bucket PGPASSWORD=secret /usr/local/bin/vprs3bkp backup --database mydb --username dbuser --host db.example.com --storage-type s3 --retention 30d
 
-## Prerequisites
-
-- PostgreSQL client tools (`pg_dump` and `psql`) for PostgreSQL backups
-- AWS credentials with `s3:PutObject` permissions (for S3 storage)
-- Gzip for compression
-
-### Installing Prerequisites on macOS
-
-```bash
-# Using Homebrew
-brew install postgresql
-
-# Verify installation
-psql --version
-pg_dump --version
-```
-
-### Installing Prerequisites on Linux (Debian/Ubuntu)
-
-```bash
-sudo apt-get update
-sudo apt-get install -y postgresql-client gzip
-
-# Verify installation
-psql --version
-pg_dump --version
+# Weekly cleanup of backups older than 30 days
+0 3 * * 0 root S3_BUCKET=my-backup-bucket /usr/local/bin/vprs3bkp cleanup --retention 30d --storage-type s3
 ```
 
 ## Troubleshooting
