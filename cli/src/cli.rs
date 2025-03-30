@@ -19,6 +19,7 @@ pub enum Commands {
     Backup(BackupArgs),
     Restore(RestoreArgs),
     List(ListArgs),
+    Cleanup(CleanupArgs),
 }
 
 #[derive(Args)]
@@ -31,6 +32,9 @@ pub struct BackupArgs {
 
     #[command(flatten)]
     pub storage: StorageArgs,
+
+    #[arg(short, long, help = "Retention period (e.g. '30d', '1w', '6m')")]
+    pub retention: Option<String>,
 }
 
 #[derive(Args)]
@@ -61,6 +65,24 @@ pub struct ListArgs {
 
     #[arg(short, long, default_value = "10")]
     pub limit: usize,
+
+    #[command(flatten)]
+    pub storage: StorageArgs,
+}
+
+#[derive(Args)]
+pub struct CleanupArgs {
+    #[arg(short, long, help = "Retention period (e.g. '30d', '1w', '6m')")]
+    pub retention: String,
+
+    #[arg(
+        long,
+        help = "Only show which backups would be deleted without actually removing them"
+    )]
+    pub dry_run: bool,
+
+    #[arg(short, long, help = "Database name to cleanup backups for")]
+    pub database: Option<String>,
 
     #[command(flatten)]
     pub storage: StorageArgs,
@@ -132,7 +154,27 @@ pub struct StorageArgs {
     pub root: Option<PathBuf>,
 }
 
-// Helper function to convert CLI arguments to storage config
+pub fn parse_retention(retention: &str) -> Result<u64> {
+    let len = retention.len();
+    if len < 2 {
+        return Err(anyhow!(
+            "Invalid retention format. Use format like '30d', '4w', '2m', '1y'"
+        ));
+    }
+
+    let value = retention[..len - 1]
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Invalid retention value"))?;
+
+    match retention.chars().last().unwrap() {
+        'd' => Ok(value), // days
+        'w' => Ok(value * 7), // weeks to days
+        'm' => Ok(value * 30), // months to days (approximate)
+        'y' => Ok(value * 365), // years to days (approximate)
+        _ => Err(anyhow!("Invalid retention unit. Use 'd' for days, 'w' for weeks, 'm' for months, or 'y' for years")),
+    }
+}
+
 pub fn storage_from_cli(storage: &StorageArgs) -> Result<StorageConfig> {
     match storage.storage_type.as_str() {
         "s3" => {
@@ -184,7 +226,6 @@ pub fn storage_from_cli(storage: &StorageArgs) -> Result<StorageConfig> {
     }
 }
 
-// Helper function to convert CLI arguments to source config
 pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
     let tunnel_config = if source.use_ssh_tunnel {
         let ssh_key_path = source

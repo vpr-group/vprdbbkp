@@ -13,8 +13,8 @@ use databases::{backup_source, configs::SourceConfig, restore_source};
 use opendal::Entry;
 
 use storage::{configs::StorageConfig, storage::Storage};
+pub use utils::get_backup_key;
 use utils::get_filename;
-pub use utils::{format_timestamp, get_backup_key};
 
 pub async fn backup<SO, ST>(source_config: SO, storage_config: ST) -> Result<String>
 where
@@ -58,6 +58,20 @@ where
     let storage = Storage::new(borrowed_storage_config).await?;
     let entries = storage.list().await?;
     Ok(entries)
+}
+
+pub async fn cleanup<ST>(
+    storage_config: ST,
+    retention_days: u64,
+    dry_run: bool,
+) -> Result<(usize, u64)>
+where
+    ST: Borrow<StorageConfig>,
+{
+    let borrowed_storage_config = storage_config.borrow();
+    let storage = Storage::new(borrowed_storage_config).await?;
+    let result = storage.cleanup(retention_days, dry_run).await?;
+    Ok(result)
 }
 
 #[cfg(test)]

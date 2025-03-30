@@ -1,11 +1,17 @@
 use std::borrow::Borrow;
+use std::time::Duration;
+use std::time::SystemTime;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bytes::Bytes;
+use chrono::DateTime;
+use chrono::Utc;
 use opendal::layers::LoggingLayer;
 use opendal::services;
 use opendal::Entry;
 use opendal::Operator;
+
+use crate::utils::extract_timestamp_from_filename;
 
 use super::configs::StorageConfig;
 
@@ -74,6 +80,7 @@ impl Storage {
             .operator
             .list_with(&prefix)
             .recursive(true)
+            .limit(10000)
             .await
             .context(format!("Failed to list dumps in"))?;
 
@@ -103,6 +110,47 @@ impl Storage {
             .context(format!("Failed to read file {}", path))?;
 
         Ok(Bytes::from(buffer.to_vec()))
+    }
+
+    pub async fn delete(&self, path: &str) -> Result<()> {
+        self.operator
+            .delete(&path)
+            .await
+            .context(format!("Failed to delete backup {}", path))?;
+
+        Ok(())
+    }
+
+    pub async fn cleanup(&self, retention_days: u64, dry_run: bool) -> Result<(usize, u64)> {
+        let backups = self.list().await?;
+
+        let cutoff = SystemTime::now()
+            .checked_sub(Duration::from_secs(retention_days * 86400))
+            .ok_or_else(|| anyhow!("Failed to calculate cutoff date"))?;
+
+        let cutoff_datetime: DateTime<Utc> = cutoff.into();
+
+        let mut deleted_count = 0;
+        let mut deleted_size = 0;
+
+        for backup in backups {
+            match extract_timestamp_from_filename(backup.name()) {
+                Ok(timestamp) => {
+                    if timestamp < cutoff_datetime {
+                        let size = backup.metadata().content_length();
+                        deleted_size += size;
+                        deleted_count += 1;
+
+                        if !dry_run {
+                            self.delete(&backup.path()).await?;
+                        }
+                    }
+                }
+                Err(_) => {}
+            };
+        }
+
+        Ok((deleted_count, deleted_size))
     }
 }
 
@@ -135,5 +183,29 @@ mod tests {
         let entries = storage.list().await.expect("Unable to list dumps");
 
         println!("{:?}", entries);
+    }
+
+    #[tokio::test]
+    async fn test_s3_cleanup() {
+        dotenv().ok();
+
+        let storage = Storage::new(StorageConfig::S3(S3StorageConfig {
+            access_key: env::var("S3_ACCESS_KEY").unwrap_or_default(),
+            secret_key: env::var("S3_SECRET_KEY").unwrap_or_default(),
+            bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
+            endpoint: env::var("S3_ENDPOINT")
+                .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string()),
+            region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
+            name: env::var("S3_CONFIG_NAME").unwrap_or_else(|_| "s3-test".to_string()),
+            prefix: None,
+        }))
+        .await
+        .expect("Unable to create storage config");
+
+        let (deleted_count, seleted_size) =
+            storage.cleanup(1, false).await.expect("Unable to cleanup");
+
+        assert!(deleted_count > 1);
+        assert!(seleted_size > 1);
     }
 }

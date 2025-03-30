@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use cli::{source_from_cli, storage_from_cli, Cli, Commands};
+use cli::{parse_retention, source_from_cli, storage_from_cli, Cli, Commands};
 use vprs3bkp_core::{
     backup,
     databases::{configs::SourceConfig, postgres::backup_postgres},
@@ -21,6 +21,17 @@ async fn main() -> Result<()> {
         Commands::Backup(args) => {
             let source_config = source_from_cli(&args.source)?;
             let storage_config = storage_from_cli(&args.storage)?;
+
+            if let Some(retention) = &args.retention {
+                let storage = Storage::new(&storage_config).await?;
+                let (entries_deleted, storage_reclaimed) =
+                    storage.cleanup(parse_retention(retention)?, false).await?;
+
+                println!(
+                    "{} Entries deleted, {} Storage reclaimed",
+                    entries_deleted, storage_reclaimed
+                );
+            }
 
             // If compression is specified and using Postgres, use custom compression logic
             if let (Some(comp_level), "postgres") =
@@ -164,6 +175,19 @@ async fn main() -> Result<()> {
 
                 println!("  {} ({})", filename, size_str);
             }
+        }
+
+        Commands::Cleanup(args) => {
+            let storage_config = storage_from_cli(&args.storage)?;
+            let storage = Storage::new(&storage_config).await?;
+            let (entries_deleted, storage_reclaimed) = storage
+                .cleanup(parse_retention(&args.retention)?, args.dry_run)
+                .await?;
+
+            println!(
+                "{} Entries deleted, {} Storage reclaimed",
+                entries_deleted, storage_reclaimed
+            );
         }
     }
 

@@ -1,6 +1,7 @@
+use anyhow::{anyhow, Result};
+use chrono::{DateTime, NaiveDateTime, Utc};
+use regex::Regex;
 use std::borrow::Borrow;
-
-use chrono::Utc;
 use uuid::Uuid;
 
 use crate::databases::configs::SourceConfig;
@@ -44,6 +45,30 @@ where
             uuid
         ),
     }
+}
+
+pub fn extract_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>> {
+    let re = Regex::new(r"(\d{4}-\d{2}-\d{2}-\d{6})-[a-f0-9]+\.(gz|dump|tar|zip|sql)$")
+        .map_err(|e| anyhow!("Failed to compile regex: {}", e))?;
+
+    let caps = re.captures(filename).ok_or_else(|| {
+        anyhow!(
+            "Filename doesn't match expected timestamp format: {}",
+            filename
+        )
+    })?;
+
+    let timestamp_str = caps
+        .get(1)
+        .ok_or_else(|| anyhow!("Failed to extract timestamp from filename: {}", filename))?
+        .as_str();
+
+    let naive_datetime = NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d-%H%M%S")
+        .map_err(|e| anyhow!("Failed to parse timestamp {}: {}", timestamp_str, e))?;
+
+    let datetime = DateTime::<Utc>::from_utc(naive_datetime, Utc);
+
+    Ok(datetime)
 }
 
 pub fn get_backup_key(prefix: &str, db_type: &str, db_name: &str) -> String {
