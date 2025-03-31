@@ -4,7 +4,9 @@ A simple tool for backing up databases to various cloud storage providers or loc
 
 Designed to make database migrations easier, this project streamlines copying, backup, and restoration operations. It works both as a command-line tool for server automation and through a GUI for everyday development tasks like pulling production data into your local environment.
 
-**Important Note:** This is a side project. It is not industrial-grade and might struggle with massive databases. Works great for development, testing, and smaller projects, but maybe don't bet your mission-critical production systems on it just yet...
+**Important Note:** This is a side project. It is not an industrial-grade solution. It only provides logical backup for the moment and might struggle with massive databases. Works great for development, testing, and smaller projects, but maybe don't bet your mission-critical production systems on it just yet...
+
+If you need more advanced tools please check [Barman](https://pgbarman.org) or [pgbackrest](https://pgbackrest.org).
 
 ## Features
 
