@@ -9,6 +9,7 @@ use tokio::time::timeout;
 use crate::tunnel::Tunnel;
 
 pub mod configs;
+pub mod mariadb;
 pub mod mysql;
 pub mod postgres;
 
