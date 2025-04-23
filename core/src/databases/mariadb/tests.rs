@@ -52,7 +52,7 @@ async fn test_mariadb_version() {
             &options.host,
             options.port,
             &options.user,
-            options.password.as_str(),
+            Some(options.password.as_str()),
         )
         .await
         .expect("Unable to check MariaDB connection");
@@ -71,7 +71,7 @@ async fn test_mariadb_connection() {
             &options.host,
             options.port,
             &options.user,
-            options.password.as_str(),
+            Some(options.password.as_str()),
         )
         .await
         .expect("Unable to check MariaDB connection");
@@ -88,7 +88,7 @@ async fn test_mariadb_dump() {
         &options.host,
         options.port,
         &options.user,
-        options.password.as_str(),
+        Some(options.password.as_str()),
     )
     .await
     .expect("Failed to initialize MariaDBTools");
@@ -99,7 +99,7 @@ async fn test_mariadb_dump() {
             &options.host,
             options.port,
             &options.user,
-            options.password.as_str(),
+            Some(options.password.as_str()),
             None,
         )
         .await

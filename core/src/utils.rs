@@ -44,6 +44,13 @@ where
             date_str,
             uuid
         ),
+        SourceConfig::MariaDB(config) => format!(
+            "{}-{}-{}-{}.gz",
+            slugify(&config.name),
+            slugify(&config.database),
+            date_str,
+            uuid
+        ),
     }
 }
 

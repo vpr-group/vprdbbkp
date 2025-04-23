@@ -24,7 +24,7 @@ impl MariaDBTools {
         host: &str,
         port: u16,
         username: &str,
-        password: &str,
+        password: Option<&str>,
     ) -> Result<Self> {
         let tools = Self::default();
         let version = tools
@@ -40,7 +40,7 @@ impl MariaDBTools {
         host: &str,
         port: u16,
         username: &str,
-        password: &str,
+        password: Option<&str>,
     ) -> Result<bool> {
         let cmd_builder =
             CommandBuilder::new(self.version, database, host, port, username, password)?;
@@ -77,7 +77,7 @@ impl MariaDBTools {
         host: &str,
         port: u16,
         username: &str,
-        password: &str,
+        password: Option<&str>,
     ) -> Result<MariaDBVersion> {
         let cmd_builder =
             CommandBuilder::new(self.version, database, host, port, username, password)?;
@@ -108,7 +108,7 @@ impl MariaDBTools {
         host: &str,
         port: u16,
         username: &str,
-        password: &str,
+        password: Option<&str>,
         compression: Option<u8>,
     ) -> Result<Bytes> {
         let cmd_builder =

@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use configs::SourceConfig;
+use mariadb::MariaDB;
 use postgres::PostgreSQL;
 use tokio::time::timeout;
 
@@ -33,6 +34,13 @@ where
             &config.username,
             Some(config.password.as_deref().unwrap_or("")),
         )),
+        SourceConfig::MariaDB(config) => Box::new(MariaDB::new(
+            &config.database,
+            &config.host,
+            config.port,
+            &config.username,
+            Some(config.password.as_deref().unwrap_or("")),
+        )),
     }
 }
 
@@ -45,20 +53,21 @@ where
     let borrowed_config = source_config.borrow();
     let cloned_config = borrowed_config.clone();
 
-    match borrowed_config {
-        SourceConfig::PG(config) => {
-            if let Some(tunnel_config) = &config.tunnel_config {
-                if tunnel_config.use_tunnel {
-                    let mut tunnel = Tunnel::new(tunnel_config.clone());
-                    tunnel.establish_tunnel(&cloned_config).await?;
-                    let new_source_config = tunnel.get_tunneled_config(&cloned_config);
+    let tunnel_config = match borrowed_config {
+        SourceConfig::PG(config) => config.tunnel_config.clone(),
+        SourceConfig::MariaDB(config) => config.tunnel_config.clone(),
+    };
 
-                    return match new_source_config {
-                        Some(source_config) => Ok((source_config, Some(tunnel))),
-                        None => Err(anyhow!("Unable to get a tunneled config for this source")),
-                    };
-                }
-            }
+    if let Some(tunnel_config) = tunnel_config {
+        if tunnel_config.use_tunnel {
+            let mut tunnel = Tunnel::new(tunnel_config.clone());
+            tunnel.establish_tunnel(&cloned_config).await?;
+            let new_source_config = tunnel.get_tunneled_config(&cloned_config);
+
+            return match new_source_config {
+                Some(source_config) => Ok((source_config, Some(tunnel))),
+                None => Err(anyhow!("Unable to get a tunneled config for this source")),
+            };
         }
     }
 

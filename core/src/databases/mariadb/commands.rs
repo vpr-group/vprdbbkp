@@ -10,7 +10,7 @@ pub struct CommandBuilder {
     pub host: String,
     pub port: u16,
     pub username: String,
-    pub password: String,
+    pub password: Option<String>,
 }
 
 impl CommandBuilder {
@@ -20,7 +20,7 @@ impl CommandBuilder {
         host: &str,
         port: u16,
         username: &str,
-        password: &str,
+        password: Option<&str>,
     ) -> Result<Self> {
         let cache_dir = dirs::cache_dir()
             .unwrap_or_else(|| env::temp_dir())
@@ -35,7 +35,7 @@ impl CommandBuilder {
             host: host.into(),
             port,
             username: username.into(),
-            password: password.into(),
+            password: password.map(|p| p.to_string()),
         })
     }
 
@@ -66,7 +66,9 @@ impl CommandBuilder {
             .arg("-u")
             .arg(&self.username);
 
-        cmd.env("MYSQL_PWD", self.password.as_str());
+        if let Some(password) = &self.password {
+            cmd.env("MYSQL_PWD", password.as_str());
+        }
 
         Ok(cmd)
     }

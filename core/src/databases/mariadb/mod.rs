@@ -15,27 +15,34 @@ pub struct MariaDB {
     host: String,
     port: u16,
     username: String,
-    password: String,
+    password: Option<String>,
 }
 
 impl MariaDB {
-    pub fn new(database: &str, host: &str, port: u16, username: &str, password: &str) -> Self {
+    pub fn new(
+        database: &str,
+        host: &str,
+        port: u16,
+        username: &str,
+        password: Option<&str>,
+    ) -> Self {
         MariaDB {
             database: database.into(),
             host: host.into(),
             port,
             username: username.into(),
-            password: password.into(),
+            password: password.map(|p| p.to_string()),
         }
     }
 
     async fn get_tools(&self) -> Result<MariaDBTools> {
+        let password_ref = self.password.as_deref();
         let tools = MariaDBTools::with_detected_version(
             self.database.as_str(),
             self.host.as_str(),
             self.port,
             self.username.as_str(),
-            self.password.as_str(),
+            password_ref,
         )
         .await?;
 
@@ -46,6 +53,7 @@ impl MariaDB {
 #[async_trait]
 impl DbAdapter for MariaDB {
     async fn is_connected(&self) -> Result<bool> {
+        let password_ref = self.password.as_deref();
         let tools = self.get_tools().await?;
         let is_connected = tools
             .is_connected(
@@ -53,7 +61,7 @@ impl DbAdapter for MariaDB {
                 self.host.as_str(),
                 self.port,
                 self.username.as_str(),
-                self.password.as_str(),
+                password_ref,
             )
             .await?;
 
@@ -61,6 +69,7 @@ impl DbAdapter for MariaDB {
     }
 
     async fn dump(&self, compression: Option<u8>) -> Result<Bytes> {
+        let password_ref = self.password.as_deref();
         let tools = self.get_tools().await?;
         let output = tools
             .dump(
@@ -68,7 +77,7 @@ impl DbAdapter for MariaDB {
                 self.host.as_str(),
                 self.port,
                 self.username.as_str(),
-                self.password.as_str(),
+                password_ref,
                 compression,
             )
             .await?;

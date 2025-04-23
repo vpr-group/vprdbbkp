@@ -40,10 +40,12 @@ impl Tunnel {
 
         let remote_host = match source_config {
             SourceConfig::PG(config) => &config.host,
+            SourceConfig::MariaDB(config) => &config.host,
         };
 
         let remote_port = match source_config {
             SourceConfig::PG(config) => config.port,
+            SourceConfig::MariaDB(config) => config.port,
         };
 
         // Build the SSH command - using standard Command since TokioCommand doesn't
@@ -110,8 +112,13 @@ impl Tunnel {
                     let mut tunneled_config = pg_config.clone();
                     tunneled_config.host = "127.0.0.1".to_string();
                     tunneled_config.port = local_port;
-
                     Some(SourceConfig::PG(tunneled_config))
+                }
+                SourceConfig::MariaDB(config) => {
+                    let mut tunneled_config = config.clone();
+                    tunneled_config.host = "127.0.0.1".to_string();
+                    tunneled_config.port = local_port;
+                    Some(SourceConfig::MariaDB(tunneled_config))
                 }
             }
         } else {
