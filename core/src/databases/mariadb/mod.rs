@@ -6,6 +6,7 @@ use tools::MariaDBTools;
 use super::DbAdapter;
 
 pub mod commands;
+pub mod installer;
 pub mod tests;
 pub mod tools;
 pub mod version;

@@ -38,7 +38,7 @@ fn initialize_test() {
 fn test_mariadb_tools_instantiation() {
     initialize_test();
     let mariadb_tools = MariaDBTools::default();
-    assert_eq!(mariadb_tools.version, MariaDBVersion::V11_2);
+    assert_eq!(mariadb_tools.version, MariaDBVersion::V11_4);
 }
 
 #[tokio::test]

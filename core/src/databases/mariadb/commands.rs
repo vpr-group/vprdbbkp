@@ -1,4 +1,4 @@
-use super::version::MariaDBVersion;
+use super::{installer::MariaDBInstaller, version::MariaDBVersion};
 use anyhow::{anyhow, Result};
 use std::{env, fs, path::PathBuf};
 use tokio::process::Command;
@@ -53,7 +53,21 @@ impl CommandBuilder {
         let path = self.get_bin_path().await?.join(bin_name);
 
         if !path.exists() {
-            return Err(anyhow!("MariaDB binary not found at {}", path.display()));
+            let installer = MariaDBInstaller::new(self.version);
+            match installer.install(self.cache_dir.clone()).await {
+                Ok(path) => {
+                    if path.exists() {
+                        println!(
+                            "Successfully installed MariaDB {} to {}",
+                            self.version,
+                            path.display()
+                        )
+                    } else {
+                        return Err(anyhow!("Binary for MariaDB {} not found", self.version));
+                    }
+                }
+                Err(error) => return Err(anyhow!("Failed to install MariaDB {}", error)),
+            };
         }
 
         let mut cmd = Command::new(&path);

@@ -8,28 +8,16 @@ pub enum MariaDBVersion {
     V10_5,
     V10_6,
     V10_11,
-    V11_0,
-    V11_1,
-    V11_2,
-    V11_3,
     V11_4,
-    V11_5,
-    V11_6,
     V11_7,
 }
 
-pub const DEFAULT_MARIADB_VERSION: MariaDBVersion = MariaDBVersion::V11_2;
+pub const DEFAULT_MARIADB_VERSION: MariaDBVersion = MariaDBVersion::V11_4;
 
 impl MariaDBVersion {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::V11_0 => "11.0",
-            Self::V11_1 => "11.1",
-            Self::V11_2 => "11.2",
-            Self::V11_3 => "11.3",
             Self::V11_4 => "11.4",
-            Self::V11_5 => "11.5",
-            Self::V11_6 => "11.6",
             Self::V11_7 => "11.7",
             Self::V10_5 => "10.5",
             Self::V10_6 => "10.6",
@@ -44,20 +32,8 @@ impl MariaDBVersion {
             Some(Self::V10_6)
         } else if version.starts_with("10.11") {
             Some(Self::V10_11)
-        } else if version.starts_with("11.0") {
-            Some(Self::V11_0)
-        } else if version.starts_with("11.1") {
-            Some(Self::V11_1)
-        } else if version.starts_with("11.2") {
-            Some(Self::V11_2)
-        } else if version.starts_with("11.3") {
-            Some(Self::V11_3)
         } else if version.starts_with("11.4") {
             Some(Self::V11_4)
-        } else if version.starts_with("11.5") {
-            Some(Self::V11_5)
-        } else if version.starts_with("11.6") {
-            Some(Self::V11_6)
         } else if version.starts_with("11.7") {
             Some(Self::V11_7)
         } else {
@@ -70,13 +46,7 @@ impl MariaDBVersion {
             (10, 5) => Some(Self::V10_5),
             (10, 6) => Some(Self::V10_6),
             (10, 11) => Some(Self::V10_11),
-            (11, 0) => Some(Self::V11_0),
-            (11, 1) => Some(Self::V11_1),
-            (11, 2) => Some(Self::V11_2),
-            (11, 3) => Some(Self::V11_3),
             (11, 4) => Some(Self::V11_4),
-            (11, 5) => Some(Self::V11_5),
-            (11, 6) => Some(Self::V11_6),
             (11, 7) => Some(Self::V11_7),
             _ => None,
         }
