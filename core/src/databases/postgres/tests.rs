@@ -64,7 +64,7 @@ mod tests {
         let is_connected = postgresql
             .is_connected()
             .await
-            .expect("Failed to check if MariaDB is connected");
+            .expect("Failed to check if PostgreSQL is connected");
 
         assert_eq!(is_connected, true);
     }

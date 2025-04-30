@@ -52,7 +52,7 @@ impl DbVersion for PostgreSQLVersion {
 
     fn from_version_tuple(major: u32, minor: u32, _patch: u32) -> Option<Self> {
         match (major, minor) {
-            (9, 6) => Some(Self::V9_6),
+            (9, 0) => Some(Self::V9_6),
             (10, 0) => Some(Self::V10),
             (11, 0) => Some(Self::V11),
             (12, 0) => Some(Self::V12),
@@ -66,12 +66,12 @@ impl DbVersion for PostgreSQLVersion {
     }
 
     fn parse_string_version(version_string: &str) -> Option<Self> {
-        let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)").ok()?;
-        let captures = re.captures(version_string)?;
+        let pg_regex = regex::Regex::new(r"PostgreSQL (\d+)\.(\d+)").ok()?;
+        let captures = pg_regex.captures(version_string)?;
 
         let major = captures.get(1)?.as_str().parse::<u32>().ok()?;
-        let minor = captures.get(2)?.as_str().parse::<u32>().ok()?;
-        let patch = captures.get(3)?.as_str().parse::<u32>().ok()?;
+        let minor = 0;
+        let patch = 0;
 
         Self::from_version_tuple(major, minor, patch)
     }
