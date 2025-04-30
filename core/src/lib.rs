@@ -2,19 +2,19 @@ use std::borrow::Borrow;
 
 use anyhow::Result;
 
+pub mod common;
 pub mod databases;
 pub mod folders;
 pub mod platform;
 pub mod storage;
 pub mod tunnel;
-pub mod utils;
 
 use databases::{backup_source, configs::SourceConfig, restore_source};
 use opendal::Entry;
 
+pub use common::get_backup_key;
+use common::get_filename;
 use storage::{configs::StorageConfig, storage::Storage};
-pub use utils::get_backup_key;
-use utils::get_filename;
 
 pub async fn backup<SO, ST>(source_config: SO, storage_config: ST) -> Result<String>
 where

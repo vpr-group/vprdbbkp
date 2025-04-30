@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
+    common::{copy_dir_all, get_arch, get_os},
     databases::DbVersion,
-    utils::{copy_dir_all, get_arch, get_os},
 };
 use anyhow::{anyhow, Result};
 use bytes::Bytes;

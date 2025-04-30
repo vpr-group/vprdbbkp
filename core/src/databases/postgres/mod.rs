@@ -1,14 +1,14 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use pg_tools::PgTools;
+use tools::PostgreSQLTools;
 
 use super::DbAdapter;
 
 pub mod commands;
-pub mod pg_installer;
-pub mod pg_tools;
-pub mod pg_utils;
+pub mod installer;
+mod tests;
+pub mod tools;
 pub mod version;
 
 pub struct PostgreSQL {
@@ -36,11 +36,11 @@ impl PostgreSQL {
         }
     }
 
-    async fn get_tools(&self) -> Result<PgTools> {
-        let mut tools = PgTools::default()?;
+    async fn get_tools(&self) -> Result<PostgreSQLTools> {
+        let mut tools = PostgreSQLTools::default()?;
         let password_ref = self.password.as_deref();
         let version = tools
-            .get_postgres_version(
+            .get_version(
                 self.database.as_str(),
                 self.host.as_str(),
                 self.port,
@@ -49,7 +49,7 @@ impl PostgreSQL {
             )
             .await?;
 
-        tools = PgTools::new(version)?;
+        tools = PostgreSQLTools::new(version)?;
 
         Ok(tools)
     }
@@ -61,7 +61,7 @@ impl DbAdapter for PostgreSQL {
         let tools = self.get_tools().await?;
         let password_ref = self.password.as_deref();
         let is_connected = tools
-            .is_postgres_connected(
+            .is_connected(
                 self.database.as_str(),
                 self.host.as_str(),
                 self.port,
@@ -69,6 +69,7 @@ impl DbAdapter for PostgreSQL {
                 password_ref,
             )
             .await?;
+
         Ok(is_connected)
     }
 
@@ -83,7 +84,6 @@ impl DbAdapter for PostgreSQL {
                 self.port,
                 self.username.as_str(),
                 password_ref,
-                None,
             )
             .await?;
 
@@ -102,7 +102,6 @@ impl DbAdapter for PostgreSQL {
                 self.username.as_str(),
                 password_ref,
                 dump_data,
-                false,
                 drop_database,
             )
             .await?;

@@ -58,6 +58,7 @@ impl PgInstaller {
             os_info::Type::CentOS => "linux",
             os_info::Type::Alpine => "linux",
             os_info::Type::Arch => "linux",
+            os_info::Type::Mint => "linux",
             os_info::Type::Windows => "windows",
             os_info::Type::Macos => "macos",
             _ => {

@@ -11,7 +11,7 @@ use opendal::services;
 use opendal::Entry;
 use opendal::Operator;
 
-use crate::utils::extract_timestamp_from_filename;
+use crate::common::extract_timestamp_from_filename;
 
 use super::configs::StorageConfig;
 

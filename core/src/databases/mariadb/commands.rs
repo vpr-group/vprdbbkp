@@ -30,7 +30,7 @@ impl CommandBuilder {
 
         fs::create_dir_all(&cache_dir)?;
 
-        Ok(CommandBuilder {
+        Ok(Self {
             cache_dir,
             version,
             database: database.into(),

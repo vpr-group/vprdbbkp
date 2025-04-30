@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::Parser;
 use cli::{parse_retention, source_from_cli, storage_from_cli, Cli, Commands};
 use vprs3bkp_core::{
-    backup, databases::get_db_adapter, list, restore, storage::storage::Storage,
-    utils::get_filename,
+    backup, common::get_filename, databases::get_db_adapter, list, restore,
+    storage::storage::Storage,
 };
 
 mod cli;
