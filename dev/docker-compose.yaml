@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: postgres_database
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - database_network
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: mariadb-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: mariadb_root_password
+      MYSQL_USER: mariadb_user
+      MYSQL_PASSWORD: mariadb_password
+      MYSQL_DATABASE: mariadb_database
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mariadb_data:/var/lib/mysql
+      - ./mariadb-init:/docker-entrypoint-initdb.d
+    networks:
+      - database_network
+
+networks:
+  database_network:
+    driver: bridge
