@@ -66,7 +66,7 @@ impl DbVersion for PostgreSQLVersion {
     }
 
     fn parse_string_version(version_string: &str) -> Option<Self> {
-        let pg_regex = regex::Regex::new(r"PostgreSQL (\d+)\.(\d+)").ok()?;
+        let pg_regex = Regex::new(r"PostgreSQL (\d+)\.(\d+)").ok()?;
         let captures = pg_regex.captures(version_string)?;
 
         let major = captures.get(1)?.as_str().parse::<u32>().ok()?;
