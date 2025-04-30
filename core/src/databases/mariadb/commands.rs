@@ -110,7 +110,7 @@ impl CommandBuilder {
         Ok(cmd)
     }
 
-    pub async fn build_dump_command(&self, compression: Option<u8>) -> Result<Command> {
+    pub async fn build_dump_command(&self) -> Result<Command> {
         let mut cmd = self.build_base_cmd("mariadb-dump").await?;
 
         cmd.arg(format!("--host={}", self.host))
@@ -122,10 +122,6 @@ impl CommandBuilder {
             .arg("--events")
             .arg("--complete-insert")
             .arg(&self.database);
-
-        if compression.is_none() {
-            cmd.arg("--compress");
-        }
 
         Ok(cmd)
     }

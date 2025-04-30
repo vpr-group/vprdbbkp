@@ -79,7 +79,6 @@ impl DbAdapter for MariaDB {
                 self.port,
                 self.username.as_str(),
                 password_ref,
-                compression,
             )
             .await?;
 
@@ -87,7 +86,20 @@ impl DbAdapter for MariaDB {
     }
 
     async fn restore(&self, dump_data: Bytes, compressed: bool, drop_database: bool) -> Result<()> {
+        let password_ref = self.password.as_deref();
         let tools = self.get_tools().await?;
+        tools
+            .restore(
+                self.database.as_str(),
+                self.host.as_str(),
+                self.port,
+                self.username.as_str(),
+                password_ref,
+                dump_data,
+                drop_database,
+            )
+            .await?;
+
         Ok(())
     }
 }
