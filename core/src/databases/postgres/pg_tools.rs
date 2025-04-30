@@ -1,6 +1,7 @@
 use super::pg_utils::get_postgres_base_directory;
-use super::pg_versions::{PostgresVersion, DEFAULT_POSTGRES_VERSION};
+use super::version::{PostgreSQLVersion, DEFAULT_POSTGRES_VERSION};
 use crate::databases::postgres::pg_installer::PgInstaller;
+use crate::databases::DbVersion;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 use bytes::Bytes;
@@ -12,11 +13,11 @@ use tokio::process::Command;
 
 pub struct PgTools {
     cache_dir: PathBuf,
-    version: PostgresVersion,
+    version: PostgreSQLVersion,
 }
 
 impl PgTools {
-    pub fn new(version: PostgresVersion) -> Result<Self> {
+    pub fn new(version: PostgreSQLVersion) -> Result<Self> {
         let cache_dir = dirs::cache_dir()
             .unwrap_or_else(|| env::temp_dir())
             .join("pg_tools_cache");
@@ -153,7 +154,7 @@ impl PgTools {
         port: u16,
         username: &str,
         password: Option<&str>,
-    ) -> Result<PostgresVersion> {
+    ) -> Result<PostgreSQLVersion> {
         let mut cmd = self.get_psql_command().await?;
 
         // Add connection parameters
@@ -191,7 +192,7 @@ impl PgTools {
         let version = match PgTools::extract_postgres_version(&string_version) {
             Some((major, minor)) => {
                 let version_str = format!("{}", major);
-                match PostgresVersion::from_str(&version_str) {
+                match PostgreSQLVersion::from_str(&version_str) {
                     Some(version) => version,
                     None => {
                         return Err(anyhow!(
@@ -807,7 +808,7 @@ mod tests {
         initialize_test();
         let pg_tools = PgTools::default().expect("Failed to initialize PgTools");
         assert!(pg_tools.cache_dir.exists());
-        assert_eq!(pg_tools.version, PostgresVersion::V15);
+        assert_eq!(pg_tools.version, PostgreSQLVersion::V15);
     }
 
     #[tokio::test]
@@ -831,7 +832,7 @@ mod tests {
             .await
             .expect("Failed to get postgres version");
 
-        assert_eq!(version, PostgresVersion::V17);
+        assert_eq!(version, PostgreSQLVersion::V17);
     }
 
     #[tokio::test]

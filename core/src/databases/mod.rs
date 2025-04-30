@@ -22,6 +22,13 @@ pub trait DbAdapter: Send + Sync {
     async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()>;
 }
 
+pub trait DbVersion: Send + Sync + Sized {
+    fn as_str(&self) -> &'static str;
+    fn from_str(version: &str) -> Option<Self>;
+    fn from_version_tuple(major: u32, minor: u32, _patch: u32) -> Option<Self>;
+    fn parse_string_version(version_string: &str) -> Option<Self>;
+}
+
 pub fn get_db_adapter<B>(source_config: B) -> Box<dyn DbAdapter>
 where
     B: Borrow<SourceConfig>,

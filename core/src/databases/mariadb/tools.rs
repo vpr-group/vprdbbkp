@@ -1,3 +1,5 @@
+use crate::databases::DbVersion;
+
 use super::commands::CommandBuilder;
 use super::version::{MariaDBVersion, DEFAULT_MARIADB_VERSION};
 use anyhow::anyhow;

@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use crate::utils::{copy_dir_all, get_arch, get_os};
+use crate::{
+    databases::DbVersion,
+    utils::{copy_dir_all, get_arch, get_os},
+};
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use flate2::read::GzDecoder;

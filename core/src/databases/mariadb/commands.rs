@@ -1,3 +1,5 @@
+use crate::databases::DbVersion;
+
 use super::{installer::MariaDBInstaller, version::MariaDBVersion};
 use anyhow::{anyhow, Result};
 use std::{env, fs, path::PathBuf};

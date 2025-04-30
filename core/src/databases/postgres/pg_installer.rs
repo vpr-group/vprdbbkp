@@ -1,4 +1,6 @@
-use super::pg_versions::{PostgresVersion, DEFAULT_POSTGRES_VERSION};
+use crate::databases::DbVersion;
+
+use super::version::{PostgreSQLVersion, DEFAULT_POSTGRES_VERSION};
 use anyhow::anyhow;
 use anyhow::Ok;
 use anyhow::Result;
@@ -12,12 +14,12 @@ use tokio::fs;
 use tokio::process::Command;
 
 pub struct PgInstaller {
-    version: PostgresVersion,
+    version: PostgreSQLVersion,
     s3_bucket_url: String,
 }
 
 impl PgInstaller {
-    pub fn new(version: PostgresVersion) -> Self {
+    pub fn new(version: PostgreSQLVersion) -> Self {
         PgInstaller { version, s3_bucket_url: "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/postgres".into() }
     }
 

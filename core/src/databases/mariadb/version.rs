@@ -3,6 +3,8 @@ use std::str::FromStr;
 
 use regex::Regex;
 
+use crate::databases::DbVersion;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MariaDBVersion {
     V10_5,
@@ -14,8 +16,8 @@ pub enum MariaDBVersion {
 
 pub const DEFAULT_MARIADB_VERSION: MariaDBVersion = MariaDBVersion::V11_4;
 
-impl MariaDBVersion {
-    pub fn as_str(&self) -> &'static str {
+impl DbVersion for MariaDBVersion {
+    fn as_str(&self) -> &'static str {
         match self {
             Self::V11_4 => "11.4",
             Self::V11_7 => "11.7",
@@ -25,7 +27,7 @@ impl MariaDBVersion {
         }
     }
 
-    pub fn from_str(version: &str) -> Option<Self> {
+    fn from_str(version: &str) -> Option<Self> {
         if version.starts_with("10.5") {
             Some(Self::V10_5)
         } else if version.starts_with("10.6") {
@@ -41,7 +43,7 @@ impl MariaDBVersion {
         }
     }
 
-    pub fn from_version_tuple(major: u32, minor: u32, _patch: u32) -> Option<Self> {
+    fn from_version_tuple(major: u32, minor: u32, _patch: u32) -> Option<Self> {
         match (major, minor) {
             (10, 5) => Some(Self::V10_5),
             (10, 6) => Some(Self::V10_6),
@@ -52,7 +54,7 @@ impl MariaDBVersion {
         }
     }
 
-    pub fn parse_string_version(version_string: &str) -> Option<MariaDBVersion> {
+    fn parse_string_version(version_string: &str) -> Option<Self> {
         let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)").ok()?;
         let captures = re.captures(version_string)?;
 
@@ -74,6 +76,7 @@ impl FromStr for MariaDBVersion {
     type Err = String;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Self::from_str(s).ok_or_else(|| format!("Unsupported MariaDB version: {}", s))
+        <MariaDBVersion as DbVersion>::from_str(s)
+            .ok_or_else(|| format!("Unsupported MariaDB version: {}", s))
     }
 }

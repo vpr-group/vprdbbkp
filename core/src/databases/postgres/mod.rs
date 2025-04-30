@@ -5,10 +5,11 @@ use pg_tools::PgTools;
 
 use super::DbAdapter;
 
+pub mod commands;
 pub mod pg_installer;
 pub mod pg_tools;
 pub mod pg_utils;
-pub mod pg_versions;
+pub mod version;
 
 pub struct PostgreSQL {
     database: String,
