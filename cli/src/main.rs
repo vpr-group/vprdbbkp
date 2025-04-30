@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
                 (args.compression, args.source.source_type.as_str())
             {
                 let db_adapter = get_db_adapter(&source_config);
-                let bytes = db_adapter.dump(Some(comp_level)).await?;
+                let bytes = db_adapter.dump().await?;
                 let storage = Storage::new(&storage_config).await?;
                 let filename = get_filename(&source_config);
                 let path = storage.write(&filename, bytes).await?;

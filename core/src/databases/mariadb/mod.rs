@@ -69,7 +69,7 @@ impl DbAdapter for MariaDB {
         Ok(is_connected)
     }
 
-    async fn dump(&self, compression: Option<u8>) -> Result<Bytes> {
+    async fn dump(&self) -> Result<Bytes> {
         let password_ref = self.password.as_deref();
         let tools = self.get_tools().await?;
         let output = tools
@@ -85,7 +85,7 @@ impl DbAdapter for MariaDB {
         Ok(output)
     }
 
-    async fn restore(&self, dump_data: Bytes, compressed: bool, drop_database: bool) -> Result<()> {
+    async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()> {
         let password_ref = self.password.as_deref();
         let tools = self.get_tools().await?;
         tools

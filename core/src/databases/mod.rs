@@ -18,8 +18,8 @@ pub mod postgres;
 #[async_trait]
 pub trait DbAdapter: Send + Sync {
     async fn is_connected(&self) -> Result<bool>;
-    async fn dump(&self, compression: Option<u8>) -> Result<Bytes>;
-    async fn restore(&self, dump_data: Bytes, compressed: bool, drop_database: bool) -> Result<()>;
+    async fn dump(&self) -> Result<Bytes>;
+    async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()>;
 }
 
 pub fn get_db_adapter<B>(source_config: B) -> Box<dyn DbAdapter>
@@ -81,7 +81,7 @@ where
     let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
 
     let db_adapter = get_db_adapter(&source_config);
-    let bytes = db_adapter.dump(Some(8)).await?;
+    let bytes = db_adapter.dump().await?;
 
     if let Some(mut tunnel) = tunnel {
         tunnel.close_tunnel().await?;
@@ -101,7 +101,7 @@ where
     let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
 
     let db_adapter = get_db_adapter(&source_config);
-    db_adapter.restore(dump_data, true, drop_database).await?;
+    db_adapter.restore(dump_data, drop_database).await?;
 
     if let Some(mut tunnel) = tunnel {
         tunnel.close_tunnel().await?;

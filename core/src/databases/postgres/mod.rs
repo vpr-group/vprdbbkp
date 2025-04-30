@@ -71,7 +71,7 @@ impl DbAdapter for PostgreSQL {
         Ok(is_connected)
     }
 
-    async fn dump(&self, compression: Option<u8>) -> Result<Bytes> {
+    async fn dump(&self) -> Result<Bytes> {
         let tools = self.get_tools().await?;
         let password_ref = self.password.as_deref();
 
@@ -82,14 +82,14 @@ impl DbAdapter for PostgreSQL {
                 self.port,
                 self.username.as_str(),
                 password_ref,
-                compression,
+                None,
             )
             .await?;
 
         Ok(output)
     }
 
-    async fn restore(&self, dump_data: Bytes, compressed: bool, drop_database: bool) -> Result<()> {
+    async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()> {
         let tools = self.get_tools().await?;
         let password_ref = self.password.as_deref();
 
@@ -101,7 +101,7 @@ impl DbAdapter for PostgreSQL {
                 self.username.as_str(),
                 password_ref,
                 dump_data,
-                compressed,
+                false,
                 drop_database,
             )
             .await?;

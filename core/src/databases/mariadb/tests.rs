@@ -123,7 +123,7 @@ mod tests {
     async fn test_02_dump() {
         initialize_test().await;
         let mariadb = get_mariadb().expect("Failed to construct MariaDB adapter");
-        let bytes = mariadb.dump(None).await.expect("Unable to create a dump");
+        let bytes = mariadb.dump().await.expect("Unable to create a dump");
 
         assert!(bytes.len() > 0);
     }
@@ -205,7 +205,7 @@ mod tests {
         );
 
         let mariadb = get_mariadb().expect("Failed to construct MariaDB adapter");
-        let bytes = mariadb.dump(None).await.expect("Unable to create a dump");
+        let bytes = mariadb.dump().await.expect("Unable to create a dump");
 
         assert!(bytes.len() > 0);
 
@@ -231,7 +231,7 @@ mod tests {
 
         // Restore database
         mariadb
-            .restore(bytes, false, true)
+            .restore(bytes, true)
             .await
             .expect("Failed to restore database");
 
