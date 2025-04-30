@@ -102,6 +102,21 @@ impl MariaDBTools {
         }
     }
 
+    pub async fn get_connection(
+        &self,
+        database: &str,
+        host: &str,
+        port: u16,
+        username: &str,
+        password: Option<&str>,
+    ) -> Result<Command> {
+        let cmd_builder =
+            CommandBuilder::new(self.version, database, host, port, username, password)?;
+        let cmd = cmd_builder.build_connection_command().await?;
+
+        Ok(cmd)
+    }
+
     pub async fn dump(
         &self,
         database: &str,

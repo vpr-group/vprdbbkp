@@ -129,4 +129,15 @@ impl CommandBuilder {
 
         Ok(cmd)
     }
+
+    pub async fn build_connection_command(&self) -> Result<Command> {
+        let mut cmd = self.build_base_cmd("mariadb").await?;
+
+        cmd.arg(&self.database)
+            .arg("--batch") // Output results in tab-separated format
+            .arg("--skip-column-names")
+            .arg("-e");
+
+        Ok(cmd)
+    }
 }
