@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
-use std::borrow::Borrow;
+use std::{borrow::Borrow, path::Path};
 use uuid::Uuid;
 
 use crate::databases::configs::SourceConfig;
@@ -27,24 +27,32 @@ pub fn slugify(input: &str) -> String {
     slug.to_string()
 }
 
-pub fn get_filename<B>(backup_source_config: B) -> String
+pub fn get_source_name<B>(source_config: B) -> String
 where
     B: Borrow<SourceConfig>,
 {
+    match source_config.borrow() {
+        SourceConfig::PG(config) => {
+            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
+        }
+        SourceConfig::MariaDB(config) => {
+            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
+        }
+    }
+}
+
+pub fn get_filename<B>(source_config: B) -> String
+where
+    B: Borrow<SourceConfig>,
+{
+    let borrowed_source_config = source_config.borrow();
     let now = Utc::now();
     let date_str = now.format("%Y-%m-%d-%H%M%S");
     let uuid_string = Uuid::new_v4().to_string();
     let uuid = uuid_string.split('-').next().unwrap_or("backup");
+    let source_name = get_source_name(borrowed_source_config);
 
-    match backup_source_config.borrow() {
-        SourceConfig::PG(config) => format!(
-            "{}-{}-{}-{}.gz",
-            slugify(&config.name),
-            slugify(&config.database),
-            date_str,
-            uuid
-        ),
-    }
+    format!("{}-{}-{}.tar.gz", source_name, date_str, uuid)
 }
 
 pub fn extract_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>> {
@@ -122,4 +130,62 @@ pub fn format_timestamp(timestamp: &str) -> String {
 
     // If we couldn't parse the timestamp in a known format, return it as is
     timestamp.to_string()
+}
+
+pub fn get_arch() -> Result<String> {
+    // Get system architecture using std
+    let arch = std::env::consts::ARCH;
+
+    // Map architecture to PostgreSQL download architecture
+    let result = match arch {
+        "x86_64" => "x86_64",
+        "amd64" => "x86_64",
+        "aarch64" => "arm64",
+        "arm64" => "arm64",
+        _ => return Err(anyhow!("Unsupported architecture: {}", arch)),
+    };
+
+    Ok(result.into())
+}
+
+pub fn get_os() -> Result<String> {
+    // Get operating system info
+    let info = os_info::get();
+
+    // Determine OS type
+    let os = match info.os_type() {
+        os_info::Type::Linux => "linux",
+        os_info::Type::Ubuntu => "linux",
+        os_info::Type::Debian => "linux",
+        os_info::Type::Fedora => "linux",
+        os_info::Type::Redhat => "linux",
+        os_info::Type::CentOS => "linux",
+        os_info::Type::Alpine => "linux",
+        os_info::Type::Mint => "linux",
+        os_info::Type::Arch => "linux",
+        os_info::Type::Windows => "windows",
+        os_info::Type::Macos => "macos",
+        _ => {
+            return Err(anyhow!(
+                "Unsupported operating system: {:?}",
+                info.os_type()
+            ))
+        }
+    };
+
+    Ok(os.into())
+}
+
+pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<()> {
+    std::fs::create_dir_all(&dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            std::fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }

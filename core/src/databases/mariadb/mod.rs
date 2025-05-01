@@ -1,17 +1,17 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use tools::PostgreSQLTools;
+use tools::MariaDBTools;
 
 use super::DbAdapter;
 
 pub mod commands;
 pub mod installer;
-mod tests;
+pub mod tests;
 pub mod tools;
 pub mod version;
 
-pub struct PostgreSQL {
+pub struct MariaDB {
     database: String,
     host: String,
     port: u16,
@@ -19,7 +19,7 @@ pub struct PostgreSQL {
     password: Option<String>,
 }
 
-impl PostgreSQL {
+impl MariaDB {
     pub fn new(
         database: &str,
         host: &str,
@@ -27,7 +27,7 @@ impl PostgreSQL {
         username: &str,
         password: Option<&str>,
     ) -> Self {
-        PostgreSQL {
+        MariaDB {
             database: database.into(),
             host: host.into(),
             port,
@@ -36,30 +36,26 @@ impl PostgreSQL {
         }
     }
 
-    pub async fn get_tools(&self) -> Result<PostgreSQLTools> {
-        let mut tools = PostgreSQLTools::default()?;
+    pub async fn get_tools(&self) -> Result<MariaDBTools> {
         let password_ref = self.password.as_deref();
-        let version = tools
-            .get_version(
-                self.database.as_str(),
-                self.host.as_str(),
-                self.port,
-                self.username.as_str(),
-                password_ref,
-            )
-            .await?;
-
-        tools = PostgreSQLTools::new(version)?;
+        let tools = MariaDBTools::with_detected_version(
+            self.database.as_str(),
+            self.host.as_str(),
+            self.port,
+            self.username.as_str(),
+            password_ref,
+        )
+        .await?;
 
         Ok(tools)
     }
 }
 
 #[async_trait]
-impl DbAdapter for PostgreSQL {
+impl DbAdapter for MariaDB {
     async fn is_connected(&self) -> Result<bool> {
-        let tools = self.get_tools().await?;
         let password_ref = self.password.as_deref();
+        let tools = self.get_tools().await?;
         let is_connected = tools
             .is_connected(
                 self.database.as_str(),
@@ -74,9 +70,8 @@ impl DbAdapter for PostgreSQL {
     }
 
     async fn dump(&self) -> Result<Bytes> {
-        let tools = self.get_tools().await?;
         let password_ref = self.password.as_deref();
-
+        let tools = self.get_tools().await?;
         let output = tools
             .dump(
                 self.database.as_str(),
@@ -91,9 +86,8 @@ impl DbAdapter for PostgreSQL {
     }
 
     async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()> {
-        let tools = self.get_tools().await?;
         let password_ref = self.password.as_deref();
-
+        let tools = self.get_tools().await?;
         tools
             .restore(
                 self.database.as_str(),

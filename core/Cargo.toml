@@ -31,4 +31,6 @@ tar = "0.4"
 os_info = "3.7"
 flate2 = "1.0"
 env_logger = "0.10"
+async-trait = "0.1.88"
+serial_test = "2.0.0"
 

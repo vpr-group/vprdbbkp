@@ -1,16 +1,55 @@
 use std::{borrow::Borrow, time::Duration};
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use bytes::Bytes;
 use configs::SourceConfig;
-use postgres::{backup_postgres, is_postgres_connected, restore_postgres};
+use mariadb::MariaDB;
+use postgres::PostgreSQL;
 use tokio::time::timeout;
 
 use crate::tunnel::Tunnel;
 
 pub mod configs;
+pub mod mariadb;
 pub mod mysql;
 pub mod postgres;
+
+#[async_trait]
+pub trait DbAdapter: Send + Sync {
+    async fn is_connected(&self) -> Result<bool>;
+    async fn dump(&self) -> Result<Bytes>;
+    async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()>;
+}
+
+pub trait DbVersion: Send + Sync + Sized {
+    fn as_str(&self) -> &'static str;
+    fn from_str(version: &str) -> Option<Self>;
+    fn from_version_tuple(major: u32, minor: u32, _patch: u32) -> Option<Self>;
+    fn parse_string_version(version_string: &str) -> Option<Self>;
+}
+
+pub fn get_db_adapter<B>(source_config: B) -> Box<dyn DbAdapter>
+where
+    B: Borrow<SourceConfig>,
+{
+    match source_config.borrow() {
+        SourceConfig::PG(config) => Box::new(PostgreSQL::new(
+            &config.database,
+            &config.host,
+            config.port,
+            &config.username,
+            Some(config.password.as_deref().unwrap_or("")),
+        )),
+        SourceConfig::MariaDB(config) => Box::new(MariaDB::new(
+            &config.database,
+            &config.host,
+            config.port,
+            &config.username,
+            Some(config.password.as_deref().unwrap_or("")),
+        )),
+    }
+}
 
 pub async fn get_source_config_with_tunnel<B>(
     source_config: B,
@@ -21,108 +60,74 @@ where
     let borrowed_config = source_config.borrow();
     let cloned_config = borrowed_config.clone();
 
-    match borrowed_config {
-        SourceConfig::PG(config) => {
-            if let Some(tunnel_config) = &config.tunnel_config {
-                if tunnel_config.use_tunnel {
-                    let mut tunnel = Tunnel::new(tunnel_config.clone());
-                    tunnel.establish_tunnel(&cloned_config).await?;
-                    let new_source_config = tunnel.get_tunneled_config(&cloned_config);
+    let tunnel_config = match borrowed_config {
+        SourceConfig::PG(config) => config.tunnel_config.clone(),
+        SourceConfig::MariaDB(config) => config.tunnel_config.clone(),
+    };
 
-                    return match new_source_config {
-                        Some(source_config) => Ok((source_config, Some(tunnel))),
-                        None => Err(anyhow!("Unable to get a tunneled config for this source")),
-                    };
-                }
-            }
+    if let Some(tunnel_config) = tunnel_config {
+        if tunnel_config.use_tunnel {
+            let mut tunnel = Tunnel::new(tunnel_config.clone());
+            tunnel.establish_tunnel(&cloned_config).await?;
+            let new_source_config = tunnel.get_tunneled_config(&cloned_config);
+
+            return match new_source_config {
+                Some(source_config) => Ok((source_config, Some(tunnel))),
+                None => Err(anyhow!("Unable to get a tunneled config for this source")),
+            };
         }
     }
 
     Ok((cloned_config, None))
 }
 
-pub async fn backup_source<B>(source_config: B) -> Result<Bytes>
+pub async fn backup<B>(source_config: B) -> Result<Bytes>
 where
     B: Borrow<SourceConfig>,
 {
     let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
 
-    match source_config {
-        SourceConfig::PG(config) => {
-            let bytes = backup_postgres(
-                &config.database,
-                &config.host,
-                config.port,
-                &config.username,
-                Some(config.password.as_deref().unwrap_or("")),
-                Some(8),
-            )
-            .await?;
+    let db_adapter = get_db_adapter(&source_config);
+    let bytes = db_adapter.dump().await?;
 
-            if let Some(mut tunnel) = tunnel {
-                tunnel.close_tunnel().await?;
-            }
-
-            Ok(bytes)
-        }
+    if let Some(mut tunnel) = tunnel {
+        tunnel.close_tunnel().await?;
     }
+
+    Ok(bytes)
 }
 
-pub async fn restore_source<B>(
-    source_config: B,
-    dump_data: Bytes,
-    drop_database: bool,
-) -> Result<()>
+pub async fn restore<B>(source_config: B, dump_data: Bytes, drop_database: bool) -> Result<()>
 where
     B: Borrow<SourceConfig>,
 {
     let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
 
-    match source_config {
-        SourceConfig::PG(config) => {
-            restore_postgres(
-                &config.database,
-                &config.host,
-                config.port,
-                &config.username,
-                Some(config.password.as_deref().unwrap_or("")),
-                dump_data,
-                true,
-                drop_database,
-            )
-            .await?;
+    let db_adapter = get_db_adapter(&source_config);
+    db_adapter.restore(dump_data, drop_database).await?;
 
-            if let Some(mut tunnel) = tunnel {
-                tunnel.close_tunnel().await?;
-            }
-
-            Ok(())
-        }
+    if let Some(mut tunnel) = tunnel {
+        tunnel.close_tunnel().await?;
     }
+
+    Ok(())
 }
 
-pub async fn is_database_connected<B>(source_config: B) -> Result<bool>
+pub async fn is_connected<B>(source_config: B) -> Result<bool>
 where
     B: Borrow<SourceConfig>,
 {
     match timeout(Duration::from_secs(5), async {
         let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
-        match source_config.borrow() {
-            SourceConfig::PG(config) => {
-                let is_connected = is_postgres_connected(
-                    &config.database,
-                    &config.host,
-                    config.port,
-                    &config.username,
-                    Some(config.password.as_deref().unwrap_or("")),
-                )
-                .await?;
-                if let Some(mut tunnel) = tunnel {
-                    tunnel.close_tunnel().await?;
-                }
-                Ok(is_connected)
-            }
+
+        let db_adapter = get_db_adapter(&source_config);
+        let is_connected = db_adapter.is_connected().await?;
+
+        if let Some(mut tunnel) = tunnel {
+            tunnel.close_tunnel().await?;
         }
+
+        Ok(is_connected)
     })
     .await
     {

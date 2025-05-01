@@ -1,0 +1,104 @@
+name: Rust Tests
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+env:
+  CARGO_TERM_COLOR: always
+  POSTGRES_DB: postgres_database
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres_password
+  MYSQL_ROOT_PASSWORD: mariadb_root_password
+  MYSQL_USER: mariadb_user
+  MYSQL_PASSWORD: mariadb_password
+  MYSQL_DATABASE: customers
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
+          MYSQL_USER: ${{ env.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ env.MYSQL_PASSWORD }}
+          MYSQL_DATABASE: ${{ env.MYSQL_DATABASE }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -pmariadb_root_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libwebkit2gtk-4.1-dev \
+            libsoup-3.0-dev
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-tests-${{ hashFiles('cli/Cargo.lock', 'cli/Cargo.toml', 'core/Cargo.lock', 'core/Cargo.toml') }}
+
+      - name: Check formatting for
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose
+        env:
+          MARIADB_HOST: localhost
+          MARIADB_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
+          MARIADB_USERNAME: root
+          MARIADB_NAME: ${{ env.MYSQL_DATABASE }}
+          MARIADB_PORT: 3306
+          POSTGRESQL_HOST: localhost
+          POSTGRESQL_USERNAME: ${{ env.POSTGRES_USER }}
+          POSTGRESQL_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRESQL_NAME: ${{ env.POSTGRES_DB }}
+          POSTGRESQL_PORT: 5432

@@ -4,6 +4,10 @@ version = "1.5.0"
 edition = "2021"
 description = "CLI for DB backup and restore"
 
+[[bin]]
+name = "cli"
+path = "src/main.rs"
+
 [profile.release]
 opt-level = "z"         # Optimize for size
 lto = true              # Enable Link Time Optimization
@@ -17,3 +21,11 @@ anyhow = "1.0"
 vprs3bkp-core = { path = "../core" }
 clap = { version = "4.3", features = ["derive", "env"] }
 tokio = { version = "1.28", default-features = false, features = ["rt-multi-thread", "macros", "fs", "io-util"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.3"
+serial_test = "2.0.0"
+regex = "1.8"
+dotenv = "0.15"

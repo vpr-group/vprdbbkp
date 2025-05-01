@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 
 pub mod mysql_docker;
 pub mod mysql_restore;
+pub mod mysql_versions;
 
 /// Get the local mysqldump version
 fn get_local_mysqldump_version() -> Result<(u32, u32)> {

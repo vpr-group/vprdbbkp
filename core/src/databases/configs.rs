@@ -18,6 +18,18 @@ pub struct PGSourceConfig {
     pub tunnel_config: Option<TunnelConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MariaDBSourceConfig {
+    pub name: String,
+    pub database: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: Option<String>,
+    pub tunnel_config: Option<TunnelConfig>,
+}
+
 impl BaseSourceConfig for PGSourceConfig {
     fn name(&self) -> &str {
         &self.name
@@ -29,4 +41,6 @@ impl BaseSourceConfig for PGSourceConfig {
 pub enum SourceConfig {
     #[serde(rename = "pg")]
     PG(PGSourceConfig),
+    #[serde(rename = "mariadb")]
+    MariaDB(MariaDBSourceConfig),
 }
