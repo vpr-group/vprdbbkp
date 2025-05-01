@@ -8,7 +8,6 @@ use anyhow::Result;
 pub mod common;
 pub mod databases;
 pub mod folders;
-pub mod platform;
 pub mod storage;
 mod tests;
 pub mod tunnel;
