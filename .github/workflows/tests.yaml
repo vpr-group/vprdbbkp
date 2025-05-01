@@ -1,4 +1,4 @@
-name: Rust Core Tests
+name: Rust Tests
 on:
   push:
     branches: ["main"]
@@ -15,7 +15,7 @@ env:
   MYSQL_DATABASE: customers
 jobs:
   test:
-    name: Test Core Crate
+    name: Test
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -73,22 +73,24 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            ./core/target
-          key: ${{ runner.os }}-cargo-core-${{ hashFiles('core/Cargo.lock', 'core/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-tests-${{ hashFiles('cli/Cargo.lock', 'cli/Cargo.toml', 'core/Cargo.lock', 'core/Cargo.toml') }}
 
-      - name: Check formatting for core
+      - name: Check formatting for
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-          working-directory: ./core
 
-      - name: Run tests for core crate
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --verbose
-          working-directory: ./core
         env:
           MARIADB_HOST: localhost
           MARIADB_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
