@@ -1,4 +1,7 @@
-use std::borrow::Borrow;
+use std::{
+    borrow::Borrow,
+    io::{Cursor, Read},
+};
 
 use anyhow::Result;
 
@@ -7,14 +10,26 @@ pub mod databases;
 pub mod folders;
 pub mod platform;
 pub mod storage;
+mod tests;
 pub mod tunnel;
 
-use databases::{backup_source, configs::SourceConfig, restore_source};
-use opendal::Entry;
-
+use bytes::Bytes;
+use chrono::Utc;
 pub use common::get_backup_key;
-use common::get_filename;
+use common::{get_filename, get_source_name};
+use databases::configs::SourceConfig;
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use opendal::Entry;
 use storage::{configs::StorageConfig, storage::Storage};
+use tar::{Archive, Builder, Header};
+
+pub async fn is_connected<SO>(source_config: SO) -> Result<bool>
+where
+    SO: Borrow<SourceConfig>,
+{
+    let is_connected = databases::is_connected(source_config.borrow()).await?;
+    Ok(is_connected)
+}
 
 pub async fn backup<SO, ST>(source_config: SO, storage_config: ST) -> Result<String>
 where
@@ -24,10 +39,33 @@ where
     let borrowed_source_config = source_config.borrow();
     let borrowed_storage_config = storage_config.borrow();
 
-    let bytes = backup_source(borrowed_source_config).await?;
+    let bytes = databases::backup(borrowed_source_config).await?;
+
+    // Compress bytes
+    let source_name = get_source_name(borrowed_source_config);
+    let filename = get_filename(borrowed_source_config);
+
+    let internal_filename = format!("backup_{}.sql", source_name);
+
+    let cursor = Cursor::new(Vec::new());
+    let encoder = GzEncoder::new(cursor, Compression::default());
+    let mut builder = Builder::new(encoder);
+
+    let mut header = Header::new_gnu();
+    header.set_size(bytes.len() as u64);
+    header.set_mode(0o644);
+    header.set_mtime(Utc::now().timestamp() as u64);
+
+    builder.append_data(&mut header, &internal_filename, Cursor::new(bytes.to_vec()))?;
+
+    let encoder = builder.into_inner()?;
+    let compressed_data = encoder.finish()?;
+    let compressed_bytes = Bytes::from(compressed_data.into_inner());
+
+    // Write compressed bytes to storage
     let storage = Storage::new(borrowed_storage_config).await?;
-    let filename = get_filename(source_config);
-    let path = storage.write(&filename, bytes).await?;
+    let path = storage.write(&filename, compressed_bytes).await?;
+
     Ok(path)
 }
 
@@ -46,7 +84,43 @@ where
 
     let storage = Storage::new(borrowed_storage_config).await?;
     let bytes = storage.read(filename).await?;
-    restore_source(borrowed_source_config, bytes, drop_database).await?;
+
+    let cursor = std::io::Cursor::new(bytes);
+    let gz_decoder = GzDecoder::new(cursor);
+    let mut archive = Archive::new(gz_decoder);
+
+    let mut extracted_content = Vec::new();
+    let mut found_file = false;
+
+    for entry in archive.entries()? {
+        let mut file = entry?;
+
+        if file.header().entry_type().is_dir() {
+            continue;
+        }
+
+        let path = file.path()?;
+        let extension = match path.extension() {
+            Some(extension) => extension.to_str().unwrap_or(""),
+            None => "",
+        };
+
+        if extension == "sql" {
+            file.read_to_end(&mut extracted_content)?;
+            found_file = true;
+
+            break;
+        }
+    }
+
+    if !found_file {
+        return Err(anyhow::anyhow!("No valid backup file found in the archive"));
+    }
+
+    let decompressed_bytes = Bytes::from(extracted_content);
+
+    databases::restore(borrowed_source_config, decompressed_bytes, drop_database).await?;
+
     Ok(())
 }
 
@@ -72,126 +146,4 @@ where
     let storage = Storage::new(borrowed_storage_config).await?;
     let result = storage.cleanup(retention_days, dry_run).await?;
     Ok(result)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::env;
-
-    use crate::{databases::configs::PGSourceConfig, storage::configs::S3StorageConfig};
-    use dotenv::dotenv;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_backup() {
-        dotenv().ok();
-
-        let storage_config = StorageConfig::S3(S3StorageConfig {
-            access_key: env::var("S3_ACCESS_KEY").unwrap_or_default(),
-            secret_key: env::var("S3_SECRET_KEY").unwrap_or_default(),
-            bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
-            endpoint: env::var("S3_ENDPOINT")
-                .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string()),
-            region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
-            name: env::var("S3_CONFIG_NAME").unwrap_or_else(|_| "s3-test".to_string()),
-            prefix: Some(env::var("S3_PREFIX").unwrap_or_default()),
-        });
-
-        let source_config = SourceConfig::PG(PGSourceConfig {
-            name: "test".into(),
-            database: "api".into(),
-            host: "localhost".into(),
-            port: 5432,
-            username: "postgres".into(),
-            password: Some("postgres".into()),
-            tunnel_config: None,
-        });
-
-        let dump_path = backup(&source_config, &storage_config)
-            .await
-            .expect("Failed to backup");
-
-        let entries = list(&storage_config).await.expect("Failed to list");
-        let entry = entries.iter().find(|entry| entry.path() == dump_path);
-
-        assert!(entry.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_restore() {
-        dotenv().ok();
-
-        let storage_config = StorageConfig::S3(S3StorageConfig {
-            access_key: env::var("S3_ACCESS_KEY").unwrap_or_default(),
-            secret_key: env::var("S3_SECRET_KEY").unwrap_or_default(),
-            bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
-            endpoint: env::var("S3_ENDPOINT")
-                .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string()),
-            region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
-            name: env::var("S3_CONFIG_NAME").unwrap_or_else(|_| "s3-test".to_string()),
-            prefix: Some(env::var("S3_PREFIX").unwrap_or_default()),
-        });
-
-        let source_config = SourceConfig::PG(PGSourceConfig {
-            name: "test".into(),
-            database: "api".into(),
-            host: "localhost".into(),
-            port: 5432,
-            username: "postgres".into(),
-            password: Some("Gwt2tmrGtN4OZ3oL577E".into()),
-            tunnel_config: None,
-        });
-
-        let filename = "test-api-2025-03-15-100759-1853fe65.gz";
-
-        restore(&source_config, &storage_config, &filename, true)
-            .await
-            .expect("Unable to restore")
-    }
-
-    #[tokio::test]
-    async fn test_e2e_backup_restore() {
-        dotenv().ok();
-
-        let storage_config = StorageConfig::S3(S3StorageConfig {
-            access_key: env::var("S3_ACCESS_KEY").unwrap_or_default(),
-            secret_key: env::var("S3_SECRET_KEY").unwrap_or_default(),
-            bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
-            endpoint: env::var("S3_ENDPOINT")
-                .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string()),
-            region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
-            name: env::var("S3_CONFIG_NAME").unwrap_or_else(|_| "s3-test".to_string()),
-            prefix: Some(env::var("S3_PREFIX").unwrap_or_default()),
-        });
-
-        let source_config = SourceConfig::PG(PGSourceConfig {
-            name: "test".into(),
-            database: "api".into(),
-            host: "localhost".into(),
-            port: 5432,
-            username: "postgres".into(),
-            password: Some("postgres".into()),
-            tunnel_config: None,
-        });
-
-        let dump_path = backup(&source_config, &storage_config)
-            .await
-            .expect("Failed to backup");
-
-        let entries = list(&storage_config).await.expect("Failed to list");
-        let entry = entries.iter().find(|entry| entry.path() == dump_path);
-
-        assert!(entry.is_some());
-
-        let storage = Storage::new(&storage_config)
-            .await
-            .expect("Unable to create storage");
-
-        let filename = storage.get_filename_from_path(&dump_path);
-
-        restore(&source_config, &storage_config, &filename, true)
-            .await
-            .expect("Unable to restore")
-    }
 }

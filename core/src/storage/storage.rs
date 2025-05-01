@@ -89,7 +89,11 @@ impl Storage {
 
     pub async fn write(&self, filename: &str, bytes: Bytes) -> Result<String> {
         let prefix = self.get_prefix();
-        let path = format!("{}/{}", prefix, filename);
+        let path = if prefix.is_empty() {
+            filename.into()
+        } else {
+            format!("{}/{}", prefix, filename)
+        };
 
         self.operator
             .write(&path, bytes)

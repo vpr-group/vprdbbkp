@@ -27,31 +27,32 @@ pub fn slugify(input: &str) -> String {
     slug.to_string()
 }
 
-pub fn get_filename<B>(backup_source_config: B) -> String
+pub fn get_source_name<B>(source_config: B) -> String
 where
     B: Borrow<SourceConfig>,
 {
+    match source_config.borrow() {
+        SourceConfig::PG(config) => {
+            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
+        }
+        SourceConfig::MariaDB(config) => {
+            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
+        }
+    }
+}
+
+pub fn get_filename<B>(source_config: B) -> String
+where
+    B: Borrow<SourceConfig>,
+{
+    let borrowed_source_config = source_config.borrow();
     let now = Utc::now();
     let date_str = now.format("%Y-%m-%d-%H%M%S");
     let uuid_string = Uuid::new_v4().to_string();
     let uuid = uuid_string.split('-').next().unwrap_or("backup");
+    let source_name = get_source_name(borrowed_source_config);
 
-    match backup_source_config.borrow() {
-        SourceConfig::PG(config) => format!(
-            "{}-{}-{}-{}.gz",
-            slugify(&config.name),
-            slugify(&config.database),
-            date_str,
-            uuid
-        ),
-        SourceConfig::MariaDB(config) => format!(
-            "{}-{}-{}-{}.gz",
-            slugify(&config.name),
-            slugify(&config.database),
-            date_str,
-            uuid
-        ),
-    }
+    format!("{}-{}-{}.tar.gz", source_name, date_str, uuid)
 }
 
 pub fn extract_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>> {

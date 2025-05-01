@@ -2,7 +2,7 @@ use crate::utils::serializable_entry::{entries_to_serializable, SerializableEntr
 use log::info;
 use serde::{Deserialize, Serialize};
 use vprs3bkp_core::{
-    databases::{configs::SourceConfig, is_database_connected},
+    databases::{configs::SourceConfig, is_connected},
     storage::configs::StorageConfig,
 };
 
@@ -51,7 +51,7 @@ pub async fn restore(
 pub async fn verify_connection(
     source_config: SourceConfig,
 ) -> Result<BackupConnectionResult, String> {
-    let connected = is_database_connected(source_config)
+    let connected = is_connected(source_config)
         .await
         .map_err(|e| format!("Failed to check source connection: {}", e))?;
 

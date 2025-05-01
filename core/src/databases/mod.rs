@@ -81,7 +81,7 @@ where
     Ok((cloned_config, None))
 }
 
-pub async fn backup_source<B>(source_config: B) -> Result<Bytes>
+pub async fn backup<B>(source_config: B) -> Result<Bytes>
 where
     B: Borrow<SourceConfig>,
 {
@@ -97,11 +97,7 @@ where
     Ok(bytes)
 }
 
-pub async fn restore_source<B>(
-    source_config: B,
-    dump_data: Bytes,
-    drop_database: bool,
-) -> Result<()>
+pub async fn restore<B>(source_config: B, dump_data: Bytes, drop_database: bool) -> Result<()>
 where
     B: Borrow<SourceConfig>,
 {
@@ -117,7 +113,7 @@ where
     Ok(())
 }
 
-pub async fn is_database_connected<B>(source_config: B) -> Result<bool>
+pub async fn is_connected<B>(source_config: B) -> Result<bool>
 where
     B: Borrow<SourceConfig>,
 {
