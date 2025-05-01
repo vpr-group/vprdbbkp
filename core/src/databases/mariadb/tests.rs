@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod mariadb_tests {
     use crate::databases::{
         mariadb::{tools::MariaDBTools, MariaDB},
         DbAdapter,
@@ -98,9 +98,9 @@ mod tests {
     async fn initialize_test() {
         LOGGER
             .get_or_init(|| async {
-                env_logger::Builder::new()
+                let _ = env_logger::Builder::new()
                     .filter_level(LevelFilter::Info)
-                    .init();
+                    .try_init();
             })
             .await;
     }

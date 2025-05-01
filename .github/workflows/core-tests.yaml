@@ -1,0 +1,111 @@
+name: Rust Core Tests
+
+on:
+  push:
+    branches: ["*"]
+    paths:
+      - "core/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: ["*"]
+    paths:
+      - "core/**"
+      - ".github/workflows/**"
+
+env:
+  CARGO_TERM_COLOR: always
+  POSTGRES_DB: postgres_database
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres_password
+  MYSQL_ROOT_PASSWORD: mariadb_root_password
+  MYSQL_USER: mariadb_user
+  MYSQL_PASSWORD: mariadb_password
+  MYSQL_DATABASE: customers
+
+jobs:
+  test:
+    name: Test Core Crate
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
+          MYSQL_USER: ${{ env.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ env.MYSQL_PASSWORD }}
+          MYSQL_DATABASE: ${{ env.MYSQL_DATABASE }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -p${{ env.MYSQL_ROOT_PASSWORD }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            ./core/target
+          key: ${{ runner.os }}-cargo-core-${{ hashFiles('core/Cargo.lock', 'core/Cargo.toml') }}
+
+      - name: Check formatting for core
+        working-directory: ./core
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Lint core with clippy
+        working-directory: ./core
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+
+      - name: Run tests for core crate
+        working-directory: ./core
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose
+        env:
+          MARIADB_HOST: localhost
+          MARIADB_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
+          MARIADB_USERNAME: root
+          MARIADB_NAME: ${{ env.MYSQL_DATABASE }}
+          MARIADB_PORT: 3306
+          POSTGRESQL_HOST: localhost
+          POSTGRESQL_USERNAME: ${{ env.POSTGRES_USER }}
+          POSTGRESQL_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRESQL_NAME: ${{ env.POSTGRES_DB }}
+          POSTGRESQL_PORT: 5432
