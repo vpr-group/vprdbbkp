@@ -71,21 +71,21 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-        working-directory: ./core
+          working-directory: ./core
 
       - name: Lint core with clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
-        working-directory: ./core
+          working-directory: ./core
 
       - name: Run tests for core crate
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --verbose
-        working-directory: ./core
+          working-directory: ./core
         env:
           MARIADB_HOST: localhost
           MARIADB_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
