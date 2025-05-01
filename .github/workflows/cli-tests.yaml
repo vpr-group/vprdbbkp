@@ -83,6 +83,12 @@ jobs:
           args: --all -- --check
           working-directory: ./cli
 
+      - name: Build cli
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          working-directory: ./cli
+
       - name: Run tests for cli crate
         uses: actions-rs/cargo@v1
         with:
