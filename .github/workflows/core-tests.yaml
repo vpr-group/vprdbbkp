@@ -3,14 +3,6 @@ name: Rust Core Tests
 on:
   push:
     branches: ["*"]
-    paths:
-      - "core/**"
-      - ".github/workflows/**"
-  pull_request:
-    branches: ["*"]
-    paths:
-      - "core/**"
-      - ".github/workflows/**"
 
 env:
   CARGO_TERM_COLOR: always
