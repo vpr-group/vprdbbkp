@@ -108,7 +108,7 @@ jobs:
       matrix:
         include:
           # Linux x86_64 targets with older GLIBC compatibility
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             rust-version: stable
             target: x86_64-unknown-linux-gnu
             artifact-name: linux-x86_64
