@@ -1,12 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
 use cli::{parse_retention, source_from_cli, storage_from_cli, Cli, Commands};
-use vprs3bkp_core::{
-    backup, common::get_filename, databases::get_db_adapter, list, restore,
-    storage::storage::Storage,
-};
+use vprs3bkp_core::{backup, list, restore, storage::storage::Storage};
 
 mod cli;
+mod tests;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,21 +28,8 @@ async fn main() -> Result<()> {
                 );
             }
 
-            // If compression is specified and using Postgres, use custom compression logic
-            if let (Some(comp_level), "postgres") =
-                (args.compression, args.source.source_type.as_str())
-            {
-                let db_adapter = get_db_adapter(&source_config);
-                let bytes = db_adapter.dump().await?;
-                let storage = Storage::new(&storage_config).await?;
-                let filename = get_filename(&source_config);
-                let path = storage.write(&filename, bytes).await?;
-                println!("Backup completed successfully: {}", path);
-            } else {
-                // Use the standard backup function
-                let path = backup(&source_config, &storage_config).await?;
-                println!("Backup completed successfully: {}", path);
-            }
+            let path = backup(&source_config, &storage_config).await?;
+            println!("Backup completed successfully: {}", path);
         }
 
         Commands::Restore(args) => {

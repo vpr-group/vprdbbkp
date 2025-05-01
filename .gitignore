@@ -2,3 +2,4 @@
 .DS_Store
 mariadb_data
 postgres_data
+test-backups*

@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 use vprs3bkp_core::{
-    databases::configs::{PGSourceConfig, SourceConfig},
+    databases::configs::{MariaDBSourceConfig, PGSourceConfig, SourceConfig},
     storage::configs::{LocalStorageConfig, S3StorageConfig, StorageConfig},
     tunnel::config::TunnelConfig,
 };
@@ -24,9 +24,6 @@ pub enum Commands {
 
 #[derive(Args)]
 pub struct BackupArgs {
-    #[arg(short, long)]
-    pub compression: Option<u8>,
-
     #[command(flatten)]
     pub source: SourceArgs,
 
@@ -42,7 +39,7 @@ pub struct RestoreArgs {
     #[arg(short, long)]
     pub filename: Option<String>,
 
-    #[arg(short, long)]
+    #[arg(long)]
     pub drop_database: Option<bool>,
 
     #[arg(long)]
@@ -251,6 +248,15 @@ pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
 
     match source.source_type.as_str() {
         "postgres" => Ok(SourceConfig::PG(PGSourceConfig {
+            name: source.source_name.clone(),
+            database: source.database.clone(),
+            host: source.host.clone(),
+            port: source.port,
+            username: source.username.clone(),
+            password: source.password.clone(),
+            tunnel_config,
+        })),
+        "mariadb" => Ok(SourceConfig::MariaDB(MariaDBSourceConfig {
             name: source.source_name.clone(),
             database: source.database.clone(),
             host: source.host.clone(),
