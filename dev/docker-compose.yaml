@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -33,6 +33,21 @@ services:
       - ./mariadb-init:/docker-entrypoint-initdb.d
     networks:
       - database_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: mariadb_root_password
+    ports:
+      - "8080:80"
+    networks:
+      - database_network
+    depends_on:
+      - mariadb
 
 networks:
   database_network:
