@@ -13,7 +13,7 @@ mod lib_tests {
             mariadb::{tools::MariaDBTools, MariaDB},
             postgres::{tools::PostgreSQLTools, PostgreSQL},
         },
-        is_connected, restore,
+        is_connected, list, restore,
         storage::configs::{LocalStorageConfig, StorageConfig},
     };
 
@@ -549,5 +549,26 @@ mod lib_tests {
             output, "test_value",
             "Value in database doesn't match expected value"
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_07_list_backups() {
+        let source_config =
+            get_mariadb_source_config().expect("Failed to get MariaDB source config");
+
+        let storage_config = get_storage_config().expect("Failed to get local storage config");
+
+        let backup_key = backup(source_config, &storage_config)
+            .await
+            .expect("Failed to check MariaDB connection");
+
+        let entries = list(storage_config).await.expect("Failed to list backups");
+
+        let entry = entries
+            .iter()
+            .find(|entry| entry.path().contains(&backup_key));
+
+        assert!(entry.is_some());
     }
 }
