@@ -1043,6 +1043,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
+ "dotenv",
  "predicates",
  "regex",
  "serial_test",

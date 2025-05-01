@@ -3,3 +3,4 @@
 mariadb_data
 postgres_data
 test-backups*
+.env
