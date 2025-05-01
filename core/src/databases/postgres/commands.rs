@@ -107,7 +107,17 @@ impl CommandBuilder {
     pub async fn build_dump_command(&self) -> Result<Command> {
         let mut cmd = self.build_base_cmd("pg_dump").await?;
 
-        cmd.arg("--format=custom");
+        cmd.arg("--format=custom")
+            .arg("--schema=*")
+            .arg("--clean")
+            .arg("--if-exists")
+            .arg("--no-owner")
+            .arg("--blobs")
+            .arg("--exclude-schema=information_schema")
+            .arg("--exclude-schema=pg_catalog")
+            .arg("--exclude-schema=pg_toast")
+            .arg("--exclude-schema=pg_temp*")
+            .arg("--exclude-schema=pg_toast_temp*");
 
         Ok(cmd)
     }
@@ -118,6 +128,7 @@ impl CommandBuilder {
         cmd.arg("--no-psqlrc")
             .arg("-v")
             .arg("ON_ERROR_STOP=1")
+            .arg("-t")
             .arg("-c");
 
         Ok(cmd)
@@ -129,7 +140,15 @@ impl CommandBuilder {
         cmd.arg("--no-owner")
             .arg("--no-privileges")
             .arg("--no-comments")
-            .arg("--exit-on-error");
+            .arg("--no-acl")
+            .arg("--single-transaction")
+            .arg("--clean")
+            .arg("--if-exists")
+            .arg("--exclude-schema=information_schema")
+            .arg("--exclude-schema=pg_catalog")
+            .arg("--exclude-schema=pg_toast")
+            .arg("--exclude-schema=pg_temp*")
+            .arg("--exclude-schema=pg_toast_temp*");
 
         Ok(cmd)
     }

@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use bytes::Bytes;
 use std::{env, fs};
 use tempfile::TempDir;
+use tokio::process::Command;
 
 pub struct PostgreSQLTools {
     version: PostgreSQLVersion,
@@ -24,6 +25,21 @@ impl PostgreSQLTools {
 
     pub fn default() -> Result<Self> {
         Self::new(DEFAULT_POSTGRES_VERSION)
+    }
+
+    pub async fn get_connection(
+        &self,
+        database: &str,
+        host: &str,
+        port: u16,
+        username: &str,
+        password: Option<&str>,
+    ) -> Result<Command> {
+        let cmd_builder =
+            CommandBuilder::new(self.version, database, host, port, username, password)?;
+        let cmd = cmd_builder.build_connection_command().await?;
+
+        Ok(cmd)
     }
 
     pub async fn get_version(
@@ -164,7 +180,7 @@ impl PostgreSQLTools {
         Ok(Bytes::from(output.stdout))
     }
 
-    async fn drop_and_recreate_database(
+    pub async fn drop_and_recreate_database(
         &self,
         database: &str,
         host: &str,
