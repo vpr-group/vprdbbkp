@@ -36,7 +36,7 @@ impl PostgreSQL {
         }
     }
 
-    async fn get_tools(&self) -> Result<PostgreSQLTools> {
+    pub async fn get_tools(&self) -> Result<PostgreSQLTools> {
         let mut tools = PostgreSQLTools::default()?;
         let password_ref = self.password.as_deref();
         let version = tools

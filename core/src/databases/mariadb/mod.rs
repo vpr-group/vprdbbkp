@@ -36,7 +36,7 @@ impl MariaDB {
         }
     }
 
-    async fn get_tools(&self) -> Result<MariaDBTools> {
+    pub async fn get_tools(&self) -> Result<MariaDBTools> {
         let password_ref = self.password.as_deref();
         let tools = MariaDBTools::with_detected_version(
             self.database.as_str(),
