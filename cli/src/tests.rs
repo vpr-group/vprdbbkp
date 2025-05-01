@@ -1,8 +1,47 @@
 #[cfg(test)]
 mod tests {
+    use anyhow::Result;
     use assert_cmd::cargo::CommandCargoExt;
+    use dotenv::dotenv;
     use regex::Regex;
+    use std::env;
     use std::process::Command;
+
+    struct ConnectionOptions {
+        host: String,
+        port: u16,
+        user: String,
+        password: String,
+        db_name: String,
+    }
+
+    fn get_postgresql_connection_options() -> Result<ConnectionOptions> {
+        dotenv().ok();
+
+        let port: u16 = env::var("POSTGRESQL_PORT").unwrap_or("0".into()).parse()?;
+
+        Ok(ConnectionOptions {
+            host: env::var("POSTGRESQL_HOST").unwrap_or_default(),
+            password: env::var("POSTGRESQL_PASSWORD").unwrap_or_default(),
+            user: env::var("POSTGRESQL_USERNAME").unwrap_or_default(),
+            db_name: env::var("POSTGRESQL_NAME").unwrap_or_default(),
+            port,
+        })
+    }
+
+    fn get_mariadb_connection_options() -> Result<ConnectionOptions> {
+        dotenv().ok();
+
+        let port: u16 = env::var("MARIADB_PORT").unwrap_or("0".into()).parse()?;
+
+        Ok(ConnectionOptions {
+            host: env::var("MARIADB_HOST").unwrap_or_default(),
+            password: env::var("MARIADB_PASSWORD").unwrap_or_default(),
+            user: env::var("MARIADB_USERNAME").unwrap_or_default(),
+            db_name: env::var("MARIADB_NAME").unwrap_or_default(),
+            port,
+        })
+    }
 
     fn extract_filename(text: &str) -> Option<String> {
         let re =
@@ -17,15 +56,17 @@ mod tests {
 
     #[test]
     fn test_01_backup_list_restore_postgresql() {
+        let options = get_postgresql_connection_options().expect("Failed to get postgres options");
         let mut cmd = Command::cargo_bin("cli").expect("Failed to get cli command");
 
         let backup_output = cmd
             .arg("backup")
             .arg(format!("--source-type=postgres"))
-            .arg(format!("--database=postgres_database"))
-            .arg(format!("--host=localhost"))
-            .arg(format!("--username=postgres"))
-            .arg(format!("--password=postgres_password"))
+            .arg(format!("--database={}", options.db_name))
+            .arg(format!("--host={}", options.host))
+            .arg(format!("--username={}", options.user))
+            .arg(format!("--password={}", options.password))
+            .arg(format!("--port={}", options.port))
             .arg(format!("--storage-type=local"))
             .arg(format!("--root=./test-backups-postgresql"))
             .output()
@@ -59,10 +100,11 @@ mod tests {
             .arg(format!("--filename={}", file_name))
             .arg(format!("--drop-database=true"))
             .arg(format!("--source-type=postgres"))
-            .arg(format!("--database=postgres_database"))
-            .arg(format!("--host=localhost"))
-            .arg(format!("--username=postgres"))
-            .arg(format!("--password=postgres_password"))
+            .arg(format!("--database={}", options.db_name))
+            .arg(format!("--host={}", options.host))
+            .arg(format!("--username={}", options.user))
+            .arg(format!("--password={}", options.password))
+            .arg(format!("--port={}", options.port))
             .arg(format!("--storage-type=local"))
             .arg(format!("--root=./test-backups-postgresql"))
             .output()
@@ -74,16 +116,17 @@ mod tests {
 
     #[test]
     fn test_02_backup_list_restore_mariadb() {
+        let options = get_mariadb_connection_options().expect("Failed to get mariadb options");
         let mut cmd = Command::cargo_bin("cli").expect("Failed to get cli command");
 
         let backup_output = cmd
             .arg("backup")
             .arg(format!("--source-type=mariadb"))
-            .arg(format!("--database=mariadb_database"))
-            .arg(format!("--host=localhost"))
-            .arg(format!("--username=root"))
-            .arg(format!("--port=3306"))
-            .arg(format!("--password=mariadb_root_password"))
+            .arg(format!("--database={}", options.db_name))
+            .arg(format!("--host={}", options.host))
+            .arg(format!("--username={}", options.user))
+            .arg(format!("--password={}", options.password))
+            .arg(format!("--port={}", options.port))
             .arg(format!("--storage-type=local"))
             .arg(format!("--root=./test-backups-mariadb"))
             .output()
@@ -117,18 +160,15 @@ mod tests {
             .arg(format!("--filename={}", file_name))
             .arg(format!("--drop-database=true"))
             .arg(format!("--source-type=mariadb"))
-            .arg(format!("--database=mariadb_database"))
-            .arg(format!("--port=3306"))
-            .arg(format!("--host=localhost"))
-            .arg(format!("--username=root"))
-            .arg(format!("--password=mariadb_root_password"))
+            .arg(format!("--database={}", options.db_name))
+            .arg(format!("--host={}", options.host))
+            .arg(format!("--username={}", options.user))
+            .arg(format!("--password={}", options.password))
+            .arg(format!("--port={}", options.port))
             .arg(format!("--storage-type=local"))
             .arg(format!("--root=./test-backups-mariadb"))
             .output()
             .expect("Failed to execute command");
-
-        println!("{}", String::from_utf8_lossy(&restore_output.stdout));
-        println!("{}", String::from_utf8_lossy(&restore_output.stderr));
 
         assert!(String::from_utf8_lossy(&restore_output.stdout)
             .contains("Restore completed successfully"));
