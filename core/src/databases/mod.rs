@@ -6,14 +6,36 @@ use bytes::Bytes;
 use configs::SourceConfig;
 use mariadb::MariaDB;
 use postgres::PostgreSQL;
+use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 
 use crate::tunnel::Tunnel;
 
 pub mod configs;
+pub mod connection;
 pub mod mariadb;
 pub mod mysql;
 pub mod postgres;
+pub mod ssh_tunnel;
+
+pub struct BackupOptions {
+    compression: Option<u16>,
+}
+
+pub struct RestoreOptions {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseMetadata {
+    version: String,
+}
+
+#[async_trait]
+pub trait SQLDatabaseConnection: Send + Sync + Unpin {
+    async fn test(&self) -> Result<bool>;
+    async fn get_metadata(&self) -> Result<DatabaseMetadata>;
+    async fn backup(&self, backup_options: BackupOptions) -> Result<()>;
+    async fn restore(&self, restore_options: RestoreOptions) -> Result<()>;
+}
 
 #[async_trait]
 pub trait DbAdapter: Send + Sync {

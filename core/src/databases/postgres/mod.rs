@@ -6,6 +6,7 @@ use tools::PostgreSQLTools;
 use super::DbAdapter;
 
 pub mod commands;
+pub mod connection;
 pub mod installer;
 mod tests;
 pub mod tools;
