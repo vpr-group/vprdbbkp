@@ -10,6 +10,7 @@ pub mod connection;
 pub mod installer;
 mod tests;
 pub mod tools;
+pub mod utilities;
 pub mod version;
 
 pub struct PostgreSQL {

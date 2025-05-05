@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use crate::databases::{
-    connection::DatabaseConfig, BackupOptions, DatabaseMetadata, RestoreOptions,
-    SQLDatabaseConnection,
+    connection::DatabaseConfig,
+    version::{Version, VersionTrait},
+    BackupOptions, DatabaseMetadata, RestoreOptions, SQLDatabaseConnection, UtilitiesTrait,
 };
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -10,6 +11,9 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     Pool, Postgres,
 };
+use tokio::process::Command;
+
+use super::{utilities::Utilities, version::PostgreSQLVersionV2};
 
 pub struct PostgreSQLConnection {
     config: DatabaseConfig,
@@ -37,17 +41,36 @@ impl PostgreSQLConnection {
 
         Ok(Self { config, pool })
     }
+
+    async fn get_command(&self, bin_name: &str) -> Result<Command> {
+        let metadata = self.get_metadata().await?;
+        let version = match metadata.version {
+            Version::PostgreSQL(version) => version,
+        };
+
+        let utilities = Utilities::new(version);
+        let cmd = utilities.get_command(bin_name)?;
+
+        Ok(cmd)
+    }
 }
 
 #[async_trait]
 impl SQLDatabaseConnection for PostgreSQLConnection {
     async fn get_metadata(&self) -> Result<DatabaseMetadata> {
-        let version: (String,) = sqlx::query_as("SELECT version()")
+        let version_string: (String,) = sqlx::query_as("SELECT version()")
             .fetch_one(&self.pool)
             .await
             .map_err(|e| anyhow!("Failed to get database version: {}", e))?;
 
-        Ok(DatabaseMetadata { version: version.0 })
+        let version = match PostgreSQLVersionV2::parse_string_version(version_string.0.as_str()) {
+            Some(version) => version,
+            None => return Err(anyhow!("Fauiled to parse PostgreSQL version string")),
+        };
+
+        Ok(DatabaseMetadata {
+            version: Version::PostgreSQL(version),
+        })
     }
 
     async fn test(&self) -> Result<bool> {
@@ -59,6 +82,7 @@ impl SQLDatabaseConnection for PostgreSQLConnection {
     }
 
     async fn backup(&self, backup_options: BackupOptions) -> Result<()> {
+        let cmd = self.get_command("pgdump").await?;
         Ok(())
     }
 
@@ -109,6 +133,15 @@ mod postgresql_connection_test {
             .get_metadata()
             .await
             .expect("Failed to get metadata");
-        assert!(metadata.version.contains("15.12"));
+
+        let version = match &metadata.version {
+            Version::PostgreSQL(version) => Some(version),
+        };
+
+        assert!(version.is_some());
+
+        let version = version.unwrap();
+
+        assert!(version.to_string().contains("15.12"));
     }
 }

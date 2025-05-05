@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, time::Duration};
+use std::{borrow::Borrow, path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -7,7 +7,8 @@ use configs::SourceConfig;
 use mariadb::MariaDB;
 use postgres::PostgreSQL;
 use serde::{Deserialize, Serialize};
-use tokio::time::timeout;
+use tokio::{process::Command, time::timeout};
+use version::Version;
 
 use crate::tunnel::Tunnel;
 
@@ -17,6 +18,7 @@ pub mod mariadb;
 pub mod mysql;
 pub mod postgres;
 pub mod ssh_tunnel;
+pub mod version;
 
 pub struct BackupOptions {
     compression: Option<u16>,
@@ -24,9 +26,9 @@ pub struct BackupOptions {
 
 pub struct RestoreOptions {}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseMetadata {
-    version: String,
+    version: Version,
 }
 
 #[async_trait]
@@ -35,6 +37,13 @@ pub trait SQLDatabaseConnection: Send + Sync + Unpin {
     async fn get_metadata(&self) -> Result<DatabaseMetadata>;
     async fn backup(&self, backup_options: BackupOptions) -> Result<()>;
     async fn restore(&self, restore_options: RestoreOptions) -> Result<()>;
+}
+
+#[async_trait]
+pub trait UtilitiesTrait: Send + Sync + Unpin {
+    fn get_base_path(&self) -> Result<PathBuf>;
+    fn get_command(&self, bin_name: &str) -> Result<Command>;
+    async fn install(&self) -> Result<()>;
 }
 
 #[async_trait]
