@@ -1,4 +1,9 @@
-use std::{borrow::Borrow, path::PathBuf, time::Duration};
+use std::{
+    borrow::Borrow,
+    io::{Read, Write},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -35,15 +40,14 @@ pub struct DatabaseMetadata {
 pub trait SQLDatabaseConnection: Send + Sync + Unpin {
     async fn test(&self) -> Result<bool>;
     async fn get_metadata(&self) -> Result<DatabaseMetadata>;
-    async fn backup(&self, backup_options: BackupOptions) -> Result<()>;
-    async fn restore(&self, restore_options: RestoreOptions) -> Result<()>;
+    async fn backup(&self, writer: &mut (dyn Write + Send)) -> Result<()>;
+    async fn restore(&self, reader: &mut (dyn Read + Send)) -> Result<()>;
 }
 
 #[async_trait]
 pub trait UtilitiesTrait: Send + Sync + Unpin {
     fn get_base_path(&self) -> Result<PathBuf>;
-    fn get_command(&self, bin_name: &str) -> Result<Command>;
-    async fn install(&self) -> Result<()>;
+    async fn get_command(&self, bin_name: &str) -> Result<Command>;
 }
 
 #[async_trait]

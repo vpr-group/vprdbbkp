@@ -19,6 +19,10 @@ impl Utilities {
     pub fn new(version: PostgreSQLVersionV2) -> Self {
         Utilities { version }
     }
+
+    async fn install(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -27,12 +31,14 @@ impl UtilitiesTrait for Utilities {
         let path = cache_dir()
             .unwrap_or_else(|| env::temp_dir())
             .join("vprdbbkp")
-            .join("postgresql");
+            .join("postgresql")
+            .join(self.version.to_string())
+            .join("bin");
 
         Ok(path)
     }
 
-    fn get_command(&self, bin_name: &str) -> Result<Command> {
+    async fn get_command(&self, bin_name: &str) -> Result<Command> {
         let base_path = self.get_base_path()?;
         let bin_path = base_path.join(bin_name);
 
@@ -42,9 +48,5 @@ impl UtilitiesTrait for Utilities {
 
         let command = Command::new(&bin_path);
         Ok(command)
-    }
-
-    async fn install(&self) -> Result<()> {
-        Ok(())
     }
 }
