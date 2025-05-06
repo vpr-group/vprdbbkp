@@ -11,7 +11,11 @@ use bytes::Bytes;
 use configs::SourceConfig;
 use mariadb::MariaDB;
 use postgres::PostgreSQL;
-use tokio::{process::Command, time::timeout};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    process::Command,
+    time::timeout,
+};
 use version::Version;
 
 use crate::tunnel::Tunnel;
@@ -39,8 +43,8 @@ pub struct DatabaseMetadata {
 pub trait SQLDatabaseConnection: Send + Sync + Unpin {
     async fn test(&self) -> Result<bool>;
     async fn get_metadata(&self) -> Result<DatabaseMetadata>;
-    async fn backup(&self, writer: &mut (dyn Write + Send)) -> Result<()>;
-    async fn restore(&self, reader: &mut (dyn Read + Send)) -> Result<()>;
+    async fn backup(&self, writer: &mut (dyn AsyncWrite + Send + Unpin)) -> Result<()>;
+    async fn restore(&self, reader: &mut (dyn AsyncRead + Send + Unpin)) -> Result<()>;
 }
 
 #[async_trait]
