@@ -11,7 +11,6 @@ use bytes::Bytes;
 use configs::SourceConfig;
 use mariadb::MariaDB;
 use postgres::PostgreSQL;
-use serde::{Deserialize, Serialize};
 use tokio::{process::Command, time::timeout};
 use version::Version;
 

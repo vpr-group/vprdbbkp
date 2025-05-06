@@ -34,3 +34,4 @@ env_logger = "0.10"
 async-trait = "0.1.88"
 serial_test = "2.0.0"
 sqlx = { version = "0.8.5", features = [ "runtime-tokio", "tls-native-tls", "postgres" ] }
+futures = "0.3.31"

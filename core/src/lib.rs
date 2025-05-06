@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Result;
 
+pub mod backup;
 pub mod common;
 pub mod databases;
 pub mod folders;

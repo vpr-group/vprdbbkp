@@ -28,7 +28,7 @@ pub struct PostgreSQLConnection {
 }
 
 impl PostgreSQLConnection {
-    async fn new(config: DatabaseConfig) -> Result<Self> {
+    pub async fn new(config: DatabaseConfig) -> Result<Self> {
         let mut connect_options = PgConnectOptions::new()
             .host(&config.host)
             .username(&config.username)

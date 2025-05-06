@@ -6286,6 +6286,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "flate2",
+ "futures",
  "log",
  "opendal",
  "os_info",
