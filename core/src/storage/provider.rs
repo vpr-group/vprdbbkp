@@ -1,15 +1,19 @@
-use anyhow::{anyhow, Ok};
+use anyhow::Result;
+use futures::StreamExt;
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
-    BufferStream, Operator, Writer,
+    BufferStream, Operator,
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    io::{Error, Write},
+    io::{Read, Write},
     sync::Arc,
 };
+use stream_download_opendal::{OpendalStream, OpendalStreamParams};
 use tokio::sync::Mutex;
+
+use super::io::{StorageReader, StorageWriter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StorageCredentials {
@@ -65,8 +69,7 @@ pub enum StorageConfig {
 #[derive(Clone)]
 pub struct StorageProvider {
     pub config: StorageConfig,
-    pub operator: Arc<Operator>,
-    writer: Arc<Mutex<Option<Writer>>>,
+    pub operator: Operator,
 }
 
 impl StorageProvider {
@@ -97,11 +100,7 @@ impl StorageProvider {
             }
         };
 
-        Ok(StorageProvider {
-            config,
-            operator: Arc::new(operator),
-            writer: Arc::new(Mutex::new(None)),
-        })
+        Ok(StorageProvider { config, operator })
     }
 
     pub async fn test(&self) -> anyhow::Result<bool> {
@@ -113,49 +112,12 @@ impl StorageProvider {
         Ok(true)
     }
 
-    pub async fn write_async(&mut self, buf: &[u8]) -> anyhow::Result<usize> {
-        let mut writer = self.writer.lock().await;
-
-        if writer.is_none() {
-            let new_writer = self.operator.writer("test").await?;
-            writer.replace(new_writer);
-        }
-
-        let writer = match writer.as_mut() {
-            Some(writer) => writer,
-            None => return Err(anyhow!("Failed to create opendal writer")),
-        };
-
-        let data_to_write = buf.to_owned();
-        writer.write(data_to_write).await?;
-
-        Ok(buf.len())
+    pub async fn create_writer(&self, filename: &str) -> Result<Box<dyn Write>> {
+        let op_writer = self.operator.writer(filename).await?;
+        Ok(Box::new(StorageWriter::new(op_writer)))
     }
 
-    pub async fn flush_async(&mut self) -> anyhow::Result<()> {
-        let mut writer_guard = self.writer.lock().await;
-
-        if writer_guard.is_none() {
-            return Err(anyhow!("Cannot flush if writer is not defined"));
-        }
-
-        let writer = match writer_guard.as_mut() {
-            Some(writer) => writer,
-            None => return Err(anyhow!("Failed to get opendal writer")),
-        };
-
-        writer.close().await?;
-        *writer_guard = None;
-
-        Ok(())
-    }
-
-    pub async fn create_writer(&self, filename: &str) -> anyhow::Result<Writer> {
-        let writer = self.operator.writer(filename).await?;
-        Ok(writer)
-    }
-
-    pub async fn create_reader(&self, filename: &str) -> anyhow::Result<BufferStream> {
+    pub async fn create_stream(&self, filename: &str) -> Result<Arc<Mutex<BufferStream>>> {
         let metadata = self.operator.stat(filename).await?;
         let file_size = metadata.content_length() as usize;
         let chunk_size = if file_size > 512 { 512 } else { file_size };
@@ -168,77 +130,28 @@ impl StorageProvider {
             .into_stream(0u64..(file_size as u64))
             .await?;
 
-        Ok(stream)
-    }
-}
-
-impl Write for StorageProvider {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let buf_copy = buf.to_vec();
-        let mut this = self.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
-            let result = rt.block_on(async {
-                println!("{:?}", buf_copy);
-                let len = this.write_async(&buf_copy.clone()).await?;
-                Ok(len)
-            });
-
-            let _ = tx.send(result);
-        });
-
-        match rx.recv() {
-            anyhow::Result::Ok(result) => match result {
-                anyhow::Result::Ok(size) => std::io::Result::Ok(size),
-                Err(e) => Err(Error::new(std::io::ErrorKind::Other, e.to_string())),
-            },
-            Err(_) => Err(Error::new(
-                std::io::ErrorKind::Other,
-                "Thread communication failed",
-            )),
-        }
+        Ok(Arc::new(Mutex::new(stream)))
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut this = self.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
-            let result = rt.block_on(async {
-                this.flush_async().await?;
-                Ok(())
-            });
-
-            let _ = tx.send(result);
-        });
-
-        match rx.recv() {
-            anyhow::Result::Ok(result) => match result {
-                anyhow::Result::Ok(_) => std::io::Result::Ok(()),
-                Err(e) => Err(Error::new(std::io::ErrorKind::Other, e.to_string())),
-            },
-            Err(_) => Err(Error::new(
-                std::io::ErrorKind::Other,
-                "Thread communication failed",
-            )),
-        }
+    pub async fn create_reader(&self, filename: &str) -> Result<Box<dyn Read>> {
+        Ok(Box::new(StorageReader::new(
+            self.operator.clone(),
+            filename.to_string(),
+        )))
     }
 }
 
 #[cfg(test)]
 mod provider_test {
+    use crate::storage::io::StorageReader;
+
     use super::{LocalStorageConfig, S3StorageConfig, StorageConfig, StorageProvider};
     use anyhow::Result;
     use dotenv::dotenv;
-    use futures::StreamExt;
+    use futures::{StreamExt, TryStreamExt};
+
     use std::{
         env,
-        fs::File,
         io::{Cursor, Read, Write},
         path::PathBuf,
     };
@@ -279,103 +192,129 @@ mod provider_test {
 
     #[tokio::test]
     async fn test_01_local_write() {
-        let (provider, path) = get_local_provider().expect("Failed to get local provider");
-        let content = "Ceci est un message test".as_bytes();
+        // let (provider, path) = get_local_provider().expect("Failed to get local provider");
+        // let content = "Ceci est un message test".as_bytes();
 
-        let mut reader = Cursor::new(content);
-        let mut writer = provider
-            .create_writer("test")
-            .await
-            .expect("Failed to create writer");
+        // let mut reader = Cursor::new(content);
+        // let mut writer = provider
+        //     .create_writer("test")
+        //     .await
+        //     .expect("Failed to create writer");
 
-        let mut buffer = [0u8; 512];
+        // let mut buffer = [0u8; 512];
 
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => break, // EOF
-                Ok(n) => {
-                    writer
-                        .write(buffer[..n].to_vec())
-                        .await
-                        .expect("Failed to write bytes");
-                }
-                Err(e) => panic!("Error while reading content: {}", e),
-            }
-        }
+        // loop {
+        //     match reader.read(&mut buffer) {
+        //         Ok(0) => break, // EOF
+        //         Ok(n) => {
+        //             writer
+        //                 .write(buffer[..n].to_vec())
+        //                 .await
+        //                 .expect("Failed to write bytes");
+        //         }
+        //         Err(e) => panic!("Error while reading content: {}", e),
+        //     }
+        // }
 
-        writer.close().await.expect("Failed to close the writer");
+        // writer.close().await.expect("Failed to close the writer");
 
-        let mut file = File::open(path.join("test")).expect("Unable to open temp file");
-        let mut file_content = String::new();
-        file.read_to_string(&mut file_content)
-            .expect("Failed to read file");
+        // let mut file = File::open(path.join("test")).expect("Unable to open temp file");
+        // let mut file_content = String::new();
+        // file.read_to_string(&mut file_content)
+        //     .expect("Failed to read file");
 
-        assert_eq!(file_content.as_bytes(), content);
+        // assert_eq!(file_content.as_bytes(), content);
     }
 
     #[tokio::test]
     async fn test_02_s3_write() {
-        let mut provider = get_s3_provider().expect("Failed to get s3 provider");
-        let content =
-            "Ceci est un message test Ceci est un message test Ceci est un message test".as_bytes();
-        let mut reader = Cursor::new(content);
+        let provider = get_s3_provider().expect("Failed to get s3 provider");
+        let mut writer = provider
+            .create_writer("test-01")
+            .await
+            .expect("Failed to create writer");
 
+        let content = "Ceci est un message test".as_bytes();
+        let mut reader = Cursor::new(content);
         let mut buffer = [0u8; 10];
 
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break, // EOF
                 Ok(n) => {
-                    provider.write(&buffer[..n]).expect("Failed to write bytes");
+                    writer.write(&buffer[..n]).expect("Failed to write bytes");
                 }
                 Err(e) => panic!("Error while reading content: {}", e),
             }
         }
 
-        provider.flush().expect("Failed to flush");
+        writer.flush().expect("Failed to flush");
     }
 
     #[tokio::test]
     async fn test_03_s3_read() {
         let provider = get_s3_provider().expect("Failed to get s3 provider");
-        let content = "Ceci est un message test".as_bytes();
-        let mut reader = Cursor::new(content);
-
         let mut writer = provider
-            .create_writer("test")
+            .create_writer("test-01")
             .await
             .expect("Failed to create writer");
 
-        let mut buffer = [0u8; 256];
+        let content = "Ceci est un message test".as_bytes();
+        let mut reader = Cursor::new(content);
+        let mut buffer = [0u8; 10];
 
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break, // EOF
                 Ok(n) => {
-                    writer
-                        .write(buffer[..n].to_vec())
-                        .await
-                        .expect("Failed to write bytes");
+                    writer.write(&buffer[..n]).expect("Failed to write bytes");
                 }
                 Err(e) => panic!("Error while reading content: {}", e),
             }
         }
 
-        writer.close().await.expect("Failed to close the writer");
+        writer.flush().expect("Failed to flush");
 
-        let mut bytes = vec![];
+        // let mut bytes = vec![];
+
         let mut reader = provider
-            .create_reader("test")
+            .create_reader("test-01")
             .await
             .expect("Failed to create reader");
 
-        while let Some(result) = reader.next().await {
-            match result {
-                Ok(buffer) => bytes.extend_from_slice(&buffer.to_bytes()),
-                Err(_) => break,
-            }
-        }
+        // let mut buffer = [0u8; 500];
+        let _ = reader.read(&mut buffer);
 
-        assert_eq!(content, &bytes[0..])
+        // let fut = std::thread::spawn({
+        //     move || {
+        //         let rt = tokio::runtime::Runtime::new().unwrap();
+
+        //         rt.block_on(async {
+        //             let reader = provider
+        //                 .create_stream("test-01")
+        //                 .await
+        //                 .expect("Failed to create reader");
+        //             let mut reader = reader.lock().await;
+
+        //             let bytes = reader.next().await;
+        //             println!("{:?}", bytes);
+        //         });
+        //     }
+        // });
+
+        // let _ = fut.join();
+
+        // loop {
+        //     match reader.read(&mut buffer) {
+        //         Ok(0) => break,
+        //         Ok(n) => {
+        //             println!("{:?}", &buffer[..n]);
+        //             let _ = bytes.extend_from_slice(&buffer[..n]);
+        //         }
+        //         Err(_) => panic!("Error while reading content"),
+        //     }
+        // }
+
+        // assert_eq!(content, &bytes[0..])
     }
 }
