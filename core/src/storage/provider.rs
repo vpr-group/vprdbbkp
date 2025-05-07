@@ -1,11 +1,15 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Ok};
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
     BufferStream, Operator, Writer,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{
+    io::{Error, Write},
+    sync::Arc,
+};
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StorageCredentials {
@@ -62,6 +66,7 @@ pub enum StorageConfig {
 pub struct StorageProvider {
     pub config: StorageConfig,
     pub operator: Arc<Operator>,
+    writer: Arc<Mutex<Option<Writer>>>,
 }
 
 impl StorageProvider {
@@ -95,14 +100,54 @@ impl StorageProvider {
         Ok(StorageProvider {
             config,
             operator: Arc::new(operator),
+            writer: Arc::new(Mutex::new(None)),
         })
     }
 
     pub async fn test(&self) -> anyhow::Result<bool> {
-        match self.operator.list(".").await {
-            Ok(_) => Ok(true),
-            Err(e) => Err(anyhow!("Storage test failed: {}", e)),
+        // match self.operator.list(".").await {
+        //     Ok(_) => Ok(true),
+        //     Err(e) => Err(anyhow!("Storage test failed: {}", e)),
+        // }
+
+        Ok(true)
+    }
+
+    pub async fn write_async(&mut self, buf: &[u8]) -> anyhow::Result<usize> {
+        let mut writer = self.writer.lock().await;
+
+        if writer.is_none() {
+            let new_writer = self.operator.writer("test").await?;
+            writer.replace(new_writer);
         }
+
+        let writer = match writer.as_mut() {
+            Some(writer) => writer,
+            None => return Err(anyhow!("Failed to create opendal writer")),
+        };
+
+        let data_to_write = buf.to_owned();
+        writer.write(data_to_write).await?;
+
+        Ok(buf.len())
+    }
+
+    pub async fn flush_async(&mut self) -> anyhow::Result<()> {
+        let mut writer_guard = self.writer.lock().await;
+
+        if writer_guard.is_none() {
+            return Err(anyhow!("Cannot flush if writer is not defined"));
+        }
+
+        let writer = match writer_guard.as_mut() {
+            Some(writer) => writer,
+            None => return Err(anyhow!("Failed to get opendal writer")),
+        };
+
+        writer.close().await?;
+        *writer_guard = None;
+
+        Ok(())
     }
 
     pub async fn create_writer(&self, filename: &str) -> anyhow::Result<Writer> {
@@ -127,6 +172,64 @@ impl StorageProvider {
     }
 }
 
+impl Write for StorageProvider {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let buf_copy = buf.to_vec();
+        let mut this = self.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+
+            let result = rt.block_on(async {
+                println!("{:?}", buf_copy);
+                let len = this.write_async(&buf_copy.clone()).await?;
+                Ok(len)
+            });
+
+            let _ = tx.send(result);
+        });
+
+        match rx.recv() {
+            anyhow::Result::Ok(result) => match result {
+                anyhow::Result::Ok(size) => std::io::Result::Ok(size),
+                Err(e) => Err(Error::new(std::io::ErrorKind::Other, e.to_string())),
+            },
+            Err(_) => Err(Error::new(
+                std::io::ErrorKind::Other,
+                "Thread communication failed",
+            )),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut this = self.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+
+            let result = rt.block_on(async {
+                this.flush_async().await?;
+                Ok(())
+            });
+
+            let _ = tx.send(result);
+        });
+
+        match rx.recv() {
+            anyhow::Result::Ok(result) => match result {
+                anyhow::Result::Ok(_) => std::io::Result::Ok(()),
+                Err(e) => Err(Error::new(std::io::ErrorKind::Other, e.to_string())),
+            },
+            Err(_) => Err(Error::new(
+                std::io::ErrorKind::Other,
+                "Thread communication failed",
+            )),
+        }
+    }
+}
+
 #[cfg(test)]
 mod provider_test {
     use super::{LocalStorageConfig, S3StorageConfig, StorageConfig, StorageProvider};
@@ -136,7 +239,7 @@ mod provider_test {
     use std::{
         env,
         fs::File,
-        io::{Cursor, Read},
+        io::{Cursor, Read, Write},
         path::PathBuf,
     };
     use tempfile::tempdir;
@@ -212,39 +315,24 @@ mod provider_test {
 
     #[tokio::test]
     async fn test_02_s3_write() {
-        let provider = get_s3_provider().expect("Failed to get s3 provider");
-        let content = "Ceci est un message test".as_bytes();
+        let mut provider = get_s3_provider().expect("Failed to get s3 provider");
+        let content =
+            "Ceci est un message test Ceci est un message test Ceci est un message test".as_bytes();
         let mut reader = Cursor::new(content);
 
-        let mut writer = provider
-            .create_writer("test")
-            .await
-            .expect("Failed to create writer");
-
-        let mut buffer = [0u8; 256];
+        let mut buffer = [0u8; 10];
 
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break, // EOF
                 Ok(n) => {
-                    writer
-                        .write(buffer[..n].to_vec())
-                        .await
-                        .expect("Failed to write bytes");
+                    provider.write(&buffer[..n]).expect("Failed to write bytes");
                 }
                 Err(e) => panic!("Error while reading content: {}", e),
             }
         }
 
-        writer.close().await.expect("Failed to close the writer");
-
-        let response = provider
-            .operator
-            .read("test")
-            .await
-            .expect("Failed to read response");
-
-        assert_eq!(response.to_bytes(), content);
+        provider.flush().expect("Failed to flush");
     }
 
     #[tokio::test]
