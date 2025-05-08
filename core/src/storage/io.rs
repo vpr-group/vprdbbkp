@@ -25,7 +25,6 @@ impl StorageWriter {
 
     async fn write_async(&mut self, buf: &[u8]) -> Result<usize, Box<dyn std::error::Error>> {
         let mut writer = self.writer.lock().await;
-
         let data_to_write = buf.to_owned();
         writer.write(data_to_write).await?;
 

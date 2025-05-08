@@ -1,4 +1,8 @@
-use std::{process::Stdio, time::Duration};
+use std::{
+    io::{Read, Write},
+    process::Stdio,
+    time::Duration,
+};
 
 use crate::databases::{
     connection::DatabaseConfig,
@@ -12,7 +16,7 @@ use sqlx::{
     Pool, Postgres,
 };
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
 };
 
@@ -103,7 +107,7 @@ impl SQLDatabaseConnection for PostgreSQLConnection {
             .map_err(|e| anyhow!("Connection test failed: {}", e))
     }
 
-    async fn backup(&self, writer: &mut (dyn AsyncWrite + Send + Unpin)) -> Result<()> {
+    async fn backup(&self, writer: &mut (dyn Write + Send + Unpin)) -> Result<()> {
         let mut cmd = self.get_command("pg_dump").await?;
 
         cmd.arg("--format=custom")
@@ -139,7 +143,6 @@ impl SQLDatabaseConnection for PostgreSQLConnection {
                 Ok(n) => {
                     writer
                         .write_all(&buffer[..n])
-                        .await
                         .map_err(|e| anyhow!("Failed to write backup data: {}", e))?;
                 }
                 Err(e) => {
@@ -171,7 +174,7 @@ impl SQLDatabaseConnection for PostgreSQLConnection {
         Ok(())
     }
 
-    async fn restore(&self, reader: &mut (dyn AsyncRead + Send + Unpin)) -> Result<()> {
+    async fn restore(&self, reader: &mut (dyn Read + Send + Unpin)) -> Result<()> {
         let mut cmd = self.get_base_command("psql").await?;
 
         cmd.arg("-h")
@@ -218,7 +221,7 @@ impl SQLDatabaseConnection for PostgreSQLConnection {
         let mut buffer = [0u8; 16384];
 
         loop {
-            match reader.read(&mut buffer).await {
+            match reader.read(&mut buffer) {
                 Ok(0) => break, // EOF
                 Ok(n) => {
                     stdin.write_all(&buffer[..n]).await?;

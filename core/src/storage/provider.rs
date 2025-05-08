@@ -111,7 +111,7 @@ impl StorageProvider {
         Ok(true)
     }
 
-    pub async fn create_writer(&self, filename: &str) -> Result<Box<dyn Write>> {
+    pub async fn create_writer(&self, filename: &str) -> Result<Box<dyn Write + Send + Unpin>> {
         let op_writer = self.operator.writer(filename).await?;
         Ok(Box::new(StorageWriter::new(op_writer)))
     }
@@ -132,7 +132,7 @@ impl StorageProvider {
         Ok(Arc::new(Mutex::new(stream)))
     }
 
-    pub async fn create_reader(&self, filename: &str) -> Result<Box<dyn Read>> {
+    pub async fn create_reader(&self, filename: &str) -> Result<Box<dyn Read + Send + Unpin>> {
         Ok(Box::new(StorageReader::new(
             self.operator.clone(),
             filename.to_string(),
@@ -153,6 +153,8 @@ mod provider_test {
     use tempfile::tempdir;
 
     fn get_local_provider() -> Result<StorageProvider> {
+        dotenv().ok();
+
         let temp_path = tempdir()?;
         let config = StorageConfig::Local(LocalStorageConfig {
             id: "test".into(),

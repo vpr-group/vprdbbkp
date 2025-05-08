@@ -26,7 +26,7 @@ pub struct DatabaseConfig {
 
 pub struct DatabaseConnection {
     pub config: DatabaseConfig,
-    connection: Arc<dyn SQLDatabaseConnection>,
+    pub connection: Arc<dyn SQLDatabaseConnection>,
 }
 
 impl DatabaseConnection {
