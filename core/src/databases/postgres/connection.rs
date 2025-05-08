@@ -322,30 +322,38 @@ mod postgresql_connection_test {
 
     #[tokio::test]
     async fn test_04_restore() {
+        let test_table_name = format!("test_restore_{}", chrono::Utc::now().timestamp());
         let connection = get_connection().await.expect("Failed to get connection");
 
-        sqlx::query("DROP TABLE IF EXISTS backup_test_table")
+        sqlx::query(format!("DROP TABLE IF EXISTS {}", test_table_name).as_str())
             .execute(&connection.pool)
             .await
             .expect("Failed to drop test table");
 
         sqlx::query(
-            "CREATE TABLE backup_test_table (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
+            format!(
+                "CREATE TABLE {} (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
+                test_table_name
+            )
+            .as_str(),
         )
         .execute(&connection.pool)
         .await
         .expect("Failed to create test table");
 
-        sqlx::query("INSERT INTO backup_test_table (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)")
+        sqlx::query(
+            format!("INSERT INTO {} (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)", test_table_name).as_str(),
+        )
         .execute(&connection.pool)
         .await
         .expect("Failed to insert test data");
 
-        let rows: Vec<(String, i32)> =
-            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&connection.pool)
-                .await
-                .expect("Failed to fetch test data");
+        let rows: Vec<(String, i32)> = sqlx::query_as(
+            format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
+        )
+        .fetch_all(&connection.pool)
+        .await
+        .expect("Failed to fetch test data");
 
         assert_eq!(rows.len(), 3, "Should have 3 rows before backup");
 
@@ -357,21 +365,28 @@ mod postgresql_connection_test {
 
         assert!(!backup_buffer.is_empty(), "Backup should not be empty");
 
-        sqlx::query("UPDATE backup_test_table SET value = 999 WHERE name = 'test1'")
-            .execute(&connection.pool)
-            .await
-            .expect("Failed to update test data");
+        sqlx::query(
+            format!(
+                "UPDATE {} SET value = 999 WHERE name = 'test1'",
+                test_table_name
+            )
+            .as_str(),
+        )
+        .execute(&connection.pool)
+        .await
+        .expect("Failed to update test data");
 
-        sqlx::query("DELETE FROM backup_test_table WHERE name = 'test3'")
+        sqlx::query(format!("DELETE FROM {} WHERE name = 'test3'", test_table_name).as_str())
             .execute(&connection.pool)
             .await
             .expect("Failed to delete test data");
 
-        let modified_rows: Vec<(String, i32)> =
-            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&connection.pool)
-                .await
-                .expect("Failed to fetch modified data");
+        let modified_rows: Vec<(String, i32)> = sqlx::query_as(
+            format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
+        )
+        .fetch_all(&connection.pool)
+        .await
+        .expect("Failed to fetch modified data");
 
         assert_eq!(modified_rows.len(), 2, "Should have 2 rows after deletion");
         assert_eq!(modified_rows[0].1, 999, "Value should be modified");
@@ -393,11 +408,12 @@ mod postgresql_connection_test {
             .await
             .expect("Failed to get connection after restore");
 
-        let restored_rows: Vec<(String, i32)> =
-            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&verify_connection.pool)
-                .await
-                .expect("Failed to fetch restored data");
+        let restored_rows: Vec<(String, i32)> = sqlx::query_as(
+            format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
+        )
+        .fetch_all(&verify_connection.pool)
+        .await
+        .expect("Failed to fetch restored data");
 
         assert_eq!(restored_rows.len(), 3, "Should have 3 rows after restore");
 

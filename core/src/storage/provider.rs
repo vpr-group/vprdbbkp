@@ -168,6 +168,8 @@ mod provider_test {
     fn get_s3_provider() -> Result<StorageProvider> {
         dotenv().ok();
 
+        let location = format!("s3_provider_test_{}", chrono::Utc::now().timestamp());
+
         let endpoint = env::var("S3_ENDPOINT")
             .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string());
 
@@ -179,7 +181,7 @@ mod provider_test {
             bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
             endpoint: Some(endpoint),
             region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
-            location: "/s3-test".into(),
+            location,
         });
 
         let provider = StorageProvider::new(config)?;
