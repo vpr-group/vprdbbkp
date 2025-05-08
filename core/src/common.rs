@@ -4,7 +4,7 @@ use regex::Regex;
 use std::{borrow::Borrow, path::Path};
 use uuid::Uuid;
 
-use crate::databases::configs::SourceConfig;
+use crate::databases::DatabaseConfig;
 
 pub fn slugify(input: &str) -> String {
     let mut slug = String::new();
@@ -29,21 +29,19 @@ pub fn slugify(input: &str) -> String {
 
 pub fn get_source_name<B>(source_config: B) -> String
 where
-    B: Borrow<SourceConfig>,
+    B: Borrow<DatabaseConfig>,
 {
-    match source_config.borrow() {
-        SourceConfig::PG(config) => {
-            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
-        }
-        SourceConfig::MariaDB(config) => {
-            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
-        }
-    }
+    let borrowed_source_config: &DatabaseConfig = source_config.borrow();
+    format!(
+        "{}-{}",
+        slugify(&borrowed_source_config.name),
+        slugify(&borrowed_source_config.database),
+    )
 }
 
 pub fn get_filename<B>(source_config: B) -> String
 where
-    B: Borrow<SourceConfig>,
+    B: Borrow<DatabaseConfig>,
 {
     let borrowed_source_config = source_config.borrow();
     let now = Utc::now();
@@ -51,7 +49,6 @@ where
     let uuid_string = Uuid::new_v4().to_string();
     let uuid = uuid_string.split('-').next().unwrap_or("backup");
     let source_name = get_source_name(borrowed_source_config);
-
     format!("{}-{}-{}.tar.gz", source_name, date_str, uuid)
 }
 

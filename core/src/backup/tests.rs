@@ -11,9 +11,8 @@ mod backup_engine_tests {
     use crate::{
         backup::engine::BackupEngine,
         databases::{
-            connection::{ConnectionType, DatabaseConfig, DatabaseConnection},
-            mysql::connection::MySqlConnection,
-            postgres::connection::PostgreSqlConnection,
+            mysql::connection::MySqlConnection, postgres::connection::PostgreSqlConnection,
+            ConnectionType, DatabaseConfig, DatabaseConnection,
         },
         storage::provider::{LocalStorageConfig, StorageConfig, StorageProvider},
     };

@@ -5,9 +5,8 @@ use std::{
 };
 
 use crate::databases::{
-    connection::DatabaseConfig,
     version::{Version, VersionTrait},
-    DatabaseConnectionTrait, DatabaseMetadata, UtilitiesTrait,
+    DatabaseConfig, DatabaseConnectionTrait, DatabaseMetadata, UtilitiesTrait,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;

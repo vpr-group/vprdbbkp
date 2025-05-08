@@ -3,10 +3,8 @@ mod mysql_connection_tests {
     use std::{env, thread::sleep, time::Duration};
 
     use crate::databases::{
-        connection::{ConnectionType, DatabaseConfig},
-        mysql::connection::MySqlConnection,
-        version::Version,
-        DatabaseConnectionTrait,
+        
+        mysql::connection::MySqlConnection, version::Version, ConnectionType, DatabaseConfig, DatabaseConnectionTrait
     };
     use anyhow::Result;
     use dotenv::dotenv;

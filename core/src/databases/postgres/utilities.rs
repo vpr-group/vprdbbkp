@@ -6,17 +6,17 @@ use async_trait::async_trait;
 use dirs::cache_dir;
 use tokio::process::Command;
 
-use super::version::PostgreSQLVersionV2;
+use super::version::PostgreSQLVersion;
 
 const BUCKET_URL: &str =
     "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/postgres";
 
 pub struct PostgreSqlUtilities {
-    version: PostgreSQLVersionV2,
+    version: PostgreSQLVersion,
 }
 
 impl PostgreSqlUtilities {
-    pub fn new(version: PostgreSQLVersionV2) -> Self {
+    pub fn new(version: PostgreSQLVersion) -> Self {
         PostgreSqlUtilities { version }
     }
 
