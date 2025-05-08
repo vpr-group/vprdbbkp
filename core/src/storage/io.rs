@@ -197,7 +197,7 @@ impl Drop for StorageReader {
 }
 
 impl Read for StorageReader {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         {
             let mut buffer = match self.buffer.lock() {
                 Ok(buffer) => buffer,

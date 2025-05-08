@@ -13,7 +13,6 @@ use ssh_tunnel::SshTunnelConfig;
 use tokio::process::Command;
 use version::Version;
 
-// pub mod configs;
 pub mod mysql;
 pub mod postgres;
 pub mod ssh_tunnel;
