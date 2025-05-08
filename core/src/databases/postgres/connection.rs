@@ -23,8 +23,8 @@ use tokio::{
 use super::{utilities::Utilities, version::PostgreSQLVersionV2};
 
 pub struct PostgreSQLConnection {
-    config: DatabaseConfig,
-    pool: Pool<Postgres>,
+    pub config: DatabaseConfig,
+    pub pool: Pool<Postgres>,
 }
 
 impl PostgreSQLConnection {

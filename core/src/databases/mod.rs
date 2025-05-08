@@ -25,7 +25,7 @@ pub mod ssh_tunnel;
 pub mod version;
 
 pub struct BackupOptions {
-    compression: Option<u16>,
+    // compression: Option<u16>,
 }
 
 pub struct RestoreOptions {}
