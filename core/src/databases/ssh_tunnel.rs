@@ -1,11 +1,16 @@
 use std::{
     io::{Read, Write},
-    net::{TcpListener, TcpStream},
-    sync::mpsc::channel,
+    net::{Shutdown, TcpListener, TcpStream},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{channel, Sender},
+        Arc,
+    },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use ssh2::Session;
 
@@ -19,7 +24,6 @@ pub struct SshTunnelConfig {
     pub remote_port: u16,
 }
 
-/// SSH authentication methods
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SshAuthMethod {
     Password {
@@ -32,23 +36,27 @@ pub enum SshAuthMethod {
 }
 
 pub struct SshTunnel {
+    pub local_port: u16,
+    shutdown_signal: Arc<AtomicBool>,
     thread_handle: Option<JoinHandle<()>>,
 }
 
 impl SshTunnel {
     pub fn new(config: SshTunnelConfig) -> Result<Self> {
+        let shutdown_signal = Arc::new(AtomicBool::new(false));
         let local_port = Self::find_available_port()?;
-        let (status_tx, status_rx) = channel();
+        let (setup_tx, setup_rx) = channel();
 
-        let thread_handle = thread::spawn({
+        let thread_handle = {
             let config = config.clone();
-            move || {
-                let result = Self::run_tunnel(config, local_port);
-                let _ = status_tx.send(result);
-            }
-        });
+            let shutdown_signal = shutdown_signal.clone();
 
-        let status = status_rx.recv()?;
+            thread::spawn(move || {
+                let _ = Self::run_tunnel(config, local_port, setup_tx, shutdown_signal);
+            })
+        };
+
+        let status = setup_rx.recv()?;
         match status {
             Ok(()) => {}
             Err(e) => return Err(anyhow!("Failed to start ssh tunnel: {}", e.to_string())),
@@ -56,6 +64,8 @@ impl SshTunnel {
 
         Ok(Self {
             thread_handle: Some(thread_handle),
+            shutdown_signal,
+            local_port,
         })
     }
 
@@ -71,7 +81,12 @@ impl SshTunnel {
         Ok(port)
     }
 
-    fn run_tunnel(config: SshTunnelConfig, local_port: u16) -> Result<()> {
+    fn run_tunnel(
+        config: SshTunnelConfig,
+        local_port: u16,
+        setup_tx: Sender<Result<()>>,
+        shutdown_signal: Arc<AtomicBool>,
+    ) -> Result<()> {
         let tcp = TcpStream::connect(format!("{}:{}", config.ssh_host, config.ssh_port))
             .map_err(|e| anyhow!("Failed to connect to SSH server: {}", e))?;
 
@@ -116,59 +131,186 @@ impl SshTunnel {
             .set_nonblocking(true)
             .map_err(|e| anyhow!("Failed to set non-blocking mode: {}", e))?;
 
+        let mut connection_threads: Vec<JoinHandle<()>> = Vec::new();
+
+        let _ = setup_tx.send(Ok(()));
+
         for stream in listener.incoming() {
+            if shutdown_signal.load(Ordering::Relaxed) {
+                break;
+            }
+
             match stream {
-                Ok(mut local_stream) => {
+                Ok(local_stream) => {
                     let session_clone = session.clone();
 
-                    match session_clone.channel_direct_tcpip(
-                        &config.remote_host,
-                        config.remote_port,
-                        None,
-                    ) {
-                        Ok(mut channel) => {
-                            thread::spawn(move || {
-                                // Forward data between local stream and SSH channel
-                                // This is simplified - you'd need proper handling of both directions
-                                let mut buffer = [0; 1024];
-                                loop {
-                                    match local_stream.read(&mut buffer) {
-                                        Ok(0) => break, // Connection closed
-                                        Ok(n) => {
-                                            if channel.write_all(&buffer[..n]).is_err() {
-                                                break;
-                                            }
-                                        }
-                                        Err(_) => break,
-                                    }
+                    let peer_addr = local_stream
+                        .peer_addr()
+                        .map_or_else(|_| "unknown".to_string(), |a| a.to_string());
 
-                                    match channel.read(&mut buffer) {
-                                        Ok(0) => break, // Connection closed
-                                        Ok(n) => {
-                                            if local_stream.write_all(&buffer[..n]).is_err() {
-                                                break;
-                                            }
-                                        }
-                                        Err(_) => break,
+                    let thread_name = format!("ssh_fwd_{}", peer_addr);
+                    let remote_host_clone = config.remote_host.clone();
+                    let remote_port_clone = config.remote_port.clone();
+
+                    let connection_thread =
+                        thread::Builder::new().name(thread_name).spawn(move || {
+                            match session_clone.channel_direct_tcpip(
+                                &remote_host_clone,
+                                remote_port_clone,
+                                None,
+                            ) {
+                                Ok(channel) => {
+                                    if let Err(e) =
+                                        Self::copy_loop(local_stream, channel, &peer_addr)
+                                    {
+                                        // log::warn!("Data forwarding error for client {}: {}. Connection terminated.", peer_addr, e);
+                                    } else {
+                                        // log::debug!("Client connection {} handled and closed gracefully.", peer_addr);
                                     }
                                 }
-                            });
-                        }
-                        Err(e) => eprintln!("Failed to open direct TCP/IP channel: {}", e),
+                                Err(e) => {
+                                    // log::error!("Failed to open SSH direct-tcpip channel to {}:{} for client {}: {}",
+                                    //     remote_host_clone, remote_port_clone, peer_addr, e);
+                                    // local_stream is dropped here, closing the connection to the client.
+                                }
+                            }
+                        });
+
+                    match connection_thread {
+                        Ok(handle) => connection_threads.push(handle),
+                        Err(e) => {}
                     }
                 }
-                Err(e) => eprintln!("Failed to accept connection: {}", e),
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(50));
+                    continue;
+                }
+                Err(e) => {
+                    // log::error!("Failed to accept local connection: {}. Listener might be broken.", e);
+                    // Depending on the error, we might want to break the main loop.
+                    // For now, log and continue, hoping it's transient.
+                    // If it's a persistent error (e.g. listener closed), the loop will likely exit.
+                    thread::sleep(Duration::from_millis(100)); // Back off a bit on persistent errors
+                }
             }
         }
 
+        for handle in connection_threads {
+            if let Err(e) = handle.join() {}
+        }
+
+        Ok(())
+    }
+
+    fn copy_loop(
+        mut local_stream: TcpStream,
+        mut channel: ssh2::Channel,
+        peer_addr: &str,
+    ) -> Result<()> {
+        local_stream.set_nonblocking(true).with_context(|| {
+            format!(
+                "Failed to set local stream (client: {}) to non-blocking",
+                peer_addr
+            )
+        })?;
+        // channel.set_blocking(false);
+
+        let mut local_buffer = vec![0; 8192];
+        let mut remote_buffer = vec![0; 8192];
+
+        let mut local_eof_reached = false;
+        let mut remote_eof_reached = false;
+
+        loop {
+            let mut activity_this_iteration = false;
+
+            if !local_eof_reached {
+                match local_stream.read(&mut local_buffer) {
+                    Ok(0) => {
+                        local_eof_reached = true;
+                        activity_this_iteration = true;
+                        if let Err(e) = channel.send_eof() {}
+                    }
+                    Ok(n) => {
+                        activity_this_iteration = true;
+
+                        if let Err(e) = channel.write_all(&local_buffer[..n]) {
+                            return Err(anyhow!("Error writing to SSH channel: {}", e));
+                        }
+
+                        if let Err(e) = channel.flush() {}
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(e) => {
+                        local_eof_reached = true;
+                        let _ = channel.send_eof();
+                    }
+                }
+            }
+
+            if !remote_eof_reached {
+                match channel.read(&mut remote_buffer) {
+                    Ok(0) => {
+                        remote_eof_reached = true;
+                        activity_this_iteration = true;
+                        if let Err(e) = local_stream.shutdown(Shutdown::Write) {}
+                    }
+                    Ok(n) => {
+                        activity_this_iteration = true;
+
+                        if let Err(e) = local_stream.write_all(&remote_buffer[..n]) {
+                            return Err(anyhow!("Error writing to local stream: {}", e));
+                        }
+                    }
+                    Err(e) => {
+                        if channel.eof() {
+                            // Explicit EOF from ssh2 error code
+                            // log::debug!("[{}] SSH channel EOF (via error code).", peer_addr);
+                            remote_eof_reached = true;
+                            activity_this_iteration = true;
+                            let _ = local_stream.shutdown(Shutdown::Write);
+                        } else {
+                            remote_eof_reached = true;
+                            let _ = local_stream.shutdown(Shutdown::Write);
+                        }
+                    }
+                }
+            }
+
+            if local_eof_reached && remote_eof_reached {
+                break;
+            }
+
+            if local_eof_reached && channel.eof() {
+                break;
+            }
+
+            if !activity_this_iteration {
+                thread::sleep(Duration::from_millis(5));
+            }
+        }
+
+        if !local_eof_reached {
+            channel.send_eof().ok();
+        }
+
+        channel.close().ok();
+        local_stream.shutdown(Shutdown::Both).ok();
         Ok(())
     }
 }
 
 impl Drop for SshTunnel {
     fn drop(&mut self) {
+        self.shutdown_signal.store(true, Ordering::Relaxed);
+
         if let Some(handle) = self.thread_handle.take() {
-            let _ = handle.join();
+            if let Err(e) = handle.join() {
+                eprintln!(
+                    "Error joining SshTunnel main thread for local port {}: {:?}",
+                    self.local_port, e
+                );
+            }
         }
     }
 }
