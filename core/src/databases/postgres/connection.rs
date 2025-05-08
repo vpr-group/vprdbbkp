@@ -7,7 +7,7 @@ use std::{
 use crate::databases::{
     connection::DatabaseConfig,
     version::{Version, VersionTrait},
-    DatabaseMetadata, SQLDatabaseConnection, UtilitiesTrait,
+    DatabaseConnectionTrait, DatabaseMetadata, UtilitiesTrait,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -20,14 +20,14 @@ use tokio::{
     process::Command,
 };
 
-use super::{utilities::Utilities, version::PostgreSQLVersionV2};
+use super::{utilities::PostgreSqlUtilities, version::PostgreSQLVersionV2};
 
-pub struct PostgreSQLConnection {
+pub struct PostgreSqlConnection {
     pub config: DatabaseConfig,
     pub pool: Pool<Postgres>,
 }
 
-impl PostgreSQLConnection {
+impl PostgreSqlConnection {
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
         let mut connect_options = PgConnectOptions::new()
             .host(&config.host)
@@ -53,9 +53,10 @@ impl PostgreSQLConnection {
         let metadata = self.get_metadata().await?;
         let version = match metadata.version {
             Version::PostgreSQL(version) => version,
+            _ => return Err(anyhow!("Wrong version type")),
         };
 
-        let utilities = Utilities::new(version);
+        let utilities = PostgreSqlUtilities::new(version);
         let mut cmd = utilities.get_command(bin_name).await?;
 
         if let Some(pass) = &self.config.password {
@@ -82,7 +83,7 @@ impl PostgreSQLConnection {
 }
 
 #[async_trait]
-impl SQLDatabaseConnection for PostgreSQLConnection {
+impl DatabaseConnectionTrait for PostgreSqlConnection {
     async fn get_metadata(&self) -> Result<DatabaseMetadata> {
         let version_string: (String,) = sqlx::query_as("SELECT version()")
             .fetch_one(&self.pool)
@@ -258,15 +259,15 @@ mod postgresql_connection_test {
     use std::env;
     use std::thread::sleep;
 
-    async fn get_connection() -> Result<PostgreSQLConnection> {
+    async fn get_connection() -> Result<PostgreSqlConnection> {
         dotenv().ok();
 
         let port: u16 = env::var("POSTGRESQL_PORT").unwrap_or("0".into()).parse()?;
         let password = env::var("POSTGRESQL_PASSWORD").unwrap_or_default();
-        let connection = PostgreSQLConnection::new(DatabaseConfig {
+        let connection = PostgreSqlConnection::new(DatabaseConfig {
             id: "test".to_string(),
             name: "test".to_string(),
-            connection_type: ConnectionType::PostgreSQL,
+            connection_type: ConnectionType::PostgreSql,
             host: env::var("POSTGRESQL_HOST").unwrap_or_default(),
             password: Some(password),
             username: env::var("POSTGRESQL_USERNAME").unwrap_or_default(),
@@ -296,6 +297,7 @@ mod postgresql_connection_test {
 
         let version = match &metadata.version {
             Version::PostgreSQL(version) => Some(version),
+            _ => None,
         };
 
         assert!(version.is_some());
@@ -403,6 +405,7 @@ mod postgresql_connection_test {
             .iter()
             .find(|(name, _)| name == "test1")
             .expect("Should have test1 row after restore");
+
         assert_eq!(
             test1_row.1, 100,
             "test1 value should be restored to original"

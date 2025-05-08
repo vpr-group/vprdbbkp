@@ -1,13 +1,15 @@
 use super::{
-    postgres::connection::PostgreSQLConnection, ssh_tunnel::SshTunnelConfig, SQLDatabaseConnection,
+    mysql::connection::MySqlConnection, postgres::connection::PostgreSqlConnection,
+    ssh_tunnel::SshTunnelConfig, DatabaseConnectionTrait,
 };
 use anyhow::Result;
+
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum ConnectionType {
-    PostgreSQL,
-    // MySQL,
+    PostgreSql,
+    MySql,
     // MariaDB,
 }
 
@@ -26,15 +28,16 @@ pub struct DatabaseConfig {
 
 pub struct DatabaseConnection {
     pub config: DatabaseConfig,
-    pub connection: Arc<dyn SQLDatabaseConnection>,
+    pub connection: Arc<dyn DatabaseConnectionTrait>,
 }
 
 impl DatabaseConnection {
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
-        let connection: Arc<dyn SQLDatabaseConnection> = match config.connection_type {
-            ConnectionType::PostgreSQL => {
-                Arc::new(PostgreSQLConnection::new(config.clone()).await?)
+        let connection: Arc<dyn DatabaseConnectionTrait> = match config.connection_type {
+            ConnectionType::PostgreSql => {
+                Arc::new(PostgreSqlConnection::new(config.clone()).await?)
             }
+            ConnectionType::MySql => Arc::new(MySqlConnection::new(config.clone()).await?),
         };
 
         Ok(Self { config, connection })

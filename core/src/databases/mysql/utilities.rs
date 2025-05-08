@@ -2,36 +2,29 @@ use std::{env, path::PathBuf};
 
 use crate::databases::UtilitiesTrait;
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use dirs::cache_dir;
 use tokio::process::Command;
 
-use super::version::PostgreSQLVersionV2;
+use super::version::MySqlVersion;
+use async_trait::async_trait;
 
-const BUCKET_URL: &str =
-    "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/postgres";
-
-pub struct PostgreSqlUtilities {
-    version: PostgreSQLVersionV2,
+pub struct MySqlUtilities {
+    version: MySqlVersion,
 }
 
-impl PostgreSqlUtilities {
-    pub fn new(version: PostgreSQLVersionV2) -> Self {
-        PostgreSqlUtilities { version }
-    }
-
-    async fn install(&self) -> Result<()> {
-        Ok(())
+impl MySqlUtilities {
+    pub fn new(version: MySqlVersion) -> Self {
+        MySqlUtilities { version }
     }
 }
 
 #[async_trait]
-impl UtilitiesTrait for PostgreSqlUtilities {
+impl UtilitiesTrait for MySqlUtilities {
     fn get_base_path(&self) -> Result<PathBuf> {
         let path = cache_dir()
             .unwrap_or_else(|| env::temp_dir())
             .join("vprdbbkp")
-            .join("postgresql")
+            .join("mysql")
             .join(self.version.to_string())
             .join("bin");
 

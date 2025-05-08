@@ -11,6 +11,7 @@ use bytes::Bytes;
 use configs::SourceConfig;
 use mariadb::MariaDB;
 use postgres::PostgreSQL;
+use serde::{Deserialize, Serialize};
 use tokio::{process::Command, time::timeout};
 use version::Version;
 
@@ -30,13 +31,13 @@ pub struct BackupOptions {
 
 pub struct RestoreOptions {}
 
-// #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseMetadata {
     version: Version,
 }
 
 #[async_trait]
-pub trait SQLDatabaseConnection: Send + Sync + Unpin {
+pub trait DatabaseConnectionTrait: Send + Sync + Unpin {
     async fn test(&self) -> Result<bool>;
     async fn get_metadata(&self) -> Result<DatabaseMetadata>;
     async fn backup(&self, writer: &mut (dyn Write + Send + Unpin)) -> Result<()>;

@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use super::postgres::version::PostgreSQLVersionV2;
+use super::{mysql::version::MySqlVersion, postgres::version::PostgreSQLVersionV2};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Version {
     PostgreSQL(PostgreSQLVersionV2),
+    MySql(MySqlVersion),
 }
 
 pub trait VersionTrait: Sized + ToString {

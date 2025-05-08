@@ -1,0 +1,178 @@
+#[cfg(test)]
+mod mysql_connection_tests {
+    use std::{env, thread::sleep, time::Duration};
+
+    use crate::databases::{
+        connection::{ConnectionType, DatabaseConfig},
+        mysql::connection::MySqlConnection,
+        version::Version,
+        DatabaseConnectionTrait,
+    };
+    use anyhow::Result;
+    use dotenv::dotenv;
+
+    fn get_mysql_config() -> Result<DatabaseConfig> {
+        dotenv().ok();
+
+        let port: u16 = env::var("MYSQL_PORT").unwrap_or("0".into()).parse()?;
+        let password = env::var("MYSQL_PASSWORD").unwrap_or_default();
+
+        let config = DatabaseConfig {
+            id: "test".to_string(),
+            name: "test".to_string(),
+            connection_type: ConnectionType::MySql,
+            host: env::var("MYSQL_HOST").unwrap_or_default(),
+            password: Some(password),
+            username: env::var("MYSQL_USERNAME").unwrap_or_default(),
+            database: env::var("MYSQL_NAME").unwrap_or_default(),
+            port,
+            ssh_tunnel: None,
+        };
+
+        Ok(config)
+    }
+
+    #[tokio::test]
+    async fn test_01_mysql_connection() {
+        let config = get_mysql_config().expect("Failed to get config");
+        let connection = MySqlConnection::new(config)
+            .await
+            .expect("Failed to get connection");
+
+        let is_connected = connection.test().await.expect("Failed to test connection");
+
+        assert!(is_connected);
+
+        let metadata = connection
+            .get_metadata()
+            .await
+            .expect("Failed to get metadata");
+
+        let version = match &metadata.version {
+            Version::MySql(version) => Some(version),
+            _ => None,
+        };
+
+        assert!(version.is_some());
+
+        let version = version.unwrap();
+
+        assert_eq!(version.to_string(), "9.3.0");
+    }
+
+    #[tokio::test]
+    async fn test_02_mysql_backup() {
+        let config = get_mysql_config().expect("Failed to get config");
+
+        let connection = MySqlConnection::new(config)
+            .await
+            .expect("Failed to get connection");
+
+        let mut buffer = Vec::new();
+        connection
+            .backup(&mut buffer)
+            .await
+            .expect("Failed to backup database");
+
+        assert!(!buffer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_03_mysql_restore() {
+        let config = get_mysql_config().expect("Failed to get config");
+
+        let connection = MySqlConnection::new(config.clone())
+            .await
+            .expect("Failed to get connection");
+
+        sqlx::query("DROP TABLE IF EXISTS backup_test_table")
+            .execute(&connection.pool)
+            .await
+            .expect("Failed to drop test table");
+
+        sqlx::query(
+            "CREATE TABLE backup_test_table (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
+        )
+        .execute(&connection.pool)
+        .await
+        .expect("Failed to create test table");
+
+        sqlx::query("INSERT INTO backup_test_table (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)")
+        .execute(&connection.pool)
+        .await
+        .expect("Failed to insert test data");
+
+        let rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&connection.pool)
+                .await
+                .expect("Failed to fetch test data");
+
+        assert_eq!(rows.len(), 3, "Should have 3 rows before backup");
+
+        let mut backup_buffer = Vec::new();
+        connection
+            .backup(&mut backup_buffer)
+            .await
+            .expect("Failed to backup database");
+
+        assert!(!backup_buffer.is_empty(), "Backup should not be empty");
+
+        sqlx::query("UPDATE backup_test_table SET value = 999 WHERE name = 'test1'")
+            .execute(&connection.pool)
+            .await
+            .expect("Failed to update test data");
+
+        sqlx::query("DELETE FROM backup_test_table WHERE name = 'test3'")
+            .execute(&connection.pool)
+            .await
+            .expect("Failed to delete test data");
+
+        let modified_rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&connection.pool)
+                .await
+                .expect("Failed to fetch modified data");
+
+        assert_eq!(modified_rows.len(), 2, "Should have 2 rows after deletion");
+        assert_eq!(modified_rows[0].1, 999, "Value should be modified");
+
+        sleep(Duration::from_secs(1));
+
+        let restore_connection = MySqlConnection::new(config.clone())
+            .await
+            .expect("Failed to get connection");
+
+        let mut backup_cursor = std::io::Cursor::new(backup_buffer);
+
+        restore_connection
+            .restore(&mut backup_cursor)
+            .await
+            .expect("Failed to restore database");
+
+        let verify_connection = MySqlConnection::new(config.clone())
+            .await
+            .expect("Failed to get connection");
+
+        let restored_rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&verify_connection.pool)
+                .await
+                .expect("Failed to fetch restored data");
+
+        assert_eq!(restored_rows.len(), 3, "Should have 3 rows after restore");
+
+        let test1_row = restored_rows
+            .iter()
+            .find(|(name, _)| name == "test1")
+            .expect("Should have test1 row after restore");
+
+        assert_eq!(
+            test1_row.1, 100,
+            "test1 value should be restored to original"
+        );
+
+        let test3_exists = restored_rows.iter().any(|(name, _)| name == "test3");
+        assert!(test3_exists, "test3 should be restored");
+    }
+}
