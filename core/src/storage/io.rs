@@ -1,12 +1,14 @@
 use std::{
     io::{Error, ErrorKind, Read, Write},
-    sync::{mpsc::channel, Arc, Mutex as StdMutex},
+    sync::{
+        mpsc::{channel, Sender},
+        Arc, Mutex as StdMutex,
+    },
     thread::{self, JoinHandle},
 };
 
-use futures::{StreamExt, TryStreamExt};
-use opendal::{BufferStream, Operator, Reader, Writer};
-use stream_download_opendal::OpendalStream;
+use futures::StreamExt;
+use opendal::{Operator, Writer};
 use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Clone)]
@@ -95,8 +97,22 @@ impl Write for StorageWriter {
     }
 }
 
+#[derive(Debug)]
+enum FetchResult {
+    DataAvailable,
+    EndOfStream,
+    Error(String),
+}
+
+enum ReadRequest {
+    FetchMoreData(Sender<FetchResult>),
+    Stop,
+}
+
 pub struct StorageReader {
     worker_handle: Option<JoinHandle<()>>,
+    buffer: Arc<StdMutex<Vec<u8>>>,
+    tx: Sender<ReadRequest>,
 }
 
 impl StorageReader {
@@ -105,81 +121,76 @@ impl StorageReader {
         // created from an operator cannot be shared accross threads without
         // producing a deadlock when we need to read from it.
 
-        let worker_handle = thread::spawn(move || {
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("Failed to create runtime: {}", e);
-                    return;
-                }
-            };
+        let buffer = Arc::new(StdMutex::new(Vec::new()));
+        let (tx, rx) = channel();
 
-            rt.block_on(async {
-                let metadata = operator.stat(filename.as_str()).await.unwrap();
-                let file_size = metadata.content_length() as usize;
-                let chunk_size = if file_size > 512 { 512 } else { file_size };
+        let worker_handle = thread::spawn({
+            let buffer = buffer.clone();
 
-                let mut stream = operator
-                    .reader_with(filename.as_str())
-                    .chunk(chunk_size as usize)
-                    .await
-                    .unwrap()
-                    .into_stream(0u64..(file_size as u64))
-                    .await
-                    .unwrap();
+            move || {
+                let rt = match tokio::runtime::Runtime::new() {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        eprintln!("Failed to create runtime: {}", e);
+                        return;
+                    }
+                };
 
-                let bytes = stream.next().await;
+                rt.block_on(async {
+                    let metadata = operator.stat(filename.as_str()).await.unwrap();
+                    let file_size = metadata.content_length() as usize;
+                    let chunk_size = if file_size > 512 { 512 } else { file_size };
 
-                println!("{:?}", bytes);
-            });
+                    let mut stream = operator
+                        .reader_with(filename.as_str())
+                        .chunk(chunk_size as usize)
+                        .await
+                        .unwrap()
+                        .into_stream(0u64..(file_size as u64))
+                        .await
+                        .unwrap();
+
+                    while let Ok(request) = rx.recv() {
+                        match request {
+                            ReadRequest::FetchMoreData(tx) => {
+                                let result = match stream.next().await {
+                                    Some(Ok(chunk)) => {
+                                        if let Ok(mut buffer) = buffer.lock() {
+                                            buffer.extend_from_slice(&chunk.to_bytes());
+                                            FetchResult::DataAvailable
+                                        } else {
+                                            FetchResult::Error(format!("Failed to lock buffer"))
+                                        }
+                                    }
+                                    Some(Err(e)) => {
+                                        FetchResult::Error(format!("Error reading chunk: {}", e))
+                                    }
+                                    None => FetchResult::EndOfStream,
+                                };
+
+                                let _ = tx.send(result);
+                            }
+                            ReadRequest::Stop => {
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
         });
 
         StorageReader {
             worker_handle: Some(worker_handle),
+            buffer,
+            tx,
         }
-    }
-
-    pub async fn read_next_chunk(&self) -> Result<bool, Error> {
-        // let mut stream = self.stream.lock().await;
-        // let mut buffer = match self.buffer.lock() {
-        //     Ok(buffer) => buffer,
-        //     Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
-        // };
-        println!("Hehe");
-
-        // match stream.next().await {
-        //     Some(result) => match result {
-        //         Ok(chunk) => {
-        //             buffer.extend_from_slice(&chunk.to_vec());
-        //             Ok(true)
-        //         }
-        //         Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
-        //     },
-        //     None => {
-        //         let mut end_of_stream = match self.end_of_stream.lock() {
-        //             Ok(end_of_strem) => end_of_strem,
-        //             Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
-        //         };
-        //         *end_of_stream = true;
-        //         Ok(false)
-        //     }
-        // }
-
-        // let res = stream.next().await;
-        // println!("{:?}", res);
-
-        // let mut end_of_stream = match self.end_of_stream.lock() {
-        //     Ok(end_of_strem) => end_of_strem,
-        //     Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
-        // };
-
-        // *end_of_stream = true;
-        Ok(false)
     }
 }
 
 impl Drop for StorageReader {
     fn drop(&mut self) {
+        let _ = self.tx.send(ReadRequest::Stop);
+
         if let Some(handle) = self.worker_handle.take() {
             let _ = handle.join();
         }
@@ -188,42 +199,37 @@ impl Drop for StorageReader {
 
 impl Read for StorageReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        // let this = self.clone();
+        {
+            let mut buffer = match self.buffer.lock() {
+                Ok(buffer) => buffer,
+                Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to lock buffer")),
+            };
 
-        // let fut = std::thread::spawn(move || {
-        //     let reader = this.reader.clone();
-        //     let result: Result<bool, Error> = this.rt.block_on(async {
-        //         let reader = this.reader.clone();
+            if !buffer.is_empty() {
+                let bytes_to_copy = std::cmp::min(buffer.len(), buf.len());
+                buf[..bytes_to_copy].copy_from_slice(&buffer[..bytes_to_copy]);
+                buffer.drain(..bytes_to_copy);
 
-        //         let mut stream = reader.into_stream(0..240).await?;
+                return Ok(bytes_to_copy);
+            }
+        }
 
-        //         println!("alskdjkl");
-        //         let mut buf = [0u8; 10].to_vec();
-        //         let res = stream.next().await;
-        //         // let res = reader.fetch(vec![0u64..10 as u64]).await;
-        //         // println!("{:?}", res);
-        //         Ok(true)
-        //     });
+        let (response_tx, response_rx) = channel();
 
-        //     // let _ = tx.send(result);
-        // });
+        match self.tx.send(ReadRequest::FetchMoreData(response_tx)) {
+            Ok(()) => {}
+            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
+        };
 
-        // let _ = fut.join();
+        let fetch_result = match response_rx.recv() {
+            Ok(response) => response,
+            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
+        };
 
-        Ok(0)
-
-        // match rx.recv() {
-        //     Ok(result) => match result {
-        //         Ok(has_data) => {
-        //             if has_data {
-        //                 self.read(buf)
-        //             } else {
-        //                 Ok(0)
-        //             }
-        //         }
-        //         Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
-        //     },
-        //     Err(_) => Err(Error::new(ErrorKind::Other, "Thread communication failed")),
-        // }
+        match fetch_result {
+            FetchResult::DataAvailable => self.read(buf),
+            FetchResult::EndOfStream => Ok(0),
+            FetchResult::Error(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
+        }
     }
 }

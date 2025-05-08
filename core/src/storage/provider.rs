@@ -1,5 +1,4 @@
 use anyhow::Result;
-use futures::StreamExt;
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
@@ -10,7 +9,6 @@ use std::{
     io::{Read, Write},
     sync::Arc,
 };
-use stream_download_opendal::{OpendalStream, OpendalStreamParams};
 use tokio::sync::Mutex;
 
 use super::io::{StorageReader, StorageWriter};
@@ -103,11 +101,12 @@ impl StorageProvider {
         Ok(StorageProvider { config, operator })
     }
 
-    pub async fn test(&self) -> anyhow::Result<bool> {
-        // match self.operator.list(".").await {
-        //     Ok(_) => Ok(true),
-        //     Err(e) => Err(anyhow!("Storage test failed: {}", e)),
-        // }
+    pub async fn test(&self) -> Result<bool> {
+        self.operator
+            .list_with("/")
+            .recursive(true)
+            .limit(1)
+            .await?;
 
         Ok(true)
     }
@@ -143,21 +142,17 @@ impl StorageProvider {
 
 #[cfg(test)]
 mod provider_test {
-    use crate::storage::io::StorageReader;
-
     use super::{LocalStorageConfig, S3StorageConfig, StorageConfig, StorageProvider};
     use anyhow::Result;
     use dotenv::dotenv;
-    use futures::{StreamExt, TryStreamExt};
 
     use std::{
         env,
         io::{Cursor, Read, Write},
-        path::PathBuf,
     };
     use tempfile::tempdir;
 
-    fn get_local_provider() -> Result<(StorageProvider, PathBuf)> {
+    fn get_local_provider() -> Result<StorageProvider> {
         let temp_path = tempdir()?;
         let config = StorageConfig::Local(LocalStorageConfig {
             id: "test".into(),
@@ -165,7 +160,7 @@ mod provider_test {
             location: temp_path.path().to_str().unwrap().to_string(),
         });
         let provider = StorageProvider::new(config)?;
-        Ok((provider, temp_path.into_path()))
+        Ok(provider)
     }
 
     fn get_s3_provider() -> Result<StorageProvider> {
@@ -191,44 +186,57 @@ mod provider_test {
     }
 
     #[tokio::test]
-    async fn test_01_local_write() {
-        // let (provider, path) = get_local_provider().expect("Failed to get local provider");
-        // let content = "Ceci est un message test".as_bytes();
+    async fn test_01_local() {
+        let provider = get_local_provider().expect("Failed to get local provider");
+        let content = "Ceci est un message test".as_bytes();
 
-        // let mut reader = Cursor::new(content);
-        // let mut writer = provider
-        //     .create_writer("test")
-        //     .await
-        //     .expect("Failed to create writer");
+        let mut content_reader = Cursor::new(content);
+        let mut writer = provider
+            .create_writer("test")
+            .await
+            .expect("Failed to create writer");
 
-        // let mut buffer = [0u8; 512];
+        let mut buffer = [0u8; 10];
 
-        // loop {
-        //     match reader.read(&mut buffer) {
-        //         Ok(0) => break, // EOF
-        //         Ok(n) => {
-        //             writer
-        //                 .write(buffer[..n].to_vec())
-        //                 .await
-        //                 .expect("Failed to write bytes");
-        //         }
-        //         Err(e) => panic!("Error while reading content: {}", e),
-        //     }
-        // }
+        loop {
+            match content_reader.read(&mut buffer) {
+                Ok(0) => break, // EOF
+                Ok(n) => {
+                    writer
+                        .write(&buffer[..n].to_vec())
+                        .expect("Failed to write bytes");
+                }
+                Err(e) => panic!("Error while reading content: {}", e),
+            }
+        }
 
-        // writer.close().await.expect("Failed to close the writer");
+        writer.flush().expect("Failed to flush the writer");
 
-        // let mut file = File::open(path.join("test")).expect("Unable to open temp file");
-        // let mut file_content = String::new();
-        // file.read_to_string(&mut file_content)
-        //     .expect("Failed to read file");
+        let is_connected = provider.test().await.expect("Failed to test the provider");
+        assert!(is_connected);
 
-        // assert_eq!(file_content.as_bytes(), content);
+        let mut reader = provider
+            .create_reader("test")
+            .await
+            .expect("Failed to create reader");
+
+        let mut reader_content = vec![];
+
+        while let Ok(n) = reader.read(&mut buffer) {
+            if (n) > 0 {
+                reader_content.extend_from_slice(&buffer[..n]);
+            } else {
+                break;
+            }
+        }
+
+        assert_eq!(reader_content.as_slice(), content);
     }
 
     #[tokio::test]
-    async fn test_02_s3_write() {
+    async fn test_02_s3() {
         let provider = get_s3_provider().expect("Failed to get s3 provider");
+
         let mut writer = provider
             .create_writer("test-01")
             .await
@@ -249,72 +257,37 @@ mod provider_test {
         }
 
         writer.flush().expect("Failed to flush");
-    }
-
-    #[tokio::test]
-    async fn test_03_s3_read() {
-        let provider = get_s3_provider().expect("Failed to get s3 provider");
-        let mut writer = provider
-            .create_writer("test-01")
-            .await
-            .expect("Failed to create writer");
-
-        let content = "Ceci est un message test".as_bytes();
-        let mut reader = Cursor::new(content);
-        let mut buffer = [0u8; 10];
-
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => break, // EOF
-                Ok(n) => {
-                    writer.write(&buffer[..n]).expect("Failed to write bytes");
-                }
-                Err(e) => panic!("Error while reading content: {}", e),
-            }
-        }
-
-        writer.flush().expect("Failed to flush");
-
-        // let mut bytes = vec![];
 
         let mut reader = provider
             .create_reader("test-01")
             .await
             .expect("Failed to create reader");
 
-        // let mut buffer = [0u8; 500];
-        let _ = reader.read(&mut buffer);
+        let mut reader_content = vec![];
 
-        // let fut = std::thread::spawn({
-        //     move || {
-        //         let rt = tokio::runtime::Runtime::new().unwrap();
+        while let Ok(n) = reader.read(&mut buffer) {
+            if (n) > 0 {
+                reader_content.extend_from_slice(&buffer[..n]);
+            } else {
+                break;
+            }
+        }
 
-        //         rt.block_on(async {
-        //             let reader = provider
-        //                 .create_stream("test-01")
-        //                 .await
-        //                 .expect("Failed to create reader");
-        //             let mut reader = reader.lock().await;
+        assert_eq!(content, reader_content.as_slice());
+    }
 
-        //             let bytes = reader.next().await;
-        //             println!("{:?}", bytes);
-        //         });
-        //     }
-        // });
+    #[tokio::test]
+    async fn test_03_list() {
+        let provider = get_s3_provider().expect("Failed to get s3 provider");
 
-        // let _ = fut.join();
+        let entries = provider
+            .operator
+            .list_with("/")
+            .recursive(true)
+            .limit(10)
+            .await
+            .expect("Failed to list dumps in");
 
-        // loop {
-        //     match reader.read(&mut buffer) {
-        //         Ok(0) => break,
-        //         Ok(n) => {
-        //             println!("{:?}", &buffer[..n]);
-        //             let _ = bytes.extend_from_slice(&buffer[..n]);
-        //         }
-        //         Err(_) => panic!("Error while reading content"),
-        //     }
-        // }
-
-        // assert_eq!(content, &bytes[0..])
+        println!("{:?}", entries);
     }
 }
