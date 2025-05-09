@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use ssh2::Session;
+use ssh2::{ErrorCode, Session};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshTunnelConfig {
@@ -135,6 +135,9 @@ impl SshTunnel {
 
         let _ = setup_tx.send(Ok(()));
 
+        // Set all subsequent channels as non blocking
+        session.set_blocking(false);
+
         for stream in listener.incoming() {
             if shutdown_signal.load(Ordering::Relaxed) {
                 break;
@@ -142,8 +145,8 @@ impl SshTunnel {
 
             match stream {
                 Ok(local_stream) => {
+                    let shutdown_signal = shutdown_signal.clone();
                     let session_clone = session.clone();
-
                     let peer_addr = local_stream
                         .peer_addr()
                         .map_or_else(|_| "unknown".to_string(), |a| a.to_string());
@@ -154,24 +157,36 @@ impl SshTunnel {
 
                     let connection_thread =
                         thread::Builder::new().name(thread_name).spawn(move || {
-                            match session_clone.channel_direct_tcpip(
-                                &remote_host_clone,
-                                remote_port_clone,
-                                None,
-                            ) {
-                                Ok(channel) => {
-                                    if let Err(e) =
-                                        Self::copy_loop(local_stream, channel, &peer_addr)
-                                    {
-                                        // log::warn!("Data forwarding error for client {}: {}. Connection terminated.", peer_addr, e);
-                                    } else {
-                                        // log::debug!("Client connection {} handled and closed gracefully.", peer_addr);
+                            loop {
+                                match session_clone.channel_direct_tcpip(
+                                    &remote_host_clone,
+                                    remote_port_clone,
+                                    None,
+                                ) {
+                                    Ok(channel) => {
+                                        if let Err(e) = Self::copy_loop(
+                                            local_stream,
+                                            channel,
+                                            &peer_addr,
+                                            shutdown_signal,
+                                        ) {
+                                            eprintln!("{}", e);
+                                            // log::warn!("Data forwarding error for client {}: {}. Connection terminated.", peer_addr, e);
+                                        } else {
+                                            // log::debug!("Client connection {} handled and closed gracefully.", peer_addr);
+                                        }
+
+                                        break;
                                     }
-                                }
-                                Err(e) => {
-                                    // log::error!("Failed to open SSH direct-tcpip channel to {}:{} for client {}: {}",
-                                    //     remote_host_clone, remote_port_clone, peer_addr, e);
-                                    // local_stream is dropped here, closing the connection to the client.
+                                    Err(e) if e.code() == ErrorCode::Session(-37) => {
+                                        // Would block
+                                        thread::sleep(Duration::from_millis(5));
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("{}", e);
+                                        break;
+                                    }
                                 }
                             }
                         });
@@ -182,7 +197,7 @@ impl SshTunnel {
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(50));
+                    thread::sleep(Duration::from_millis(5));
                     continue;
                 }
                 Err(e) => {
@@ -206,6 +221,7 @@ impl SshTunnel {
         mut local_stream: TcpStream,
         mut channel: ssh2::Channel,
         peer_addr: &str,
+        shutdown_signal: Arc<AtomicBool>,
     ) -> Result<()> {
         local_stream.set_nonblocking(true).with_context(|| {
             format!(
@@ -213,7 +229,6 @@ impl SshTunnel {
                 peer_addr
             )
         })?;
-        // channel.set_blocking(false);
 
         let mut local_buffer = vec![0; 8192];
         let mut remote_buffer = vec![0; 8192];
@@ -223,6 +238,10 @@ impl SshTunnel {
 
         loop {
             let mut activity_this_iteration = false;
+
+            if shutdown_signal.load(Ordering::Relaxed) {
+                break;
+            }
 
             if !local_eof_reached {
                 match local_stream.read(&mut local_buffer) {
@@ -238,10 +257,15 @@ impl SshTunnel {
                             return Err(anyhow!("Error writing to SSH channel: {}", e));
                         }
 
-                        if let Err(e) = channel.flush() {}
+                        if let Err(e) = channel.flush() {
+                            eprintln!("{}", e);
+                        }
                     }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(50));
+                    }
                     Err(e) => {
+                        println!("{}", e);
                         local_eof_reached = true;
                         let _ = channel.send_eof();
                     }
@@ -262,7 +286,12 @@ impl SshTunnel {
                             return Err(anyhow!("Error writing to local stream: {}", e));
                         }
                     }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(5));
+                    }
                     Err(e) => {
+                        println!("Read error {}", e);
+
                         if channel.eof() {
                             // Explicit EOF from ssh2 error code
                             // log::debug!("[{}] SSH channel EOF (via error code).", peer_addr);
@@ -285,9 +314,10 @@ impl SshTunnel {
                 break;
             }
 
-            if !activity_this_iteration {
-                thread::sleep(Duration::from_millis(5));
-            }
+            // if !activity_this_iteration {
+            // }
+
+            thread::sleep(Duration::from_millis(5));
         }
 
         if !local_eof_reached {
@@ -317,13 +347,28 @@ impl Drop for SshTunnel {
 
 #[cfg(test)]
 mod ssh_tunnel_tests {
-    use crate::databases::ssh_tunnel::{SshAuthMethod, SshTunnel, SshTunnelConfig};
+
+    use dotenv::dotenv;
+    use std::env;
+
+    use crate::databases::{
+        postgres::connection::PostgreSqlConnection,
+        ssh_tunnel::{SshAuthMethod, SshTunnel, SshTunnelConfig},
+        ConnectionType, DatabaseConfig, DatabaseConnectionTrait,
+    };
 
     #[tokio::test]
     async fn test_01_run_tunnel() {
-        let config = SshTunnelConfig {
+        dotenv().ok();
+
+        let remote_port: u16 = env::var("POSTGRESQL_PORT")
+            .unwrap_or("0".into())
+            .parse()
+            .expect("Unable to parse remote port");
+
+        let ssh_config = SshTunnelConfig {
             remote_host: "localhost".into(),
-            remote_port: 5432,
+            remote_port,
             ssh_host: "188.213.129.133".into(),
             ssh_port: 22,
             ssh_username: "ubuntu".into(),
@@ -333,6 +378,30 @@ mod ssh_tunnel_tests {
             },
         };
 
-        let _ = SshTunnel::new(config).expect("Failed to get ssh tunnel");
+        let tunnel = SshTunnel::new(ssh_config).expect("Failed to get ssh tunnel");
+        let password = env::var("DB_PASSWORD").unwrap_or_default();
+
+        let database_config = DatabaseConfig {
+            id: "test".into(),
+            name: "test".into(),
+            connection_type: ConnectionType::PostgreSql,
+            host: "localhost".into(),
+            port: tunnel.local_port,
+            username: env::var("DB_USERNAME").unwrap_or_default(),
+            database: env::var("DB_NAME").unwrap_or_default(),
+            password: Some(password),
+            ssh_tunnel: None,
+        };
+
+        let postgres_connection = PostgreSqlConnection::new(database_config)
+            .await
+            .expect("Unable to get postgresql connection");
+
+        let is_connected = postgres_connection
+            .test()
+            .await
+            .expect("Failed to test database connection");
+
+        println!("is connected: {}", is_connected);
     }
 }
