@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::databases::{
+    ssh_tunnel::{SshRemoteConfig, SshTunnel},
     version::{Version, VersionTrait},
     DatabaseConfig, DatabaseConnectionTrait, DatabaseMetadata, UtilitiesTrait,
 };
@@ -24,15 +25,37 @@ use super::{utilities::PostgreSqlUtilities, version::PostgreSQLVersion};
 pub struct PostgreSqlConnection {
     pub config: DatabaseConfig,
     pub pool: Pool<Postgres>,
+    _ssh_tunnel: Option<SshTunnel>,
 }
 
 impl PostgreSqlConnection {
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
+        let ssh_tunnel = match &config.ssh_tunnel {
+            Some(config) => Some(SshTunnel::new(
+                config.clone(),
+                SshRemoteConfig {
+                    host: config.host.clone(),
+                    port: config.port,
+                },
+            )?),
+            None => None,
+        };
+
+        let host = match &ssh_tunnel {
+            Some(_) => "localhost",
+            None => &config.host,
+        };
+
+        let port = match &ssh_tunnel {
+            Some(ssh_tunnel) => ssh_tunnel.local_port,
+            None => config.port,
+        };
+
         let mut connect_options = PgConnectOptions::new()
-            .host(&config.host)
+            .host(host)
             .username(&config.username)
             .database(&config.database)
-            .port(config.port);
+            .port(port);
 
         connect_options = match &config.password {
             Some(password) => connect_options.password(&password),
@@ -45,7 +68,11 @@ impl PostgreSqlConnection {
             .connect_with(connect_options)
             .await?;
 
-        Ok(Self { config, pool })
+        Ok(Self {
+            config,
+            pool,
+            _ssh_tunnel: ssh_tunnel,
+        })
     }
 
     async fn get_base_command(&self, bin_name: &str) -> Result<Command> {

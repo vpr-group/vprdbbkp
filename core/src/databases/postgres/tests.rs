@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod postgresql_connection_test {
     use crate::databases::postgres::connection::PostgreSqlConnection;
+    use crate::databases::ssh_tunnel::{SshAuthMethod, SshTunnelConfig};
     use crate::databases::version::Version;
     use crate::databases::{ConnectionType, DatabaseConfig, DatabaseConnectionTrait};
     use anyhow::Result;
@@ -8,6 +9,15 @@ mod postgresql_connection_test {
     use std::env;
     use std::thread::sleep;
     use std::time::Duration;
+
+    fn initialize_test() {
+        dotenv().ok();
+        env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init()
+            .ok();
+    }
 
     async fn get_connection() -> Result<PostgreSqlConnection> {
         dotenv().ok();
@@ -30,8 +40,38 @@ mod postgresql_connection_test {
         Ok(connection)
     }
 
+    async fn get_tunneled_connection() -> Result<PostgreSqlConnection> {
+        dotenv().ok();
+
+        let port: u16 = env::var("DB_PORT").unwrap_or("0".into()).parse()?;
+        let password = env::var("DB_PASSWORD").unwrap_or_default();
+        let connection = PostgreSqlConnection::new(DatabaseConfig {
+            id: "test".to_string(),
+            name: "test".to_string(),
+            connection_type: ConnectionType::PostgreSql,
+            host: "localhost".into(),
+            password: Some(password),
+            username: env::var("DB_USERNAME").unwrap_or_default(),
+            database: env::var("DB_NAME").unwrap_or_default(),
+            port,
+            ssh_tunnel: Some(SshTunnelConfig {
+                host: env::var("SSH_HOST").unwrap_or_default(),
+                username: env::var("SSH_USERNAME").unwrap_or_default(),
+                port: 22,
+                auth_method: SshAuthMethod::PrivateKey {
+                    key_path: env::var("SSH_KEY_PATH").unwrap_or_default(),
+                    passphrase_key: None,
+                },
+            }),
+        })
+        .await?;
+
+        Ok(connection)
+    }
+
     #[tokio::test]
     async fn test_01_connection_test() {
+        initialize_test();
         let connection = get_connection().await.expect("Failed to get connection");
         let is_connected = connection.test().await.expect("Failed to test connection");
         assert!(is_connected)
@@ -39,6 +79,7 @@ mod postgresql_connection_test {
 
     #[tokio::test]
     async fn test_02_get_metadata() {
+        initialize_test();
         let connection = get_connection().await.expect("Failed to get connection");
         let metadata = connection
             .get_metadata()
@@ -59,6 +100,7 @@ mod postgresql_connection_test {
 
     #[tokio::test]
     async fn test_03_dump() {
+        initialize_test();
         let connection = get_connection().await.expect("Failed to get connection");
 
         let mut buffer = Vec::new();
@@ -72,6 +114,7 @@ mod postgresql_connection_test {
 
     #[tokio::test]
     async fn test_04_restore() {
+        initialize_test();
         let test_table_name = format!("test_restore_{}", chrono::Utc::now().timestamp());
         let connection = get_connection().await.expect("Failed to get connection");
 
@@ -179,5 +222,19 @@ mod postgresql_connection_test {
 
         let test3_exists = restored_rows.iter().any(|(name, _)| name == "test3");
         assert!(test3_exists, "test3 should be restored");
+    }
+
+    #[tokio::test]
+    async fn test_05_tunneled_connection() {
+        initialize_test();
+        let connection = get_tunneled_connection()
+            .await
+            .expect("Failed to get tunneled connection");
+
+        let is_connected = connection.test().await.expect("Failed to check connection");
+
+        println!("{}", is_connected);
+
+        assert!(is_connected);
     }
 }

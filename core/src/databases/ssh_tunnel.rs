@@ -17,12 +17,16 @@ use ssh2::{ErrorCode, Session};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshTunnelConfig {
-    pub ssh_host: String,
-    pub ssh_port: u16,
-    pub ssh_username: String,
-    pub ssh_auth_method: SshAuthMethod,
-    pub remote_host: String,
-    pub remote_port: u16,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_method: SshAuthMethod,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshRemoteConfig {
+    pub host: String,
+    pub port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,17 +47,24 @@ pub struct SshTunnel {
 }
 
 impl SshTunnel {
-    pub fn new(config: SshTunnelConfig) -> Result<Self> {
+    pub fn new(ssh_config: SshTunnelConfig, remote_config: SshRemoteConfig) -> Result<Self> {
         let shutdown_signal = Arc::new(AtomicBool::new(false));
         let local_port = Self::find_available_port()?;
         let (setup_tx, setup_rx) = channel();
 
         let thread_handle = {
-            let config = config.clone();
+            let ssh_config = ssh_config.clone();
+            let remote_config = remote_config.clone();
             let shutdown_signal = shutdown_signal.clone();
 
             thread::spawn(move || {
-                Self::run_tunnel(config, local_port, setup_tx, shutdown_signal);
+                Self::run_tunnel(
+                    ssh_config,
+                    remote_config,
+                    local_port,
+                    setup_tx,
+                    shutdown_signal,
+                );
             })
         };
 
@@ -83,12 +94,13 @@ impl SshTunnel {
     }
 
     fn run_tunnel(
-        config: SshTunnelConfig,
+        ssh_config: SshTunnelConfig,
+        remote_config: SshRemoteConfig,
         local_port: u16,
         setup_tx: Sender<Result<()>>,
         shutdown_signal: Arc<AtomicBool>,
     ) {
-        let tcp = match TcpStream::connect(format!("{}:{}", config.ssh_host, config.ssh_port)) {
+        let tcp = match TcpStream::connect(format!("{}:{}", ssh_config.host, ssh_config.port)) {
             Ok(tcp) => tcp,
             Err(e) => {
                 shutdown_signal.store(true, Ordering::Relaxed);
@@ -128,9 +140,9 @@ impl SshTunnel {
 
         trace!("SSH handshake successful");
 
-        match &config.ssh_auth_method {
+        match &ssh_config.auth_method {
             SshAuthMethod::Password { password } => {
-                if let Err(e) = session.userauth_password(&config.ssh_username, &password) {
+                if let Err(e) = session.userauth_password(&ssh_config.username, &password) {
                     shutdown_signal.store(true, Ordering::Relaxed);
                     if let Err(e) =
                         setup_tx.send(Err(anyhow!("SSH password authentication failed: {}", e)))
@@ -150,7 +162,7 @@ impl SshTunnel {
                 };
 
                 if let Err(e) = session.userauth_pubkey_file(
-                    &config.ssh_username,
+                    &ssh_config.username,
                     None,
                     std::path::Path::new(key_path),
                     passphrase_key,
@@ -216,8 +228,8 @@ impl SshTunnel {
                         .map_or_else(|_| "unknown".to_string(), |a| a.to_string());
 
                     let thread_name = format!("ssh_fwd_{}", peer_addr);
-                    let remote_host_clone = config.remote_host.clone();
-                    let remote_port_clone = config.remote_port.clone();
+                    let remote_host_clone = remote_config.host.clone();
+                    let remote_port_clone = remote_config.port.clone();
 
                     let connection_thread =
                         thread::Builder::new().name(thread_name.clone()).spawn(move || {
@@ -383,8 +395,8 @@ impl SshTunnel {
 
 impl Drop for SshTunnel {
     fn drop(&mut self) {
+        debug!("Dropping SSH tunnel");
         self.shutdown_signal.store(true, Ordering::Relaxed);
-
         if let Some(handle) = self.thread_handle.take() {
             if let Err(e) = handle.join() {
                 error!(
@@ -404,7 +416,7 @@ mod ssh_tunnel_tests {
 
     use crate::databases::{
         postgres::connection::PostgreSqlConnection,
-        ssh_tunnel::{SshAuthMethod, SshTunnel, SshTunnelConfig},
+        ssh_tunnel::{SshAuthMethod, SshRemoteConfig, SshTunnel, SshTunnelConfig},
         ConnectionType, DatabaseConfig, DatabaseConnectionTrait,
     };
 
@@ -417,24 +429,28 @@ mod ssh_tunnel_tests {
             .try_init()
             .ok();
 
-        let remote_port: u16 = env::var("POSTGRESQL_PORT")
-            .unwrap_or("0".into())
-            .parse()
-            .expect("Unable to parse remote port");
-
         let ssh_config = SshTunnelConfig {
-            remote_host: "localhost".into(),
-            remote_port,
-            ssh_host: env::var("SSH_HOST").unwrap_or_default(),
-            ssh_username: env::var("SSH_USERNAME").unwrap_or_default(),
-            ssh_port: 22,
-            ssh_auth_method: SshAuthMethod::PrivateKey {
+            host: env::var("SSH_HOST").unwrap_or_default(),
+            username: env::var("SSH_USERNAME").unwrap_or_default(),
+            port: 22,
+            auth_method: SshAuthMethod::PrivateKey {
                 key_path: env::var("SSH_KEY_PATH").unwrap_or_default(),
                 passphrase_key: None,
             },
         };
 
-        let tunnel = SshTunnel::new(ssh_config).expect("Failed to get ssh tunnel");
+        let remote_port: u16 = env::var("POSTGRESQL_PORT")
+            .unwrap_or("0".into())
+            .parse()
+            .expect("Unable to parse remote port");
+
+        let ssh_remote_config = SshRemoteConfig {
+            host: "localhost".into(),
+            port: remote_port,
+        };
+
+        let tunnel =
+            SshTunnel::new(ssh_config, ssh_remote_config).expect("Failed to get ssh tunnel");
         let password = env::var("DB_PASSWORD").unwrap_or_default();
 
         let database_config = DatabaseConfig {
