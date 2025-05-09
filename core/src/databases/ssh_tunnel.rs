@@ -86,23 +86,41 @@ impl SshTunnel {
         local_port: u16,
         setup_tx: Sender<Result<()>>,
         shutdown_signal: Arc<AtomicBool>,
-    ) -> Result<()> {
-        let tcp = TcpStream::connect(format!("{}:{}", config.ssh_host, config.ssh_port))
-            .map_err(|e| anyhow!("Failed to connect to SSH server: {}", e))?;
+    ) {
+        let tcp = match TcpStream::connect(format!("{}:{}", config.ssh_host, config.ssh_port)) {
+            Ok(tcp) => tcp,
+            Err(e) => {
+                let _ = setup_tx.send(Err(anyhow!("Failed to connect to SSH server: {}", e)));
+                shutdown_signal.store(true, Ordering::Relaxed);
+                return;
+            }
+        };
 
-        let mut session =
-            Session::new().map_err(|e| anyhow!("Failed to create SSH session: {}", e))?;
+        let mut session = match Session::new() {
+            Ok(session) => session,
+            Err(e) => {
+                let _ = setup_tx.send(Err(anyhow!("Failed to create SSH session: {}", e)));
+                shutdown_signal.store(true, Ordering::Relaxed);
+                return;
+            }
+        };
 
         session.set_tcp_stream(tcp);
-        session
-            .handshake()
-            .map_err(|e| anyhow!("SSH handshake failed: {}", e))?;
+
+        if let Err(e) = session.handshake() {
+            let _ = setup_tx.send(Err(anyhow!("SSH handshake failed: {}", e)));
+            shutdown_signal.store(true, Ordering::Relaxed);
+            return;
+        };
 
         match &config.ssh_auth_method {
             SshAuthMethod::Password { password } => {
-                session
-                    .userauth_password(&config.ssh_username, &password)
-                    .map_err(|e| anyhow!("SSH password authentication failed: {}", e))?;
+                if let Err(e) = session.userauth_password(&config.ssh_username, &password) {
+                    let _ =
+                        setup_tx.send(Err(anyhow!("SSH password authentication failed: {}", e)));
+                    shutdown_signal.store(true, Ordering::Relaxed);
+                    return;
+                };
             }
             SshAuthMethod::PrivateKey {
                 key_path,
@@ -113,30 +131,39 @@ impl SshTunnel {
                     None => None,
                 };
 
-                session
-                    .userauth_pubkey_file(
-                        &config.ssh_username,
-                        None,
-                        std::path::Path::new(key_path),
-                        passphrase_key,
-                    )
-                    .map_err(|e| anyhow!("SSH key authentication failed: {}", e))?;
+                if let Err(e) = session.userauth_pubkey_file(
+                    &config.ssh_username,
+                    None,
+                    std::path::Path::new(key_path),
+                    passphrase_key,
+                ) {
+                    let _ = setup_tx.send(Err(anyhow!("SSH key authentication failed: {}", e)));
+                    shutdown_signal.store(true, Ordering::Relaxed);
+                    return;
+                };
             }
         }
 
-        let listener = TcpListener::bind(format!("127.0.0.1:{}", local_port))
-            .map_err(|e| anyhow!("Failed to bind to local port: {}", e))?;
+        let listener = match TcpListener::bind(format!("127.0.0.1:{}", local_port)) {
+            Ok(listener) => listener,
+            Err(e) => {
+                let _ = setup_tx.send(Err(anyhow!("Failed to bind to local port: {}", e)));
+                shutdown_signal.store(true, Ordering::Relaxed);
+                return;
+            }
+        };
 
-        listener
-            .set_nonblocking(true)
-            .map_err(|e| anyhow!("Failed to set non-blocking mode: {}", e))?;
+        if let Err(e) = listener.set_nonblocking(true) {
+            let _ = setup_tx.send(Err(anyhow!("Failed to set non-blocking mode: {}", e)));
+            shutdown_signal.store(true, Ordering::Relaxed);
+            return;
+        };
 
         let mut connection_threads: Vec<JoinHandle<()>> = Vec::new();
 
         let _ = setup_tx.send(Ok(()));
 
         // Set all subsequent channels as non blocking
-        session.set_blocking(false);
 
         for stream in listener.incoming() {
             if shutdown_signal.load(Ordering::Relaxed) {
@@ -170,7 +197,7 @@ impl SshTunnel {
                                             &peer_addr,
                                             shutdown_signal,
                                         ) {
-                                            eprintln!("{}", e);
+                                            eprintln!("Error copy loop: {}", e);
                                             // log::warn!("Data forwarding error for client {}: {}. Connection terminated.", peer_addr, e);
                                         } else {
                                             // log::debug!("Client connection {} handled and closed gracefully.", peer_addr);
@@ -213,8 +240,6 @@ impl SshTunnel {
         for handle in connection_threads {
             if let Err(e) = handle.join() {}
         }
-
-        Ok(())
     }
 
     fn copy_loop(
