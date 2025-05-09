@@ -31,13 +31,17 @@ pub struct PostgreSqlConnection {
 impl PostgreSqlConnection {
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
         let ssh_tunnel = match &config.ssh_tunnel {
-            Some(config) => Some(SshTunnel::new(
-                config.clone(),
-                SshRemoteConfig {
-                    host: config.host.clone(),
-                    port: config.port,
-                },
-            )?),
+            Some(ssh_config) => {
+                let tunnel = SshTunnel::new(
+                    ssh_config.clone(),
+                    SshRemoteConfig {
+                        host: config.host.clone(),
+                        port: config.port,
+                    },
+                )?;
+
+                Some(tunnel)
+            }
             None => None,
         };
 

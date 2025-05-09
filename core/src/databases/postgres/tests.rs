@@ -233,8 +233,6 @@ mod postgresql_connection_test {
 
         let is_connected = connection.test().await.expect("Failed to check connection");
 
-        println!("{}", is_connected);
-
         assert!(is_connected);
     }
 }
