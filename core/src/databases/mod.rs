@@ -43,7 +43,7 @@ pub trait UtilitiesTrait: Send + Sync + Unpin {
     async fn get_command(&self, bin_name: &str) -> Result<Command>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionType {
     PostgreSql,
     MySql,
