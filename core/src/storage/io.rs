@@ -8,6 +8,7 @@ use std::{
 };
 
 use futures::StreamExt;
+use log::debug;
 use opendal::{Operator, Writer};
 use tokio::sync::Mutex as TokioMutex;
 
@@ -53,6 +54,9 @@ impl Write for StorageWriter {
                     .write_async(&buf_copy.clone())
                     .await
                     .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+
+                debug!("{}, bytes written", len);
+
                 Ok(len)
             });
 

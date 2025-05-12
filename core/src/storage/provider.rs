@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
-    BufferStream, Operator,
+    BufferStream, Entry, Operator,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -109,6 +109,18 @@ impl StorageProvider {
             .await?;
 
         Ok(true)
+    }
+
+    pub async fn list(&self) -> Result<Vec<Entry>> {
+        let result = self
+            .operator
+            .list_with("")
+            .recursive(true)
+            .limit(10000)
+            .await
+            .context(format!("Failed to list dumps in"))?;
+
+        Ok(result)
     }
 
     pub async fn create_writer(&self, filename: &str) -> Result<Box<dyn Write + Send + Unpin>> {

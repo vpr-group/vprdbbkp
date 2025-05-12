@@ -11,7 +11,10 @@ use std::{
 use tokio::{fs::File, io::AsyncWriteExt};
 use uuid::Uuid;
 
-use crate::databases::{version::Version, DatabaseConfig};
+use crate::{
+    compression::CompressionFormat,
+    databases::{version::Version, DatabaseConfig},
+};
 
 pub fn slugify(input: &str) -> String {
     let mut slug = String::new();
@@ -32,6 +35,32 @@ pub fn slugify(input: &str) -> String {
     let slug = slug.trim_matches('-');
 
     slug.to_string()
+}
+
+pub fn get_default_backup_name<B>(
+    database_config: B,
+    compression_format: &CompressionFormat,
+) -> String
+where
+    B: Borrow<DatabaseConfig>,
+{
+    let borrowed_config: &DatabaseConfig = database_config.borrow();
+    let now = Utc::now();
+    let date_str = now.format("%Y-%m-%d-%H%M%S");
+    let uuid_string = Uuid::new_v4().to_string();
+    let uuid = uuid_string.split('-').next().unwrap_or("backup");
+
+    let extension = match compression_format {
+        CompressionFormat::Zlib => "zip",
+        CompressionFormat::Deflate => "zz",
+        CompressionFormat::Gzip => "gz",
+        CompressionFormat::None => "",
+    };
+
+    format!(
+        "{}-{}-{}.{}",
+        borrowed_config.name, date_str, uuid, extension
+    )
 }
 
 pub fn get_binaries_base_path(version: &Version) -> PathBuf {
