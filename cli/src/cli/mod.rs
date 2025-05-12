@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
-use std::path::PathBuf;
 use vprs3bkp_core::{
     databases::{
         ssh_tunnel::{SshAuthMethod, SshTunnelConfig},
@@ -21,18 +20,18 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     Backup(BackupArgs),
-    // Restore(RestoreArgs),
-    // List(ListArgs),
+    Restore(RestoreArgs),
+    List(ListArgs),
     // Cleanup(CleanupArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct BackupArgs {
     #[command(flatten)]
-    pub database: DatabaseArgs,
+    pub database_config: DatabaseArgs,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub storage_config: StorageArgs,
 
     #[arg(short, long, help = "Retention period (e.g. '30d', '1w', '6m')")]
     pub retention: Option<String>,
@@ -40,20 +39,20 @@ pub struct BackupArgs {
 
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
-    #[arg(short, long)]
-    pub filename: Option<String>,
+    #[arg(long)]
+    pub name: String,
 
     #[arg(long)]
-    pub drop_database: Option<bool>,
+    pub drop_database: bool,
 
     #[arg(long)]
     pub latest: bool,
 
     #[command(flatten)]
-    pub source: DatabaseArgs,
+    pub database_config: DatabaseArgs,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub storage_config: StorageArgs,
 }
 
 #[derive(Args, Debug)]
@@ -64,8 +63,8 @@ pub struct ListArgs {
     #[arg(long)]
     pub latest_only: bool,
 
-    #[arg(short, long, default_value = "10")]
-    pub limit: usize,
+    #[arg(long, default_value = "10")]
+    pub limit: Option<usize>,
 
     #[command(flatten)]
     pub storage: StorageArgs,
@@ -127,17 +126,15 @@ pub struct DatabaseArgs {
 
 #[derive(Args, Debug)]
 pub struct StorageArgs {
-    // Shared args
-    #[arg(long, default_value = "s3")]
+    #[arg(long, default_value = "local")]
     pub storage_type: String,
 
     #[arg(long, default_value = "default")]
     pub storage_name: String,
 
     #[arg(long)]
-    pub prefix: Option<String>,
+    pub location: String,
 
-    // S3 specific args
     #[arg(long, env = "S3_BUCKET")]
     pub bucket: Option<String>,
 
@@ -152,10 +149,6 @@ pub struct StorageArgs {
 
     #[arg(long, env = "S3_SECRET_ACCESS_KEY", env = "S3_SECRET_KEY")]
     pub secret_key: Option<String>,
-
-    // Local specific args
-    #[arg(long)]
-    pub root: Option<PathBuf>,
 }
 
 pub fn parse_retention(retention: &str) -> Result<u64> {
@@ -199,31 +192,27 @@ pub fn storage_from_cli(args: &StorageArgs) -> Result<StorageConfig> {
                 .secret_key
                 .clone()
                 .ok_or_else(|| anyhow!("S3 storage requires --secret-key parameter"))?;
+            let region = args
+                .region
+                .clone()
+                .ok_or_else(|| anyhow!("S3 storage requires --region parameter"))?;
 
             Ok(StorageConfig::S3(S3StorageConfig {
                 name: args.storage_name.clone(),
                 bucket,
-                region: args.region.clone().unwrap(),
+                region,
                 endpoint: Some(endpoint),
                 access_key,
                 secret_key,
-                location: args.prefix.clone().unwrap(),
+                location: args.location.clone(),
                 id: "".into(),
             }))
         }
-        "local" => {
-            // Validate required args for local
-            let root = args
-                .root
-                .clone()
-                .ok_or_else(|| anyhow!("Local storage requires --root parameter"))?;
-
-            Ok(StorageConfig::Local(LocalStorageConfig {
-                name: args.storage_name.clone(),
-                id: "".into(),
-                location: args.prefix.clone().unwrap(),
-            }))
-        }
+        "local" => Ok(StorageConfig::Local(LocalStorageConfig {
+            name: args.storage_name.clone(),
+            id: "".into(),
+            location: args.location.clone(),
+        })),
         _ => Err(anyhow!("Unsupported storage type: {}", args.storage_type)),
     }
 }

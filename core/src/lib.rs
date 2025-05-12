@@ -5,7 +5,7 @@ use databases::DatabaseConnection;
 use flate2::Compression;
 use opendal::Entry;
 use serde::{Deserialize, Serialize};
-use storage::provider::StorageProvider;
+use storage::provider::{ListOptions, StorageProvider};
 
 pub mod common;
 pub mod compression;
@@ -23,8 +23,8 @@ pub struct BackupOptions {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RestoreOptions {
-    name: String,
-    compression_format: Option<CompressionFormat>,
+    pub name: String,
+    pub compression_format: Option<CompressionFormat>,
 }
 
 pub struct DbBkp {
@@ -110,8 +110,8 @@ impl DbBkp {
         Ok(())
     }
 
-    pub async fn list(&self) -> Result<Vec<Entry>> {
-        let entries = self.storage_provider.list().await?;
+    pub async fn list(&self, options: ListOptions) -> Result<Vec<Entry>> {
+        let entries = self.storage_provider.list(options).await?;
         Ok(entries)
     }
 }

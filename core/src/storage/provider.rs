@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use chrono::DateTime;
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
@@ -10,6 +11,8 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
+
+use crate::common::extract_timestamp_from_filename;
 
 use super::io::{StorageReader, StorageWriter};
 
@@ -70,6 +73,12 @@ pub struct StorageProvider {
     pub operator: Operator,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListOptions {
+    pub latest_only: Option<bool>,
+    pub limit: Option<usize>,
+}
+
 impl StorageProvider {
     pub fn new(config: StorageConfig) -> anyhow::Result<Self> {
         let operator = match &config {
@@ -111,16 +120,41 @@ impl StorageProvider {
         Ok(true)
     }
 
-    pub async fn list(&self) -> Result<Vec<Entry>> {
+    pub async fn list(&self, options: ListOptions) -> Result<Vec<Entry>> {
+        let limit = options.limit.unwrap_or(1000);
+        let latest_only = options.latest_only.unwrap_or(false);
+
         let result = self
             .operator
             .list_with("")
             .recursive(true)
-            .limit(10000)
+            .limit(limit)
             .await
-            .context(format!("Failed to list dumps in"))?;
+            .context(format!("Failed to list backups"))?;
 
-        Ok(result)
+        let mut filtered_results: Vec<Entry> = result
+            .into_iter()
+            .filter(|entry| entry.metadata().is_file())
+            .collect();
+
+        filtered_results.sort_by(|a, b| {
+            let a_timestamp =
+                extract_timestamp_from_filename(a.name()).unwrap_or(DateTime::default());
+
+            let b_timestamp =
+                extract_timestamp_from_filename(b.name()).unwrap_or(DateTime::default());
+
+            b_timestamp.cmp(&a_timestamp)
+        });
+
+        if latest_only {
+            match filtered_results.first() {
+                Some(entry) => return Ok(vec![entry.clone()]),
+                None => return Err(anyhow!("No entry found")),
+            }
+        }
+
+        Ok(filtered_results)
     }
 
     pub async fn create_writer(&self, filename: &str) -> Result<Box<dyn Write + Send + Unpin>> {

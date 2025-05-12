@@ -43,13 +43,12 @@ mod cli_test {
         let storage_args = StorageArgs {
             storage_type: "s3".into(),
             storage_name: "test".into(),
-            prefix: Some("".into()),
+            location: "".into(),
             bucket: Some("bucket".into()),
             region: Some("region".into()),
             endpoint: Some("endpoint".into()),
             access_key: Some("access_key".into()),
             secret_key: Some("access_key".into()),
-            root: None,
         };
 
         let storage_config = storage_from_cli(&storage_args);

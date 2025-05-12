@@ -44,8 +44,7 @@ mod tests {
     }
 
     fn extract_filename(text: &str) -> Option<String> {
-        let re =
-            Regex::new(r"\s+([a-zA-Z0-9_-]+-\d{4}-\d{2}-\d{2}-\d{6}-[a-z0-9]+\.tar\.gz)").unwrap();
+        let re = Regex::new(r"\s+([a-zA-Z0-9_-]+-\d{4}-\d{2}-\d{2}-\d{6}-[a-z0-9]+\.gz)").unwrap();
 
         if let Some(cap) = re.captures(text) {
             return Some(cap[1].to_string());
@@ -68,13 +67,9 @@ mod tests {
             .arg(format!("--password={}", options.password))
             .arg(format!("--port={}", options.port))
             .arg(format!("--storage-type=local"))
-            .arg(format!("--root=./test-backups-postgresql"))
+            .arg(format!("--location=./test-backups-postgresql"))
             .output()
             .expect("Failed to execute command");
-
-        if !backup_output.status.success() {
-            println!("{}", String::from_utf8_lossy(&backup_output.stderr))
-        };
 
         assert!(backup_output.status.success());
         assert!(String::from_utf8_lossy(&backup_output.stdout)
@@ -86,7 +81,7 @@ mod tests {
             .arg("list")
             .arg("--latest-only")
             .arg(format!("--storage-type=local"))
-            .arg(format!("--root=./test-backups-postgresql"))
+            .arg(format!("--location=./test-backups-postgresql"))
             .output()
             .expect("Failed to execute command");
 
@@ -101,18 +96,20 @@ mod tests {
 
         let restore_output = cmd
             .arg("restore")
-            .arg(format!("--filename={}", file_name))
-            .arg(format!("--drop-database=true"))
-            .arg(format!("--source-type=postgres"))
+            .arg(format!("--name={}", file_name))
+            .arg(format!("--drop-database"))
+            .arg(format!("--database-type=postgresql"))
             .arg(format!("--database={}", options.db_name))
             .arg(format!("--host={}", options.host))
             .arg(format!("--username={}", options.user))
             .arg(format!("--password={}", options.password))
             .arg(format!("--port={}", options.port))
             .arg(format!("--storage-type=local"))
-            .arg(format!("--root=./test-backups-postgresql"))
+            .arg(format!("--location=./test-backups-postgresql"))
             .output()
             .expect("Failed to execute command");
+
+        println!("{}", String::from_utf8_lossy(&restore_output.stderr));
 
         assert!(String::from_utf8_lossy(&restore_output.stdout)
             .contains("Restore completed successfully"));
