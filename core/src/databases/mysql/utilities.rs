@@ -1,8 +1,11 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
-use crate::databases::UtilitiesTrait;
+use crate::{
+    common::{download_and_install_binaries, get_binaries_base_path},
+    databases::{version::Version, UtilitiesTrait},
+};
 use anyhow::{anyhow, Result};
-use dirs::cache_dir;
+use log::debug;
 use tokio::process::Command;
 
 use super::version::MySqlVersion;
@@ -16,18 +19,23 @@ impl MySqlUtilities {
     pub fn new(version: MySqlVersion) -> Self {
         MySqlUtilities { version }
     }
+
+    pub async fn install(&self) -> Result<()> {
+        let path = download_and_install_binaries(&Version::MySql(self.version.clone())).await?;
+
+        debug!(
+            "Successfully installed MySql utilities at {}",
+            path.display()
+        );
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl UtilitiesTrait for MySqlUtilities {
     fn get_base_path(&self) -> Result<PathBuf> {
-        let path = cache_dir()
-            .unwrap_or_else(|| env::temp_dir())
-            .join("vprdbbkp")
-            .join("mysql")
-            .join(self.version.to_string())
-            .join("bin");
-
+        let path = get_binaries_base_path(&Version::MySql(self.version.clone())).join("bin");
         Ok(path)
     }
 

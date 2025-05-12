@@ -1,10 +1,17 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
+use dirs::cache_dir;
+use log::info;
 use regex::Regex;
-use std::{borrow::Borrow, path::Path};
+use std::{
+    borrow::Borrow,
+    env, fs,
+    path::{Path, PathBuf},
+};
+use tokio::{fs::File, io::AsyncWriteExt};
 use uuid::Uuid;
 
-use crate::databases::DatabaseConfig;
+use crate::databases::{version::Version, DatabaseConfig};
 
 pub fn slugify(input: &str) -> String {
     let mut slug = String::new();
@@ -25,6 +32,190 @@ pub fn slugify(input: &str) -> String {
     let slug = slug.trim_matches('-');
 
     slug.to_string()
+}
+
+pub fn get_binaries_base_path(version: &Version) -> PathBuf {
+    let db_name = get_db_name(&version);
+    let version_name = get_version_name(&version);
+
+    cache_dir()
+        .unwrap_or_else(|| env::temp_dir())
+        .join("vprdbbkp")
+        .join(db_name)
+        .join(version_name)
+}
+
+fn get_db_name(version: &Version) -> String {
+    match version {
+        Version::PostgreSQL(_) => "postgresql".into(),
+        Version::MySql(_) => "mysql".into(),
+    }
+}
+
+fn get_version_name(version: &Version) -> String {
+    match version {
+        Version::PostgreSQL(version) => version.to_string(),
+        Version::MySql(version) => version.to_string(),
+    }
+}
+
+pub fn get_binary_archive_url(version: &Version) -> Result<String> {
+    let os = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+
+    let arch = if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        return Err(anyhow!("Unsupported architecture"));
+    };
+
+    let archive_extension = if cfg!(target_os = "windows") {
+        "zip"
+    } else {
+        "tar.gz"
+    };
+
+    let db_name = get_db_name(&version);
+    let version_name = get_version_name(&version);
+
+    let base_bucket_url =
+        "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp";
+
+    let archive_name = format!(
+        "{}-{}-{}.{}",
+        db_name, version_name, arch, archive_extension
+    );
+
+    let url = format!("{}/{}/{}", base_bucket_url, os, archive_name);
+
+    Ok(url)
+}
+
+async fn extract_zip(archive_path: &PathBuf, destination: &PathBuf) -> Result<()> {
+    use std::process::Command as StdCommand;
+
+    let status = StdCommand::new("powershell")
+        .arg("-Command")
+        .arg(&format!(
+            "Expand-Archive -Path '{}' -DestinationPath '{}'",
+            archive_path.display(),
+            destination.display()
+        ))
+        .status()
+        .with_context(|| "Failed to execute PowerShell to extract zip archive")?;
+
+    if !status.success() {
+        return Err(anyhow!("Failed to extract zip archive"));
+    }
+
+    Ok(())
+}
+
+async fn extract_tar_gz(archive_path: &PathBuf, destination: &PathBuf) -> Result<()> {
+    use std::process::Command as StdCommand;
+
+    if !destination.exists() {
+        fs::create_dir_all(destination)?;
+    }
+
+    let status = StdCommand::new("tar")
+        .arg("-xzf")
+        .arg(archive_path)
+        .arg("-C")
+        .arg(destination)
+        .status()
+        .with_context(|| "Failed to execute tar to extract archive")?;
+
+    if !status.success() {
+        return Err(anyhow!("Failed to extract tar.gz archive"));
+    }
+
+    let bin_dir = destination.join("bin");
+    if bin_dir.exists() {
+        let entries = fs::read_dir(&bin_dir)?;
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() {
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let metadata = fs::metadata(&path)?;
+                        let mut perms = metadata.permissions();
+                        perms.set_mode(0o755); // rwxr-xr-x
+                        fs::set_permissions(&path, perms)?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn download_and_install_binaries(version: &Version) -> Result<PathBuf> {
+    let base_path = get_binaries_base_path(&version);
+
+    if !base_path.exists() {
+        fs::create_dir_all(&base_path)
+            .with_context(|| format!("Failed to create directory: {}", base_path.display()))?;
+    }
+
+    let url = get_binary_archive_url(&version)?;
+
+    info!("Downloading archive from {}", url);
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to download archive from {}", url))?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!(
+            "Failed to download archive, server returned: {}",
+            response.status()
+        ));
+    }
+
+    let content = response
+        .bytes()
+        .await
+        .with_context(|| "Failed to read response body")?;
+
+    let temp_dir = env::temp_dir();
+
+    let db_name = get_db_name(&version);
+    let version_name = get_version_name(&version);
+    let archive_path = temp_dir.join(format!("{}-{}", db_name, version_name));
+
+    let mut file = File::create(&archive_path)
+        .await
+        .with_context(|| format!("Failed to create file: {}", archive_path.display()))?;
+
+    file.write_all(&content)
+        .await
+        .with_context(|| format!("Failed to write to file: {}", archive_path.display()))?;
+
+    file.sync_all().await?;
+
+    if cfg!(target_os = "windows") {
+        extract_zip(&archive_path, &base_path).await?;
+    } else {
+        extract_tar_gz(&archive_path, &base_path).await?;
+    }
+
+    tokio::fs::remove_file(archive_path).await.ok();
+
+    Ok(base_path)
 }
 
 pub fn get_source_name<B>(source_config: B) -> String

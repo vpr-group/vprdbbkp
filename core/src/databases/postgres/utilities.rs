@@ -1,15 +1,15 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
-use crate::databases::UtilitiesTrait;
+use crate::{
+    common::{download_and_install_binaries, get_binaries_base_path},
+    databases::{version::Version, UtilitiesTrait},
+};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use dirs::cache_dir;
+use log::debug;
 use tokio::process::Command;
 
 use super::version::PostgreSQLVersion;
-
-const BUCKET_URL: &str =
-    "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/postgres";
 
 pub struct PostgreSqlUtilities {
     version: PostgreSQLVersion,
@@ -21,6 +21,14 @@ impl PostgreSqlUtilities {
     }
 
     async fn install(&self) -> Result<()> {
+        let path =
+            download_and_install_binaries(&Version::PostgreSQL(self.version.clone())).await?;
+
+        debug!(
+            "Successfully installed PostgreSQL utilities at {}",
+            path.display()
+        );
+
         Ok(())
     }
 }
@@ -28,13 +36,7 @@ impl PostgreSqlUtilities {
 #[async_trait]
 impl UtilitiesTrait for PostgreSqlUtilities {
     fn get_base_path(&self) -> Result<PathBuf> {
-        let path = cache_dir()
-            .unwrap_or_else(|| env::temp_dir())
-            .join("vprdbbkp")
-            .join("postgresql")
-            .join(self.version.to_string())
-            .join("bin");
-
+        let path = get_binaries_base_path(&Version::PostgreSQL(self.version.clone())).join("bin");
         Ok(path)
     }
 
@@ -43,7 +45,12 @@ impl UtilitiesTrait for PostgreSqlUtilities {
         let bin_path = base_path.join(bin_name);
 
         if !bin_path.exists() {
-            return Err(anyhow!("{} binary not found", bin_path.display()));
+            debug!("PostgreSQL utilities not found, attempting to download and install");
+            self.install().await?;
+
+            if !bin_path.exists() {
+                return Err(anyhow!("Binary {} not found after installation", bin_name));
+            }
         }
 
         let command = Command::new(&bin_path);
