@@ -1,6 +1,7 @@
 use anyhow::Result;
-use clap::Parser;
-use cli::{database_config_from_cli, parse_retention, storage_from_cli, Cli, Commands};
+use clap::{Args, Parser};
+use cli::{database_config_from_cli, storage_from_cli, Cli, Commands};
+use vprs3bkp_core::{databases::DatabaseConnection, storage::provider::StorageProvider, DbBkp};
 
 mod cli;
 mod tests;
@@ -9,6 +10,25 @@ mod tests;
 async fn main() -> Result<()> {
     // Parse command line arguments
     let cli = Cli::parse();
+
+    println!("{:?}", cli.command);
+
+    match cli.command {
+        Commands::Backup(args) => {
+            let database_config = database_config_from_cli(&args.database)?;
+            let storage_config = storage_from_cli(&args.storage)?;
+
+            let database_connection = DatabaseConnection::new(database_config).await?;
+            let storage_provider = StorageProvider::new(storage_config)?;
+
+            let core = DbBkp::new(database_connection, storage_provider);
+
+            // Test database & storage connection
+            core.test().await?;
+
+            let backup_file = core.backup().await?;
+        }
+    };
 
     // Process commands
     // match &cli.command {

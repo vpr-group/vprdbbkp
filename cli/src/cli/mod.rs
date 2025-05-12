@@ -11,14 +11,14 @@ use vprs3bkp_core::{
 
 mod tests;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 pub enum Commands {
     Backup(BackupArgs),
     // Restore(RestoreArgs),
@@ -26,7 +26,7 @@ pub enum Commands {
     // Cleanup(CleanupArgs),
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct BackupArgs {
     #[command(flatten)]
     pub database: DatabaseArgs,
@@ -38,7 +38,7 @@ pub struct BackupArgs {
     pub retention: Option<String>,
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct RestoreArgs {
     #[arg(short, long)]
     pub filename: Option<String>,
@@ -56,7 +56,7 @@ pub struct RestoreArgs {
     pub storage: StorageArgs,
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct ListArgs {
     #[arg(short, long)]
     pub database: Option<String>,
@@ -71,7 +71,7 @@ pub struct ListArgs {
     pub storage: StorageArgs,
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct CleanupArgs {
     #[arg(short, long, help = "Retention period (e.g. '30d', '1w', '6m')")]
     pub retention: String,
@@ -89,7 +89,7 @@ pub struct CleanupArgs {
     pub storage: StorageArgs,
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct SshArgs {
     #[arg(long)]
     pub ssh_host: Option<String>,
@@ -101,21 +101,21 @@ pub struct SshArgs {
     ssh_key_path: Option<String>,
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct DatabaseArgs {
-    #[arg(long, default_value = "postgres")]
+    #[arg(long, help = "Database type ('postgresql' or 'mysql')")]
     pub database_type: String,
 
-    #[arg(short, long)]
+    #[arg(long)]
     pub database: String,
 
-    #[arg(long, short = 'H', default_value = "localhost")]
+    #[arg(long)]
     pub host: String,
 
-    #[arg(short, long, default_value = "5432")]
+    #[arg(long)]
     pub port: u16,
 
-    #[arg(short, long, default_value = "postgres")]
+    #[arg(long)]
     pub username: String,
 
     #[arg(long, env = "PGPASSWORD")]
@@ -125,7 +125,7 @@ pub struct DatabaseArgs {
     pub ssh: Option<SshArgs>,
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct StorageArgs {
     // Shared args
     #[arg(long, default_value = "s3")]

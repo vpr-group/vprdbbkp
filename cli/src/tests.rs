@@ -61,7 +61,7 @@ mod tests {
 
         let backup_output = cmd
             .arg("backup")
-            .arg(format!("--source-type=postgres"))
+            .arg(format!("--database-type=postgresql"))
             .arg(format!("--database={}", options.db_name))
             .arg(format!("--host={}", options.host))
             .arg(format!("--username={}", options.user))
@@ -71,6 +71,10 @@ mod tests {
             .arg(format!("--root=./test-backups-postgresql"))
             .output()
             .expect("Failed to execute command");
+
+        if !backup_output.status.success() {
+            println!("{}", String::from_utf8_lossy(&backup_output.stderr))
+        };
 
         assert!(backup_output.status.success());
         assert!(String::from_utf8_lossy(&backup_output.stdout)
