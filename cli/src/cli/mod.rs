@@ -2,10 +2,14 @@ use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 use vprs3bkp_core::{
-    databases::configs::{MariaDBSourceConfig, PGSourceConfig, SourceConfig},
-    storage::configs::{LocalStorageConfig, S3StorageConfig, StorageConfig},
-    tunnel::config::TunnelConfig,
+    databases::{
+        ssh_tunnel::{SshAuthMethod, SshTunnelConfig},
+        ConnectionType, DatabaseConfig,
+    },
+    storage::provider::{LocalStorageConfig, S3StorageConfig, StorageConfig},
 };
+
+mod tests;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -17,15 +21,15 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     Backup(BackupArgs),
-    Restore(RestoreArgs),
-    List(ListArgs),
-    Cleanup(CleanupArgs),
+    // Restore(RestoreArgs),
+    // List(ListArgs),
+    // Cleanup(CleanupArgs),
 }
 
 #[derive(Args)]
 pub struct BackupArgs {
     #[command(flatten)]
-    pub source: SourceArgs,
+    pub database: DatabaseArgs,
 
     #[command(flatten)]
     pub storage: StorageArgs,
@@ -46,7 +50,7 @@ pub struct RestoreArgs {
     pub latest: bool,
 
     #[command(flatten)]
-    pub source: SourceArgs,
+    pub source: DatabaseArgs,
 
     #[command(flatten)]
     pub storage: StorageArgs,
@@ -85,13 +89,22 @@ pub struct CleanupArgs {
     pub storage: StorageArgs,
 }
 
-#[derive(Args)]
-pub struct SourceArgs {
-    #[arg(long, default_value = "postgres")]
-    pub source_type: String,
+#[derive(Args, Clone)]
+pub struct SshArgs {
+    #[arg(long)]
+    pub ssh_host: Option<String>,
 
-    #[arg(long, default_value = "default")]
-    pub source_name: String,
+    #[arg(long)]
+    ssh_username: Option<String>,
+
+    #[arg(long)]
+    ssh_key_path: Option<String>,
+}
+
+#[derive(Args, Clone)]
+pub struct DatabaseArgs {
+    #[arg(long, default_value = "postgres")]
+    pub database_type: String,
 
     #[arg(short, long)]
     pub database: String,
@@ -108,14 +121,8 @@ pub struct SourceArgs {
     #[arg(long, env = "PGPASSWORD")]
     pub password: Option<String>,
 
-    #[arg(long)]
-    pub use_ssh_tunnel: bool,
-
-    #[arg(long)]
-    pub ssh_key_path: Option<String>,
-
-    #[arg(long)]
-    pub ssh_username: Option<String>,
+    #[command(flatten)]
+    pub ssh: Option<SshArgs>,
 }
 
 #[derive(Args)]
@@ -135,7 +142,7 @@ pub struct StorageArgs {
     pub bucket: Option<String>,
 
     #[arg(long, env = "S3_REGION", default_value = "us-east-1")]
-    pub region: String,
+    pub region: Option<String>,
 
     #[arg(long, env = "S3_ENDPOINT")]
     pub endpoint: Option<String>,
@@ -172,99 +179,111 @@ pub fn parse_retention(retention: &str) -> Result<u64> {
     }
 }
 
-pub fn storage_from_cli(storage: &StorageArgs) -> Result<StorageConfig> {
-    match storage.storage_type.as_str() {
+pub fn storage_from_cli(args: &StorageArgs) -> Result<StorageConfig> {
+    match args.storage_type.as_str() {
         "s3" => {
             // Validate required args for S3
-            let bucket = storage
+            let bucket = args
                 .bucket
                 .clone()
                 .ok_or_else(|| anyhow!("S3 storage requires --bucket parameter"))?;
-            let endpoint = storage
+            let endpoint = args
                 .endpoint
                 .clone()
                 .ok_or_else(|| anyhow!("S3 storage requires --endpoint parameter"))?;
-            let access_key = storage
+            let access_key = args
                 .access_key
                 .clone()
                 .ok_or_else(|| anyhow!("S3 storage requires --access-key parameter"))?;
-            let secret_key = storage
+            let secret_key = args
                 .secret_key
                 .clone()
                 .ok_or_else(|| anyhow!("S3 storage requires --secret-key parameter"))?;
 
             Ok(StorageConfig::S3(S3StorageConfig {
-                name: storage.storage_name.clone(),
+                name: args.storage_name.clone(),
                 bucket,
-                region: storage.region.clone(),
-                endpoint,
+                region: args.region.clone().unwrap(),
+                endpoint: Some(endpoint),
                 access_key,
                 secret_key,
-                prefix: storage.prefix.clone(),
+                location: args.prefix.clone().unwrap(),
+                id: "".into(),
             }))
         }
         "local" => {
             // Validate required args for local
-            let root = storage
+            let root = args
                 .root
                 .clone()
                 .ok_or_else(|| anyhow!("Local storage requires --root parameter"))?;
 
             Ok(StorageConfig::Local(LocalStorageConfig {
-                name: storage.storage_name.clone(),
-                root,
-                prefix: storage.prefix.clone(),
+                name: args.storage_name.clone(),
+                id: "".into(),
+                location: args.prefix.clone().unwrap(),
             }))
         }
-        _ => Err(anyhow!(
-            "Unsupported storage type: {}",
-            storage.storage_type
-        )),
+        _ => Err(anyhow!("Unsupported storage type: {}", args.storage_type)),
     }
 }
 
-pub fn source_from_cli(source: &SourceArgs) -> Result<SourceConfig> {
-    let tunnel_config = if source.use_ssh_tunnel {
-        let ssh_key_path = source
+pub fn database_config_from_cli(args: &DatabaseArgs) -> Result<DatabaseConfig> {
+    let ssh_tunnel = if let Some(ssh) = &args.ssh {
+        let ssh_host = ssh
+            .ssh_host
+            .as_ref()
+            .ok_or_else(|| anyhow!("SSH key path is required when using SSH tunnel"))?
+            .clone();
+
+        let ssh_key_path = ssh
             .ssh_key_path
             .as_ref()
             .ok_or_else(|| anyhow!("SSH key path is required when using SSH tunnel"))?
             .clone();
 
-        let ssh_username = source
+        let ssh_username = ssh
             .ssh_username
             .as_ref()
             .ok_or_else(|| anyhow!("SSH username is required when using SSH tunnel"))?
             .clone();
 
-        Some(TunnelConfig {
-            use_tunnel: source.use_ssh_tunnel,
-            key_path: ssh_key_path,
+        Some(SshTunnelConfig {
+            port: 22,
+            host: ssh_host,
             username: ssh_username,
+            auth_method: SshAuthMethod::PrivateKey {
+                key_path: ssh_key_path,
+                passphrase_key: None,
+            },
         })
     } else {
         None
     };
 
-    match source.source_type.as_str() {
-        "postgres" => Ok(SourceConfig::PG(PGSourceConfig {
-            name: source.source_name.clone(),
-            database: source.database.clone(),
-            host: source.host.clone(),
-            port: source.port,
-            username: source.username.clone(),
-            password: source.password.clone(),
-            tunnel_config,
-        })),
-        "mariadb" => Ok(SourceConfig::MariaDB(MariaDBSourceConfig {
-            name: source.source_name.clone(),
-            database: source.database.clone(),
-            host: source.host.clone(),
-            port: source.port,
-            username: source.username.clone(),
-            password: source.password.clone(),
-            tunnel_config,
-        })),
-        _ => Err(anyhow!("Unsupported source type: {}", source.source_type)),
+    match args.database_type.as_str() {
+        "postgresql" => Ok(DatabaseConfig {
+            connection_type: ConnectionType::PostgreSql,
+            database: args.database.clone(),
+            id: "".into(),
+            name: args.database.clone(),
+            host: args.host.clone(),
+            port: args.port,
+            username: args.username.clone(),
+            password: args.password.clone(),
+            ssh_tunnel,
+        }),
+        "mysql" => Ok(DatabaseConfig {
+            connection_type: ConnectionType::MySql,
+            database: args.database.clone(),
+            id: "".into(),
+            name: args.database.clone(),
+            host: args.host.clone(),
+            port: args.port,
+            username: args.username.clone(),
+            password: args.password.clone(),
+            ssh_tunnel,
+        }),
+        _ => Err(anyhow!("Unsupported database type: {}", args.database_type)),
     }
 }
