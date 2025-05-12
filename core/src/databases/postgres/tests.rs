@@ -45,7 +45,8 @@ mod postgresql_connection_test {
 
         let port: u16 = env::var("DB_PORT").unwrap_or("0".into()).parse()?;
         let password = env::var("DB_PASSWORD").unwrap_or_default();
-        let connection = PostgreSqlConnection::new(DatabaseConfig {
+
+        let config = DatabaseConfig {
             id: "test".to_string(),
             name: "test".to_string(),
             connection_type: ConnectionType::PostgreSql,
@@ -63,8 +64,9 @@ mod postgresql_connection_test {
                     passphrase_key: None,
                 },
             }),
-        })
-        .await?;
+        };
+
+        let connection = PostgreSqlConnection::new(config).await?;
 
         Ok(connection)
     }
@@ -234,5 +236,22 @@ mod postgresql_connection_test {
         let is_connected = connection.test().await.expect("Failed to check connection");
 
         assert!(is_connected);
+    }
+
+    #[tokio::test]
+    async fn test_05_tunneled_backup() {
+        initialize_test();
+        let connection = get_tunneled_connection()
+            .await
+            .expect("Failed to get tunneled connection");
+
+        let mut buf = vec![];
+
+        connection
+            .backup(&mut buf)
+            .await
+            .expect("Failed to check connection");
+
+        assert!(buf.len() > 0);
     }
 }

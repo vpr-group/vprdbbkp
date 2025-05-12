@@ -30,6 +30,7 @@ pub struct PostgreSqlConnection {
 
 impl PostgreSqlConnection {
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
+        let mut config = config.clone();
         let ssh_tunnel = match &config.ssh_tunnel {
             Some(ssh_config) => {
                 let tunnel = SshTunnel::new(
@@ -45,21 +46,16 @@ impl PostgreSqlConnection {
             None => None,
         };
 
-        let host = match &ssh_tunnel {
-            Some(_) => "localhost",
-            None => &config.host,
-        };
-
-        let port = match &ssh_tunnel {
-            Some(ssh_tunnel) => ssh_tunnel.local_port,
-            None => config.port,
-        };
+        if let Some(ssh_tunnel) = &ssh_tunnel {
+            config.host = "localhost".into();
+            config.port = ssh_tunnel.local_port;
+        }
 
         let mut connect_options = PgConnectOptions::new()
-            .host(host)
+            .host(&config.host)
             .username(&config.username)
             .database(&config.database)
-            .port(port);
+            .port(config.port);
 
         connect_options = match &config.password {
             Some(password) => connect_options.password(&password),
