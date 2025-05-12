@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use common::get_default_backup_name;
 use compression::{CompressionFormat, Compressor, Decompressor};
 use databases::DatabaseConnection;
@@ -38,6 +38,19 @@ impl DbBkp {
             database_connection,
             storage_provider,
         }
+    }
+
+    pub async fn test(&self) -> Result<bool> {
+        let is_database_connected = self.database_connection.connection.test().await?;
+        let is_storage_connected = self.storage_provider.test().await?;
+
+        if !is_database_connected {
+            return Err(anyhow!("Failed to connect to the database"));
+        } else if !is_storage_connected {
+            return Err(anyhow!("Failed to connect to the storage provider"));
+        }
+
+        return Ok(true);
     }
 
     pub async fn backup_with(&self, options: Option<BackupOptions>) -> Result<String> {
