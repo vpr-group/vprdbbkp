@@ -44,7 +44,12 @@ impl UtilitiesTrait for MySqlUtilities {
         let bin_path = base_path.join(bin_name);
 
         if !bin_path.exists() {
-            return Err(anyhow!("{} binary not found", bin_path.display()));
+            debug!("MySql utilities not found, attempting to download and install");
+            self.install().await?;
+
+            if !bin_path.exists() {
+                return Err(anyhow!("Binary {} not found after installation", bin_name));
+            }
         }
 
         let command = Command::new(&bin_path);
