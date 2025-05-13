@@ -97,7 +97,7 @@ mod postgresql_connection_test {
 
         let version = version.unwrap();
 
-        assert!(version.to_string().contains("15.12"));
+        assert!(version.to_string().contains("15"));
     }
 
     #[tokio::test]

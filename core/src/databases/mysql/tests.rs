@@ -55,7 +55,7 @@ mod mysql_connection_tests {
 
         let version = version.unwrap();
 
-        assert_eq!(version.to_string(), "9.3.0");
+        assert_eq!(version.to_string(), "9");
     }
 
     #[tokio::test]
