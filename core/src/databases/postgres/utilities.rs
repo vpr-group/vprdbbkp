@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use crate::{
-    common::{download_and_install_binaries, get_binaries_base_path},
+    archives::installer::ArchiveInstaller,
+    common::get_binaries_base_path,
     databases::{version::Version, UtilitiesTrait},
 };
 use anyhow::{anyhow, Result};
@@ -21,8 +22,8 @@ impl PostgreSqlUtilities {
     }
 
     async fn install(&self) -> Result<()> {
-        let path =
-            download_and_install_binaries(&Version::PostgreSQL(self.version.clone())).await?;
+        let archives_installer = ArchiveInstaller::new(Version::PostgreSQL(self.version.clone()));
+        let path = archives_installer.download_and_install().await?;
 
         debug!(
             "Successfully installed PostgreSQL utilities at {}",

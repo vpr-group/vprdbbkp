@@ -45,7 +45,7 @@ impl VersionTrait for MySqlVersion {
 
 impl fmt::Display for MySqlVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+        write!(f, "{}", self.major)
     }
 }
 

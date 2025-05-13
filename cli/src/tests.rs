@@ -109,8 +109,6 @@ mod tests {
             .output()
             .expect("Failed to execute command");
 
-        println!("{}", String::from_utf8_lossy(&restore_output.stderr));
-
         assert!(String::from_utf8_lossy(&restore_output.stdout)
             .contains("Restore completed successfully"));
     }

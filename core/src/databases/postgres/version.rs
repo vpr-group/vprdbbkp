@@ -35,7 +35,7 @@ impl VersionTrait for PostgreSQLVersion {
 
 impl fmt::Display for PostgreSQLVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.major, self.minor)
+        write!(f, "{}", self.major)
     }
 }
 

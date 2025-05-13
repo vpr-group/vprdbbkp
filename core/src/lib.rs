@@ -7,6 +7,7 @@ use opendal::Entry;
 use serde::{Deserialize, Serialize};
 use storage::provider::{ListOptions, StorageProvider};
 
+pub mod archives;
 pub mod common;
 pub mod compression;
 pub mod databases;
@@ -110,8 +111,20 @@ impl DbBkp {
         Ok(())
     }
 
-    pub async fn list(&self, options: ListOptions) -> Result<Vec<Entry>> {
+    pub async fn list_with(&self, options: ListOptions) -> Result<Vec<Entry>> {
         let entries = self.storage_provider.list(options).await?;
+        Ok(entries)
+    }
+
+    pub async fn list(&self) -> Result<Vec<Entry>> {
+        let entries = self
+            .storage_provider
+            .list(ListOptions {
+                latest_only: None,
+                limit: None,
+            })
+            .await?;
+
         Ok(entries)
     }
 }

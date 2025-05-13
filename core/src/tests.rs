@@ -253,7 +253,7 @@ mod vprdbbkp_tests {
     }
 
     #[tokio::test]
-    async fn test_01_mysql_backup() {
+    async fn test_03_mysql_backup() {
         initialize();
         let config = get_mysql_config().expect("Failed to get mysql config");
 
