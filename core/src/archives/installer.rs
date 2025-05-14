@@ -5,7 +5,7 @@ use crate::{
     databases::version::Version,
 };
 use anyhow::{anyhow, Context, Result};
-use log::{debug, info};
+use log::{debug, error, info};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 
 use super::DatabaseArchives;
