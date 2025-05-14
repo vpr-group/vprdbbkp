@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
+use log::{info, warn};
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
@@ -9,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
     sync::Arc,
+    time::{Duration, SystemTime},
 };
 use tokio::sync::Mutex;
 
@@ -183,5 +185,54 @@ impl StorageProvider {
             self.operator.clone(),
             filename.to_string(),
         )))
+    }
+
+    pub async fn delete(&self, path: &str) -> Result<()> {
+        self.operator
+            .delete(&path)
+            .await
+            .context(format!("Failed to delete backup {}", path))?;
+
+        Ok(())
+    }
+
+    pub async fn cleanup(&self, retention_days: u64, dry_run: bool) -> Result<(usize, u64)> {
+        let backups = self
+            .list(ListOptions {
+                latest_only: None,
+                limit: None,
+            })
+            .await?;
+
+        let cutoff = SystemTime::now()
+            .checked_sub(Duration::from_secs(retention_days * 86400))
+            .ok_or_else(|| anyhow!("Failed to calculate cutoff date"))?;
+
+        let cutoff_datetime: DateTime<Utc> = cutoff.into();
+
+        let mut deleted_count = 0;
+        let mut deleted_size = 0;
+
+        for backup in backups {
+            match extract_timestamp_from_filename(backup.name()) {
+                Ok(timestamp) => {
+                    if timestamp < cutoff_datetime {
+                        let size = backup.metadata().content_length();
+                        deleted_size += size;
+                        deleted_count += 1;
+
+                        if !dry_run {
+                            self.delete(&backup.path()).await?;
+                            info!("Successfully deleted {}", backup.path());
+                        }
+                    }
+                }
+                Err(_) => {
+                    warn!("Failed to extract timestamp from {}", backup.name());
+                }
+            };
+        }
+
+        Ok((deleted_count, deleted_size))
     }
 }

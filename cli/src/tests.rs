@@ -111,6 +111,18 @@ mod tests {
 
         assert!(String::from_utf8_lossy(&restore_output.stdout)
             .contains("Restore completed successfully"));
+
+        cmd = Command::cargo_bin("cli").expect("Failed to get cli command");
+
+        let cleanup_output = cmd
+            .arg("cleanup")
+            .arg(format!("--storage-type=local"))
+            .arg(format!("--location=./test-backups-postgresql"))
+            .arg("--retention=0d")
+            .output()
+            .expect("Faled to execute cleanup command");
+
+        assert!(String::from_utf8_lossy(&cleanup_output.stdout).contains("1 Entries deleted"));
     }
 
     #[test]

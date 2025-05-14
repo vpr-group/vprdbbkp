@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use cli::{database_config_from_cli, storage_from_cli, Cli, Commands};
+use cli::{database_config_from_cli, parse_retention, storage_from_cli, Cli, Commands};
 use vprs3bkp_core::{
     databases::DatabaseConnection,
     storage::provider::{ListOptions, StorageProvider},
@@ -80,18 +80,23 @@ async fn main() -> Result<()> {
             .await?;
 
             println!("Restore completed successfully: {}", args.name);
-        } //     Commands::Cleanup(args) => {
-          //         let storage_config = storage_from_cli(&args.storage)?;
-          //         let storage = Storage::new(&storage_config).await?;
-          //         let (entries_deleted, storage_reclaimed) = storage
-          //             .cleanup(parse_retention(&args.retention)?, args.dry_run)
-          //             .await?;
+        }
+        Commands::Cleanup(args) => {
+            let storage_config = storage_from_cli(&args.storage)?;
+            let storage = StorageProvider::new(storage_config)?;
 
-          //         println!(
-          //             "{} Entries deleted, {} Storage reclaimed",
-          //             entries_deleted, storage_reclaimed
-          //         );
-          //     }
+            // Test storage connection
+            storage.test().await?;
+
+            let (entries_deleted, storage_reclaimed) = storage
+                .cleanup(parse_retention(&args.retention)?, args.dry_run)
+                .await?;
+
+            println!(
+                "{} Entries deleted, {} Storage reclaimed",
+                entries_deleted, storage_reclaimed
+            );
+        }
     };
 
     Ok(())

@@ -22,7 +22,7 @@ pub enum Commands {
     Backup(BackupArgs),
     Restore(RestoreArgs),
     List(ListArgs),
-    // Cleanup(CleanupArgs),
+    Cleanup(CleanupArgs),
 }
 
 #[derive(Args, Debug)]
