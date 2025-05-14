@@ -3,8 +3,8 @@ mod mysql_connection_tests {
     use std::{env, thread::sleep, time::Duration};
 
     use crate::databases::{
-        
-        mysql::connection::MySqlConnection, version::Version, ConnectionType, DatabaseConfig, DatabaseConnectionTrait
+        mysql::connection::MySqlConnection, version::Version, ConnectionType, DatabaseConfig,
+        DatabaseConnectionTrait,
     };
     use anyhow::Result;
     use dotenv::dotenv;
@@ -99,18 +99,19 @@ mod mysql_connection_tests {
             format!(
                 "INSERT INTO {} (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)",
                 test_table_name
-            )   
+            )
             .as_str(),
         )
         .execute(&connection.pool)
         .await
         .expect("Failed to insert test data");
 
-        let rows: Vec<(String, i32)> =
-            sqlx::query_as(format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str())
-                .fetch_all(&connection.pool)
-                .await
-                .expect("Failed to fetch test data");
+        let rows: Vec<(String, i32)> = sqlx::query_as(
+            format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
+        )
+        .fetch_all(&connection.pool)
+        .await
+        .expect("Failed to fetch test data");
 
         assert_eq!(rows.len(), 3, "Should have 3 rows before backup");
 
@@ -122,21 +123,28 @@ mod mysql_connection_tests {
 
         assert!(!backup_buffer.is_empty(), "Backup should not be empty");
 
-        sqlx::query(format!("UPDATE {} SET value = 999 WHERE name = 'test1'", test_table_name).as_str())
-            .execute(&connection.pool)
-            .await
-            .expect("Failed to update test data");
+        sqlx::query(
+            format!(
+                "UPDATE {} SET value = 999 WHERE name = 'test1'",
+                test_table_name
+            )
+            .as_str(),
+        )
+        .execute(&connection.pool)
+        .await
+        .expect("Failed to update test data");
 
         sqlx::query(format!("DELETE FROM {} WHERE name = 'test3'", test_table_name).as_str())
             .execute(&connection.pool)
             .await
             .expect("Failed to delete test data");
 
-        let modified_rows: Vec<(String, i32)> =
-            sqlx::query_as(format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str())
-                .fetch_all(&connection.pool)
-                .await
-                .expect("Failed to fetch modified data");
+        let modified_rows: Vec<(String, i32)> = sqlx::query_as(
+            format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
+        )
+        .fetch_all(&connection.pool)
+        .await
+        .expect("Failed to fetch modified data");
 
         assert_eq!(modified_rows.len(), 2, "Should have 2 rows after deletion");
         assert_eq!(modified_rows[0].1, 999, "Value should be modified");
@@ -158,11 +166,12 @@ mod mysql_connection_tests {
             .await
             .expect("Failed to get connection");
 
-        let restored_rows: Vec<(String, i32)> =
-            sqlx::query_as(format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str())
-                .fetch_all(&verify_connection.pool)
-                .await
-                .expect("Failed to fetch restored data");
+        let restored_rows: Vec<(String, i32)> = sqlx::query_as(
+            format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
+        )
+        .fetch_all(&verify_connection.pool)
+        .await
+        .expect("Failed to fetch restored data");
 
         assert_eq!(restored_rows.len(), 3, "Should have 3 rows after restore");
 
