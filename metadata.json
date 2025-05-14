@@ -1,102 +1,120 @@
 {
-    "metadata": {
-        "schema_version": "1.0",
-        "last_updated": "2025-05-13T00:00:00Z"
-    },
-    "databases": [
+  "metadata": {
+    "schema_version": "1.0",
+    "last_updated": "2025-05-13T00:00:00Z"
+  },
+  "databases": [
+    {
+      "database": "postgresql",
+      "archives": [
         {
-            "database": "postgresql",
-            "archives": [
-                {
-                    "version": {
-                        "major": 17,
-                        "minor": 5,
-                        "patch": null
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-17.5-arm64.tar.gz"
-                        }
-                    }
-                },
-                {
-                    "version": {
-                        "major": 16,
-                        "minor": 9,
-                        "patch": null
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-16.9-arm64.tar.gz"
-                        }
-                    }
-                },
-                {
-                    "version": {
-                        "major": 15,
-                        "minor": 13,
-                        "patch": null
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-15.13-arm64.tar.gz"
-                        }
-                    }
-                },
-                {
-                    "version": {
-                        "major": 14,
-                        "minor": 18,
-                        "patch": null
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-14.18-arm64.tar.gz"
-                        }
-                    }
-                },
-                {
-                    "version": {
-                        "major": 13,
-                        "minor": 21,
-                        "patch": null
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-13.21-arm64.tar.gz"
-                        }
-                    }
-                }
-            ]
+          "version": {
+            "major": 17,
+            "minor": null,
+            "patch": null
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-17.5-arm64.tar.gz"
+            },
+            "linux-x86_64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-17-x86_64.tar.xz"
+            }
+          }
         },
         {
-            "database": "mysql",
-            "archives": [
-                {
-                    "version": {
-                        "major": 9,
-                        "minor": 3,
-                        "patch": 0
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/mysql-9.3.0-arm64.tar.gz"
-                        }
-                    }
-                },
-                {
-                    "version": {
-                        "major": 8,
-                        "minor": 4,
-                        "patch": 5
-                    },
-                    "platforms": {
-                        "macos-arm64": {
-                            "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/mysql-8.4.5-arm64.tar.gz"
-                        }
-                    }
-                }
-            ]
+          "version": {
+            "major": 16,
+            "minor": null,
+            "patch": null
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-16.9-arm64.tar.gz"
+            },
+            "linux-x86_64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-16-x86_64.tar.xz"
+            }
+          }
+        },
+        {
+          "version": {
+            "major": 15,
+            "minor": null,
+            "patch": null
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-15.13-arm64.tar.gz"
+            },
+            "linux-x86_64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-15-x86_64.tar.xz"
+            }
+          }
+        },
+        {
+          "version": {
+            "major": 14,
+            "minor": null,
+            "patch": null
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-14.18-arm64.tar.gz"
+            },
+            "linux-x86_64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-14-x86_64.tar.xz"
+            }
+          }
+        },
+        {
+          "version": {
+            "major": 13,
+            "minor": null,
+            "patch": null
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-13.21-arm64.tar.gz"
+            }
+          }
         }
-    ]
+      ]
+    },
+    {
+      "database": "mysql",
+      "archives": [
+        {
+          "version": {
+            "major": 9,
+            "minor": 3,
+            "patch": 0
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/mysql-9.3.0-arm64.tar.gz"
+            },
+            "linux-x86_64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/mysql-9.3.0-x86_64.tar.xz"
+            }
+          }
+        },
+        {
+          "version": {
+            "major": 8,
+            "minor": 4,
+            "patch": 5
+          },
+          "platforms": {
+            "macos-arm64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/mysql-8.4.5-arm64.tar.gz"
+            },
+            "linux-x86_64": {
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/mysql-8.4.5-x86_64.tar.xz"
+            }
+          }
+        }
+      ]
+    }
+  ]
 }
