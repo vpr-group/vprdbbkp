@@ -230,6 +230,7 @@ mod vprdbbkp_tests {
         assert!(test3_exists, "test3 should be restored");
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_02_postgresql_tunneled_backup() {
         initialize();

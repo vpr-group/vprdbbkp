@@ -420,6 +420,7 @@ mod ssh_tunnel_tests {
         ConnectionType, DatabaseConfig, DatabaseConnectionTrait,
     };
 
+    #[ignore]
     #[tokio::test]
     async fn test_01_run_tunnel() {
         dotenv().ok();

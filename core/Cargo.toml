@@ -36,4 +36,5 @@ serial_test = "2.0.0"
 sqlx = { version = "0.8.5", features = [ "runtime-tokio", "tls-native-tls", "postgres", "mysql" ] }
 futures = "0.3.31"
 ssh2 = "0.9.5"
+xz2 = "0.1.7"
 

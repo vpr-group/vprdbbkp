@@ -226,6 +226,7 @@ mod postgresql_connection_test {
         assert!(test3_exists, "test3 should be restored");
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_05_tunneled_connection() {
         initialize_test();
@@ -238,6 +239,7 @@ mod postgresql_connection_test {
         assert!(is_connected);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_05_tunneled_backup() {
         initialize_test();

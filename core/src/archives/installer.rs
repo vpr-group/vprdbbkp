@@ -5,7 +5,7 @@ use crate::{
     databases::version::Version,
 };
 use anyhow::{anyhow, Context, Result};
-use log::{debug, error, info};
+use log::{debug, info};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 
 use super::DatabaseArchives;
@@ -109,19 +109,20 @@ impl ArchiveInstaller {
             fs::create_dir_all(destination)?;
         }
 
-        let status = Command::new("tar")
-            .arg("-xf")
-            .arg(archive_path)
-            .arg("-C")
-            .arg(destination)
-            .status()
-            .await
-            .with_context(|| "Failed to execute tar to extract archive")?;
+        let file = fs::File::open(archive_path)
+            .with_context(|| format!("Failed to open archive file: {}", archive_path.display()))?;
 
-        if !status.success() {
-            return Err(anyhow!("Failed to extract tar.xz archive"));
-        }
+        let xz_decoder = xz2::read::XzDecoder::new(file);
+        let mut archive = tar::Archive::new(xz_decoder);
 
+        archive.unpack(destination).with_context(|| {
+            format!(
+                "Failed to extract tar.xz archive to {}",
+                destination.display()
+            )
+        })?;
+
+        // Handle file permissions for bin directory
         let bin_dir = destination.join("bin");
         if bin_dir.exists() {
             let entries = fs::read_dir(&bin_dir)?;
@@ -156,7 +157,7 @@ impl ArchiveInstaller {
                 debug!("Successfully removed quarantine attribute");
             } else {
                 let error = String::from_utf8_lossy(&output.stderr);
-                error!("Error removing quarantine attribute: {}", error);
+                log::error!("Error removing quarantine attribute: {}", error);
 
                 if !error.contains("No such xattr") {
                     return Err(anyhow!("xattr command failed: {}", error));
