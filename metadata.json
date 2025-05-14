@@ -15,7 +15,7 @@
           },
           "platforms": {
             "macos-arm64": {
-              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-17.5-arm64.tar.xz"
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgres-17.5-arm64.tar.xz"
             },
             "linux-x86_64": {
               "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-17-x86_64.tar.xz"
@@ -30,7 +30,7 @@
           },
           "platforms": {
             "macos-arm64": {
-              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-16.9-arm64.tar.xz"
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgres-16.9-arm64.tar.xz"
             },
             "linux-x86_64": {
               "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-16-x86_64.tar.xz"
@@ -45,7 +45,7 @@
           },
           "platforms": {
             "macos-arm64": {
-              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-15.13-arm64.tar.xz"
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgres-15.13-arm64.tar.xz"
             },
             "linux-x86_64": {
               "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-15-x86_64.tar.xz"
@@ -60,7 +60,7 @@
           },
           "platforms": {
             "macos-arm64": {
-              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-14.18-arm64.tar.xz"
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgres-14.18-arm64.tar.xz"
             },
             "linux-x86_64": {
               "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/linux/postgres-14-x86_64.tar.xz"
@@ -75,7 +75,7 @@
           },
           "platforms": {
             "macos-arm64": {
-              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgresql-13.21-arm64.tar.xz"
+              "url": "https://s3.pub1.infomaniak.cloud/object/v1/AUTH_f1ed7eb1a4594d268432025f27acb84f/vprdbbkp/macos/postgres-13.21-arm64.tar.xz"
             }
           }
         }
