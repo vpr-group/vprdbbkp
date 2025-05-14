@@ -5,7 +5,7 @@ use crate::{
     databases::version::Version,
 };
 use anyhow::{anyhow, Context, Result};
-use log::{debug, error, info};
+use log::{debug, info};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 
 use super::DatabaseArchives;
@@ -98,23 +98,28 @@ impl ArchiveInstaller {
         Ok(url)
     }
 
-    async fn extract_tar_gz(archive_path: &PathBuf, destination: &PathBuf) -> Result<()> {
-        use std::process::Command as StdCommand;
+    async fn extract_tar_xz(archive_path: &PathBuf, destination: &PathBuf) -> Result<()> {
+        debug!(
+            "Extracting {} into {}",
+            archive_path.display(),
+            destination.display()
+        );
 
         if !destination.exists() {
             fs::create_dir_all(destination)?;
         }
 
-        let status = StdCommand::new("tar")
-            .arg("-xzf")
+        let status = Command::new("tar")
+            .arg("-xf")
             .arg(archive_path)
             .arg("-C")
             .arg(destination)
             .status()
+            .await
             .with_context(|| "Failed to execute tar to extract archive")?;
 
         if !status.success() {
-            return Err(anyhow!("Failed to extract tar.gz archive"));
+            return Err(anyhow!("Failed to extract tar.xz archive"));
         }
 
         let bin_dir = destination.join("bin");
@@ -163,9 +168,13 @@ impl ArchiveInstaller {
     }
 
     async fn extract_zip(archive_path: &PathBuf, destination: &PathBuf) -> Result<()> {
-        use std::process::Command as StdCommand;
+        debug!(
+            "Extracting {} into {}",
+            archive_path.display(),
+            destination.display()
+        );
 
-        let status = StdCommand::new("powershell")
+        let status = Command::new("powershell")
             .arg("-Command")
             .arg(&format!(
                 "Expand-Archive -Path '{}' -DestinationPath '{}'",
@@ -173,6 +182,7 @@ impl ArchiveInstaller {
                 destination.display()
             ))
             .status()
+            .await
             .with_context(|| "Failed to execute PowerShell to extract zip archive")?;
 
         if !status.success() {
@@ -235,7 +245,7 @@ impl ArchiveInstaller {
         if cfg!(target_os = "windows") {
             Self::extract_zip(&archive_path, &binaries_base_bath).await?;
         } else {
-            Self::extract_tar_gz(&archive_path, &binaries_base_bath).await?;
+            Self::extract_tar_xz(&archive_path, &binaries_base_bath).await?;
         }
 
         tokio::fs::remove_file(archive_path).await.ok();

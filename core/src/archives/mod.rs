@@ -31,7 +31,7 @@ struct Archive {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Version {
     major: u32,
-    minor: u32,
+    minor: Option<u32>,
     patch: Option<u32>,
 }
 
