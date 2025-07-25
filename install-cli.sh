@@ -1,12 +1,12 @@
 #!/bin/bash
-# install.sh - Easy installer for vprs3bkp
+# install.sh - Easy installer for dbkp
 set -e
 
 # Configuration
 VERSION="2.0.0"  # Update this with your latest version
-BINARY_NAME="cli"
+BINARY_NAME="dbkp"
 INSTALL_DIR="/usr/local/bin"
-GITHUB_REPO="vpr-group/vprs3bkp"  # Updated with your actual repo
+GITHUB_REPO="vpr-group/dbkp"  # Updated with your actual repo
 
 # Parse command line arguments
 INSTALL_FROM_SOURCE=false
@@ -136,7 +136,7 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
 
   # Build the project with optimizations for small binary size
   echo "Building optimized release with vendored OpenSSL..."
-  
+
   # Build for the appropriate target with vendored OpenSSL
   if [ "$OS" = "macos" ]; then
     ARCH=$(uname -m)
@@ -166,8 +166,8 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
     # Install the binary
     $SUDO_CMD cp ../target/x86_64-unknown-linux-musl/release/$BINARY_NAME $INSTALL_DIR/
   fi
-  
-  $SUDO_CMD mv $INSTALL_DIR/$BINARY_NAME $INSTALL_DIR/vprs3bkp
+
+  $SUDO_CMD mv $INSTALL_DIR/$BINARY_NAME $INSTALL_DIR/dbkp
 
   # Clean up
   cd - > /dev/null
@@ -175,7 +175,7 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
 else
   # Download pre-built binary based on architecture and OS
   ARCH=$(uname -m)
-  
+
   if [ "$OS" = "macos" ]; then
     if [ "$ARCH" = "arm64" ]; then
       ARTIFACT_NAME="macos-silicon"
@@ -196,18 +196,18 @@ else
       exit 1
     fi
   fi
-  
+
   # New GitHub release asset URL format
-  BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/vprs3bkp-$ARTIFACT_NAME"
-  
+  BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/dbkp-$ARTIFACT_NAME"
+
   echo "Downloading statically linked binary from $BINARY_URL..."
   # Create a temporary directory
   TMP_DIR=$(mktemp -d)
-  
+
   # Download the binary to the temporary location
-  if curl -L "$BINARY_URL" -o "$TMP_DIR/vprs3bkp"; then
+  if curl -L "$BINARY_URL" -o "$TMP_DIR/dbkp"; then
     # Move to final location
-    $SUDO_CMD mv "$TMP_DIR/vprs3bkp" "$INSTALL_DIR/vprs3bkp"
+    $SUDO_CMD mv "$TMP_DIR/dbkp" "$INSTALL_DIR/dbkp"
     # Clean up
     rm -rf "$TMP_DIR"
   else
@@ -219,12 +219,12 @@ else
 fi
 
 # Make binary executable
-$SUDO_CMD chmod +x $INSTALL_DIR/vprs3bkp
+$SUDO_CMD chmod +x $INSTALL_DIR/dbkp
 
 # Verify installation
-if [ -x "$INSTALL_DIR/vprs3bkp" ]; then
+if [ -x "$INSTALL_DIR/dbkp" ]; then
   echo "Installation successful!"
-  echo "The vprs3bkp tool is now available at $INSTALL_DIR/vprs3bkp"
+  echo "The dbkp tool is now available at $INSTALL_DIR/dbkp"
   echo ""
   echo "Binary info:"
   if [ "$OS" = "linux" ]; then
@@ -236,10 +236,10 @@ if [ -x "$INSTALL_DIR/vprs3bkp" ]; then
   echo "  • Version: $VERSION"
   echo ""
   echo "Example usage:"
-  echo "vprs3bkp backup --database mydb --host localhost --username postgres \\"
+  echo "dbkp backup --database mydb --host localhost --username postgres \\"
   echo "  --storage-type s3 --bucket my-backup-bucket --region us-west-2"
   echo ""
-  echo "For more options, run: vprs3bkp --help"
+  echo "For more options, run: dbkp --help"
 else
   echo "Installation failed."
   exit 1

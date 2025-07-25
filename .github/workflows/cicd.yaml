@@ -1,269 +1,269 @@
 name: CI and Docker Build
 on:
-  push:
-    branches: ["main"]
-    tags:
-      - "v*"
-  pull_request:
-    branches: ["main"]
-  workflow_dispatch:
-    inputs:
-      version_increment:
-        description: "Version increment type"
-        required: true
-        default: "patch"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+    push:
+        branches: ["main"]
+        tags:
+            - "v*"
+    pull_request:
+        branches: ["main"]
+    workflow_dispatch:
+        inputs:
+            version_increment:
+                description: "Version increment type"
+                required: true
+                default: "patch"
+                type: choice
+                options:
+                    - patch
+                    - minor
+                    - major
 
 env:
-  CARGO_TERM_COLOR: always
-  BINARY_NAME: cli
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/vprs3bkp
+    CARGO_TERM_COLOR: always
+    BINARY_NAME: cli
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{ github.repository }}/dbkp
 
 jobs:
-  version:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      new_version: ${{ steps.tag_version.outputs.new_version }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+    version:
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        outputs:
+            new_version: ${{ steps.tag_version.outputs.new_version }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Git
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
+            - name: Setup Git
+              run: |
+                  git config user.name "GitHub Actions Bot"
+                  git config user.email "actions@github.com"
 
-      - name: Get Current Version
-        id: current_version
-        run: |
-          CURRENT_VERSION=$(grep -m 1 "version" cli/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $CURRENT_VERSION"
+            - name: Get Current Version
+              id: current_version
+              run: |
+                  CURRENT_VERSION=$(grep -m 1 "version" cli/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+                  echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+                  echo "Current version: $CURRENT_VERSION"
 
-      - name: Bump Version
-        id: bump_version
-        uses: actions-ecosystem/action-bump-semver@v1
-        with:
-          current_version: ${{ steps.current_version.outputs.current_version }}
-          level: ${{ github.event.inputs.version_increment }}
+            - name: Bump Version
+              id: bump_version
+              uses: actions-ecosystem/action-bump-semver@v1
+              with:
+                  current_version: ${{ steps.current_version.outputs.current_version }}
+                  level: ${{ github.event.inputs.version_increment }}
 
-      - name: Update Cargo.toml Files
-        run: |
-          NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
-          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" cli/Cargo.toml
-          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" core/Cargo.toml
-          echo "Updated Cargo.toml files to version $NEW_VERSION"
+            - name: Update Cargo.toml Files
+              run: |
+                  NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
+                  sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" cli/Cargo.toml
+                  sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" core/Cargo.toml
+                  echo "Updated Cargo.toml files to version $NEW_VERSION"
 
-      - name: Update install.sh Version
-        run: |
-          NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
-          if [ -f install.sh ]; then
-            sed -i "s/^VERSION=\".*\"/VERSION=\"$NEW_VERSION\"/" install.sh
-            echo "Updated install.sh to version $NEW_VERSION"
-          fi
+            - name: Update install.sh Version
+              run: |
+                  NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
+                  if [ -f install.sh ]; then
+                    sed -i "s/^VERSION=\".*\"/VERSION=\"$NEW_VERSION\"/" install.sh
+                    echo "Updated install.sh to version $NEW_VERSION"
+                  fi
 
-      - name: Commit and Push Changes
-        run: |
-          git add cli/Cargo.toml core/Cargo.toml
-          if [ -f install.sh ]; then
-            git add install.sh
-          fi
-          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
-          git push origin main
+            - name: Commit and Push Changes
+              run: |
+                  git add cli/Cargo.toml core/Cargo.toml
+                  if [ -f install.sh ]; then
+                    git add install.sh
+                  fi
+                  git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
+                  git push origin main
 
-      - name: Tag Version
-        id: tag_version
-        run: |
-          NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
-          git tag -a "v$NEW_VERSION" -m "v$NEW_VERSION"
-          git push origin "v$NEW_VERSION"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "Tagged version: v$NEW_VERSION"
+            - name: Tag Version
+              id: tag_version
+              run: |
+                  NEW_VERSION=${{ steps.bump_version.outputs.new_version }}
+                  git tag -a "v$NEW_VERSION" -m "v$NEW_VERSION"
+                  git push origin "v$NEW_VERSION"
+                  echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+                  echo "Tagged version: v$NEW_VERSION"
 
-  build-binaries:
-    needs: [version]
-    if: always() && (github.event_name != 'workflow_dispatch' || needs.version.result == 'success')
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            rust-version: stable
-            target: x86_64-unknown-linux-musl
-            artifact-name: linux-x86_64-musl
-          - os: macos-latest
-            rust-version: stable
-            target: x86_64-apple-darwin
-            artifact-name: macos-intel
-          - os: macos-latest
-            rust-version: stable
-            target: aarch64-apple-darwin
-            artifact-name: macos-silicon
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', needs.version.outputs.new_version) || '' }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+    build-binaries:
+        needs: [version]
+        if: always() && (github.event_name != 'workflow_dispatch' || needs.version.result == 'success')
+        strategy:
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      rust-version: stable
+                      target: x86_64-unknown-linux-musl
+                      artifact-name: linux-x86_64-musl
+                    - os: macos-latest
+                      rust-version: stable
+                      target: x86_64-apple-darwin
+                      artifact-name: macos-intel
+                    - os: macos-latest
+                      rust-version: stable
+                      target: aarch64-apple-darwin
+                      artifact-name: macos-silicon
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', needs.version.outputs.new_version) || '' }}
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
 
-      - name: Install musl-tools and setup for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools musl-dev
-          echo "OPENSSL_DIR=" >> $GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=" >> $GITHUB_ENV
-          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-          echo "OPENSSL_VENDOR=1" >> $GITHUB_ENV
+            - name: Install musl-tools and setup for musl
+              if: matrix.target == 'x86_64-unknown-linux-musl'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y musl-tools musl-dev
+                  echo "OPENSSL_DIR=" >> $GITHUB_ENV
+                  echo "OPENSSL_LIB_DIR=" >> $GITHUB_ENV
+                  echo "OPENSSL_INCLUDE_DIR=" >> $GITHUB_ENV
+                  echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+                  echo "OPENSSL_VENDOR=1" >> $GITHUB_ENV
 
-      - name: Install OpenSSL (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          echo "Using vendored OpenSSL for macOS cross-compilation"
+            - name: Install OpenSSL (macOS)
+              if: startsWith(matrix.os, 'macos')
+              run: |
+                  echo "Using vendored OpenSSL for macOS cross-compilation"
 
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v1-rust"
-          shared-key: "build-${{ matrix.target }}"
+            - name: Setup Rust cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  prefix-key: "v1-rust"
+                  shared-key: "build-${{ matrix.target }}"
 
-      - name: Build Release
-        run: |
-          cd cli
-          cargo build --target ${{ matrix.target }} --release --verbose --features vendored-openssl
+            - name: Build Release
+              run: |
+                  cd cli
+                  cargo build --target ${{ matrix.target }} --release --verbose --features vendored-openssl
 
-      - name: Prepare Artifact
-        run: |
-          mkdir -p artifacts
-          cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} artifacts/vprs3bkp-${{ matrix.artifact-name }}
+            - name: Prepare Artifact
+              run: |
+                  mkdir -p artifacts
+                  cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} artifacts/dbkp-${{ matrix.artifact-name }}
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact-name }}
-          path: artifacts/vprs3bkp-${{ matrix.artifact-name }}
-          retention-days: 7
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.artifact-name }}
+                  path: artifacts/dbkp-${{ matrix.artifact-name }}
+                  retention-days: 7
 
-  build-docker:
-    needs: [version]
-    if: always() && (github.event_name != 'workflow_dispatch' || needs.version.result == 'success')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', needs.version.outputs.new_version) || '' }}
+    build-docker:
+        needs: [version]
+        if: always() && (github.event_name != 'workflow_dispatch' || needs.version.result == 'success')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', needs.version.outputs.new_version) || '' }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            - name: Log in to Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            - name: Extract metadata
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      type=ref,event=branch
+                      type=ref,event=pr
+                      type=semver,pattern={{version}}
+                      type=semver,pattern={{major}}.{{minor}}
+                      type=semver,pattern={{major}}
+                      type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Make entrypoint script executable
-        run: chmod +x entrypoint.sh
+            - name: Make entrypoint script executable
+              run: chmod +x entrypoint.sh
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            - name: Build and push Docker image
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  file: ./Dockerfile
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  platforms: linux/amd64
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
 
-  release:
-    needs: [build-binaries, build-docker, version]
-    if: github.event_name == 'workflow_dispatch' && needs.version.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    release:
+        needs: [build-binaries, build-docker, version]
+        if: github.event_name == 'workflow_dispatch' && needs.version.result == 'success'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
+            - name: Download Artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: dist
 
-      - name: Prepare Release Files
-        run: |
-          mkdir -p release-artifacts
-          find dist -type f -name "*" -exec cp {} release-artifacts/ \;
-          ls -la release-artifacts/
+            - name: Prepare Release Files
+              run: |
+                  mkdir -p release-artifacts
+                  find dist -type f -name "*" -exec cp {} release-artifacts/ \;
+                  ls -la release-artifacts/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.version.outputs.new_version }}
-          name: "Release v${{ needs.version.outputs.new_version }}"
-          body: |
-            ## Release v${{ needs.version.outputs.new_version }}
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: v${{ needs.version.outputs.new_version }}
+                  name: "Release v${{ needs.version.outputs.new_version }}"
+                  body: |
+                      ## Release v${{ needs.version.outputs.new_version }}
 
-            ### 📦 Binary Downloads
-            - **Linux (musl)**: `vprs3bkp-linux-x86_64-musl`
-            - **macOS Intel**: `vprs3bkp-macos-intel`
-            - **macOS Silicon**: `vprs3bkp-macos-silicon`
+                      ### 📦 Binary Downloads
+                      - **Linux (musl)**: `dbkp-linux-x86_64-musl`
+                      - **macOS Intel**: `dbkp-macos-intel`
+                      - **macOS Silicon**: `dbkp-macos-silicon`
 
-            ### 🐳 Docker Image
-            ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.new_version }}
-            ```
+                      ### 🐳 Docker Image
+                      ```bash
+                      docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.new_version }}
+                      ```
 
-            ### 📖 Usage
+                      ### 📖 Usage
 
-            #### Install Script
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
-            ```
+                      #### Install Script
+                      ```bash
+                      curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+                      ```
 
-            #### Docker Usage
-            ```bash
-            docker run -e DATABASE=mydb -e USERNAME=user -e PASSWORD=pass \
-              -e BUCKET=my-bucket -e ACCESS_KEY=key -e SECRET_KEY=secret \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.new_version }}
-            ```
-          files: release-artifacts/*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+                      #### Docker Usage
+                      ```bash
+                      docker run -e DATABASE=mydb -e USERNAME=user -e PASSWORD=pass \
+                        -e BUCKET=my-bucket -e ACCESS_KEY=key -e SECRET_KEY=secret \
+                        ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.new_version }}
+                      ```
+                  files: release-artifacts/*
+                  generate_release_notes: true
+                  draft: false
+                  prerelease: false
