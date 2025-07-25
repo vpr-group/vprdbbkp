@@ -20,11 +20,14 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: cli # Changed to match your actual binary name
+  # Remove global OpenSSL environment variables - set them per OS instead
 
 jobs:
   version:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allow writing to repository (commits, tags)
     outputs:
       new_version: ${{ steps.tag_version.outputs.new_version }}
     steps:
