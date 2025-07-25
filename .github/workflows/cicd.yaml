@@ -105,21 +105,11 @@ jobs:
     strategy:
       matrix:
         include:
-          # Linux x86_64 targets with older GLIBC compatibility
-          - os: ubuntu-22.04
-            rust-version: stable
-            target: x86_64-unknown-linux-gnu
-            artifact-name: linux-x86_64
-          # Static Linux build (no GLIBC dependency)
+          # Static Linux build (no GLIBC dependency) - musl only
           - os: ubuntu-latest
             rust-version: stable
             target: x86_64-unknown-linux-musl
             artifact-name: linux-x86_64-musl
-          # macOS Silicon (ARM64) targets
-          - os: macos-latest
-            rust-version: stable
-            target: aarch64-apple-darwin
-            artifact-name: macos-silicon
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -131,35 +121,18 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Install OpenSSL for Linux builds and set environment variables
-      - name: Install OpenSSL (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
-          # Set Linux-specific OpenSSL environment variables
-          echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=/usr/include/openssl" >> $GITHUB_ENV
-
-      # Install OpenSSL for musl target - use vendored OpenSSL
+      # Install musl tools and setup for musl
       - name: Install musl-tools and setup for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
+          # Clear any existing OpenSSL environment variables for musl
+          echo "OPENSSL_DIR=" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=" >> $GITHUB_ENV
           # Use vendored OpenSSL for musl to avoid linking issues
           echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
           echo "OPENSSL_VENDOR=1" >> $GITHUB_ENV
-
-      # Handle OpenSSL for macOS - don't set conflicting environment variables
-      - name: Install OpenSSL (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew install openssl@3
-          # Set macOS-specific OpenSSL environment variables
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -171,7 +144,7 @@ jobs:
         run: |
           # Navigate to cli directory and build
           cd cli
-          cargo build --target ${{ matrix.target }} --release --verbose
+          cargo build --target ${{ matrix.target }} --release --verbose --features vendored-openssl
 
       - name: Prepare Artifact
         run: |
