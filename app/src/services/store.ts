@@ -3,7 +3,7 @@ import { path } from "@tauri-apps/api";
 import { load, Store } from "@tauri-apps/plugin-store";
 
 const STORAGE_CONFIGS_KEY = "storage-configs";
-const SOURCE_CONFIGS_KEY = "source-configs";
+const DATABASE_CONFIGS_KEY = "source-configs";
 
 export interface BaseStorageConfig {
   id: string;
@@ -33,23 +33,23 @@ export interface TunnelConfig {
   keyPath: string;
 }
 
-export interface BaseSourceConfig {
+export interface BaseDatabaseConfig {
   id: string;
   name: string;
-  type: "pg";
+  connection_type: "PostgreSql";
 }
 
-export interface PostgresSourceConfig extends BaseSourceConfig {
-  type: "pg";
+export interface PostgresdatabaseConfig extends BaseDatabaseConfig {
+  connection_type: "PostgreSql";
+  database: string;
   host: string;
   port: number;
   username: string;
   password: string;
-  database: string;
   tunnelConfig?: TunnelConfig;
 }
 
-export type SourceConfig = PostgresSourceConfig;
+export type DatabaseConfig = PostgresdatabaseConfig;
 
 export class StoreService {
   private internalStore: Store | undefined;
@@ -138,48 +138,52 @@ export class StoreService {
   }
 
   // Backup Source Methods
-  private async getRawSourceConfigs(): Promise<Record<string, SourceConfig>> {
-    const sourceConfigs =
-      ((await this.store.get(SOURCE_CONFIGS_KEY)) as Record<
+  private async getRawDatabaseConfigs(): Promise<
+    Record<string, DatabaseConfig>
+  > {
+    const databaseConfigs =
+      ((await this.store.get(DATABASE_CONFIGS_KEY)) as Record<
         string,
-        SourceConfig
+        DatabaseConfig
       >) || {};
-    return sourceConfigs;
+    return databaseConfigs;
   }
 
-  async getSourceConfigs(): Promise<SourceConfig[]> {
-    const sourceConfigs = await this.getRawSourceConfigs();
-    return Object.values(sourceConfigs);
+  async getDatabaseConfigs(): Promise<DatabaseConfig[]> {
+    const databaseConfigs = await this.getRawDatabaseConfigs();
+    return Object.values(databaseConfigs);
   }
 
-  async getSourceConfig(id: string): Promise<SourceConfig | null> {
-    const sourceConfigs = await this.getRawSourceConfigs();
-    return sourceConfigs[id] || null;
+  async getDatabaseConfig(id: string): Promise<DatabaseConfig | null> {
+    const databaseConfigs = await this.getRawDatabaseConfigs();
+    return databaseConfigs[id] || null;
   }
 
-  async saveSourceConfig(backupSource: SourceConfig): Promise<SourceConfig> {
-    const sourceConfigs = await this.getRawSourceConfigs();
-    const completeSourceConfig = {
+  async saveDatabaseConfig(
+    backupSource: DatabaseConfig
+  ): Promise<DatabaseConfig> {
+    const databaseConfigs = await this.getRawDatabaseConfigs();
+    const completedatabaseConfig = {
       ...backupSource,
       id: backupSource.id || createId(),
-    } as SourceConfig;
+    } as DatabaseConfig;
 
-    const updatedSourceConfigs = {
-      ...sourceConfigs,
-      [completeSourceConfig.id]: completeSourceConfig,
+    const updateddatabaseConfigs = {
+      ...databaseConfigs,
+      [completedatabaseConfig.id]: completedatabaseConfig,
     };
 
-    await this.store.set(SOURCE_CONFIGS_KEY, updatedSourceConfigs);
+    await this.store.set(DATABASE_CONFIGS_KEY, updateddatabaseConfigs);
     await this.store.save();
-    return completeSourceConfig;
+    return completedatabaseConfig;
   }
 
-  async deleteSourceConfig(id: string): Promise<void> {
-    const sourceConfigs = await this.getRawSourceConfigs();
-    if (sourceConfigs[id]) {
+  async deleteDatabaseConfig(id: string): Promise<void> {
+    const databaseConfigs = await this.getRawDatabaseConfigs();
+    if (databaseConfigs[id]) {
       console.log("deleting");
-      delete sourceConfigs[id];
-      await this.store.set(SOURCE_CONFIGS_KEY, sourceConfigs);
+      delete databaseConfigs[id];
+      await this.store.set(DATABASE_CONFIGS_KEY, databaseConfigs);
     }
     await this.store.save();
   }

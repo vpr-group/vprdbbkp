@@ -26,6 +26,7 @@ pub struct BackupOptions {
 pub struct RestoreOptions {
     pub name: String,
     pub compression_format: Option<CompressionFormat>,
+    pub drop_database_first: Option<bool>,
 }
 
 pub struct DbBkp {
@@ -105,25 +106,27 @@ impl DbBkp {
 
         self.database_connection
             .connection
-            .restore(&mut compressed_reader)
+            .restore_with_options(
+                &mut compressed_reader,
+                databases::RestoreOptions {
+                    drop_database_first: match options.drop_database_first {
+                        Some(drop) => drop,
+                        None => false,
+                    },
+                },
+            )
             .await?;
 
         Ok(())
     }
 
-    pub async fn list_with(&self, options: ListOptions) -> Result<Vec<Entry>> {
-        let entries = self.storage_provider.list(options).await?;
+    pub async fn list_with_options(&self, options: ListOptions) -> Result<Vec<Entry>> {
+        let entries = self.storage_provider.list_with_options(options).await?;
         Ok(entries)
     }
 
     pub async fn list(&self) -> Result<Vec<Entry>> {
-        let entries = self
-            .storage_provider
-            .list(ListOptions {
-                latest_only: None,
-                limit: None,
-            })
-            .await?;
+        let entries = self.storage_provider.list().await?;
 
         Ok(entries)
     }

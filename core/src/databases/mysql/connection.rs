@@ -6,7 +6,7 @@ use std::{
 
 use crate::databases::{
     version::{Version, VersionTrait},
-    DatabaseConfig, DatabaseConnectionTrait, DatabaseMetadata, UtilitiesTrait,
+    DatabaseConfig, DatabaseConnectionTrait, DatabaseMetadata, RestoreOptions, UtilitiesTrait,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -167,7 +167,11 @@ impl DatabaseConnectionTrait for MySqlConnection {
         Ok(())
     }
 
-    async fn restore(&self, reader: &mut (dyn Read + Send + Unpin)) -> Result<()> {
+    async fn restore_with_options(
+        &self,
+        reader: &mut (dyn Read + Send + Unpin),
+        _options: RestoreOptions,
+    ) -> Result<()> {
         let mut cmd = self.get_base_command("mysql").await?;
 
         cmd.arg(format!("--host={}", self.config.host))
@@ -234,5 +238,15 @@ impl DatabaseConnectionTrait for MySqlConnection {
         }
 
         Ok(())
+    }
+
+    async fn restore(&self, reader: &mut (dyn Read + Send + Unpin)) -> Result<()> {
+        self.restore_with_options(
+            reader,
+            RestoreOptions {
+                drop_database_first: true,
+            },
+        )
+        .await
     }
 }

@@ -3549,33 +3549,6 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55c840b5a6ad96106d6c0612fabb8f35a5ace826e0474fc55ebda33042b8d33"
-dependencies = [
- "anyhow",
- "async-trait",
- "backon",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "futures",
- "getrandom 0.2.15",
- "http 1.3.1",
- "log",
- "md-5",
- "once_cell",
- "percent-encoding",
- "quick-xml 0.36.2",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "opendal"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0f407ca2797ca6c010720aa3cedfa0187430e4f70b729c75c33142d44021f59"
@@ -4135,16 +4108,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d3a6e5838b60e0e8fa7a43f22ade549a37d61f8bdbe636d0d7816191de969c2"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
-dependencies = [
- "memchr",
- "serde",
 ]
 
 [[package]]
@@ -6342,7 +6305,7 @@ dependencies = [
  "aws-sdk-s3",
  "env_logger",
  "log",
- "opendal 0.52.0",
+ "opendal",
  "serde",
  "serde_json",
  "tauri",
@@ -6366,7 +6329,7 @@ dependencies = [
  "flate2",
  "futures",
  "log",
- "opendal 0.53.1",
+ "opendal",
  "os_info",
  "regex",
  "reqwest",

@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
             storage_provider.test().await?;
 
             let entries = storage_provider
-                .list(ListOptions {
+                .list_with_options(ListOptions {
                     latest_only: Some(args.latest_only),
                     limit: args.limit,
                 })
@@ -76,6 +76,7 @@ async fn main() -> Result<()> {
             core.restore(RestoreOptions {
                 name: args.name.clone(),
                 compression_format: None,
+                drop_database_first: Some(args.drop_database),
             })
             .await?;
 

@@ -7,7 +7,7 @@ use std::{
 use crate::databases::{
     ssh_tunnel::{SshRemoteConfig, SshTunnel},
     version::{Version, VersionTrait},
-    DatabaseConfig, DatabaseConnectionTrait, DatabaseMetadata, UtilitiesTrait,
+    DatabaseConfig, DatabaseConnectionTrait, DatabaseMetadata, RestoreOptions, UtilitiesTrait,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -54,7 +54,7 @@ impl PostgreSqlConnection {
         let mut connect_options = PgConnectOptions::new()
             .host(&config.host)
             .username(&config.username)
-            .database(&config.database)
+            .database("postgres")
             .port(config.port);
 
         connect_options = match &config.password {
@@ -202,6 +202,20 @@ impl DatabaseConnectionTrait for PostgreSqlConnection {
     }
 
     async fn restore(&self, reader: &mut (dyn Read + Send + Unpin)) -> Result<()> {
+        self.restore_with_options(
+            reader,
+            RestoreOptions {
+                drop_database_first: true,
+            },
+        )
+        .await
+    }
+
+    async fn restore_with_options(
+        &self,
+        reader: &mut (dyn Read + Send + Unpin),
+        options: RestoreOptions,
+    ) -> Result<()> {
         let mut cmd = self.get_base_command("psql").await?;
 
         cmd.arg("-h")
@@ -211,7 +225,7 @@ impl DatabaseConnectionTrait for PostgreSqlConnection {
             .arg("-U")
             .arg(&self.config.username)
             .arg("-d")
-            .arg("postgres") // System database for PostgreSQL
+            .arg("postgres")
             .arg("-c")
             .arg(format!(
                 "SELECT pg_terminate_backend(pg_stat_activity.pid) 
@@ -224,26 +238,104 @@ impl DatabaseConnectionTrait for PostgreSqlConnection {
         let drop_connections_output = cmd
             .output()
             .await
-            .context(format!("Failed to execute connection termination command"))?;
+            .context("Failed to execute connection termination command")?;
 
         if !drop_connections_output.status.success() {
             let stderr = String::from_utf8_lossy(&drop_connections_output.stderr);
             let exit_code = drop_connections_output.status.code().unwrap_or(-1);
 
             return Err(anyhow!(
-                "Failed to drop database with exit code {}.\nError details: {}",
+                "Failed to terminate database connections with exit code {}.\nError details: {}",
                 exit_code,
                 stderr.trim()
             ));
         }
 
-        let mut cmd = self.get_command("psql").await?;
-        let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+        if options.drop_database_first {
+            let mut cmd = self.get_base_command("psql").await?;
+
+            cmd.arg("-h")
+                .arg(&self.config.host)
+                .arg("-p")
+                .arg(self.config.port.to_string())
+                .arg("-U")
+                .arg(&self.config.username)
+                .arg("-d")
+                .arg("postgres")
+                .arg("-c")
+                .arg(format!(
+                    "DROP DATABASE IF EXISTS \"{}\";",
+                    self.config.database
+                ));
+
+            let output = cmd
+                .output()
+                .await
+                .context("Failed to execute drop database command")?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let exit_code = output.status.code().unwrap_or(-1);
+
+                return Err(anyhow!(
+                    "Failed to drop database with exit code {}.\nError: {}",
+                    exit_code,
+                    stderr.trim()
+                ));
+            }
+
+            let mut create_cmd = self.get_base_command("psql").await?;
+
+            create_cmd
+                .arg("-h")
+                .arg(&self.config.host)
+                .arg("-p")
+                .arg(self.config.port.to_string())
+                .arg("-U")
+                .arg(&self.config.username)
+                .arg("-d")
+                .arg("postgres")
+                .arg("-c")
+                .arg(format!("CREATE DATABASE \"{}\";", self.config.database));
+
+            let create_output = create_cmd
+                .output()
+                .await
+                .context("Failed to create database")?;
+
+            if !create_output.status.success() {
+                let stderr = String::from_utf8_lossy(&create_output.stderr);
+                let exit_code = create_output.status.code().unwrap_or(-1);
+
+                return Err(anyhow!(
+                    "Failed to create database with exit code {}.\nError: {}",
+                    exit_code,
+                    stderr.trim()
+                ));
+            }
+        }
+
+        let mut cmd = self.get_base_command("psql").await?;
+
+        cmd.arg("-h")
+            .arg(&self.config.host)
+            .arg("-p")
+            .arg(self.config.port.to_string())
+            .arg("-U")
+            .arg(&self.config.username)
+            .arg("-d")
+            .arg(&self.config.database);
+
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
 
         let mut stdin = child
             .stdin
             .take()
-            .ok_or_else(|| anyhow!("Failed to capture psql stdin".to_string()))?;
+            .ok_or_else(|| anyhow!("Failed to capture psql stdin"))?;
 
         let mut buffer = [0u8; 16384];
 
@@ -254,7 +346,7 @@ impl DatabaseConnectionTrait for PostgreSqlConnection {
                     stdin.write_all(&buffer[..n]).await?;
                 }
                 Err(e) => {
-                    return Err(anyhow!("Failed to read from pg_dump: {}", e));
+                    return Err(anyhow!("Failed to read backup data: {}", e));
                 }
             }
         }
@@ -267,9 +359,15 @@ impl DatabaseConnectionTrait for PostgreSqlConnection {
             .map_err(|e| anyhow!("psql process failed: {}", e))?;
 
         if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let exit_code = output.status.code().unwrap_or(-1);
+
             return Err(anyhow!(
-                "psql restore failed: {}",
-                String::from_utf8_lossy(&output.stderr)
+                "psql restore failed with exit code {}.\nStderr: {}\nStdout: {}",
+                exit_code,
+                stderr.trim(),
+                stdout.trim()
             ));
         }
 

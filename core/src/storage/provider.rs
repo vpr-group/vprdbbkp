@@ -122,7 +122,15 @@ impl StorageProvider {
         Ok(true)
     }
 
-    pub async fn list(&self, options: ListOptions) -> Result<Vec<Entry>> {
+    pub async fn list(&self) -> Result<Vec<Entry>> {
+        self.list_with_options(ListOptions {
+            latest_only: None,
+            limit: None,
+        })
+        .await
+    }
+
+    pub async fn list_with_options(&self, options: ListOptions) -> Result<Vec<Entry>> {
         let limit = options.limit.unwrap_or(1000);
         let latest_only = options.latest_only.unwrap_or(false);
 
@@ -197,12 +205,7 @@ impl StorageProvider {
     }
 
     pub async fn cleanup(&self, retention_days: u64, dry_run: bool) -> Result<(usize, u64)> {
-        let backups = self
-            .list(ListOptions {
-                latest_only: None,
-                limit: None,
-            })
-            .await?;
+        let backups = self.list().await?;
 
         let cutoff = SystemTime::now()
             .checked_sub(Duration::from_secs(retention_days * 86400))

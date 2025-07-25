@@ -200,6 +200,7 @@ mod vprdbbkp_tests {
             .restore(RestoreOptions {
                 name: backup_name,
                 compression_format: None,
+                drop_database_first: Some(true),
             })
             .await
             .expect("Failed to restore");
@@ -320,6 +321,7 @@ mod vprdbbkp_tests {
             .restore(RestoreOptions {
                 name: backup_name,
                 compression_format: None,
+                drop_database_first: Some(true),
             })
             .await
             .expect("Failed to restore");

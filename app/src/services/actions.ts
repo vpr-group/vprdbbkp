@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { StorageConfig, SourceConfig } from "./store";
+import type { StorageConfig, DatabaseConfig } from "./store";
 
 export interface Entry {
   path: string;
@@ -24,45 +24,57 @@ export interface BackupSourceConnection {
   connected: boolean;
 }
 
+function mapStorageConfig(storageConfig: StorageConfig) {
+  return storageConfig.type === "local"
+    ? {
+        Local: storageConfig,
+      }
+    : storageConfig.type === "s3"
+    ? {
+        S3: storageConfig,
+      }
+    : undefined;
+}
+
 export class ActionsService {
   async list(storageConfig: StorageConfig): Promise<Entry[]> {
     const entries = await invoke<Entry[]>("list", {
-      storageConfig,
+      storageConfig: mapStorageConfig(storageConfig),
     });
 
     return entries.filter((it) => it.metadata.mode === "FILE");
   }
 
-  async verifySourceConnection(
-    sourceConfig: SourceConfig
+  async testConnection(
+    databaseConfig: DatabaseConfig
   ): Promise<BackupSourceConnection> {
-    const result = await invoke<BackupSourceConnection>("verify_connection", {
-      sourceConfig,
+    const result = await invoke<BackupSourceConnection>("test_connection", {
+      databaseConfig,
     });
 
     return result;
   }
 
   async backup(
-    sourceConfig: SourceConfig,
+    databaseConfig: DatabaseConfig,
     storageConfig: StorageConfig
   ): Promise<void> {
     await invoke<string>("backup", {
-      sourceConfig,
-      storageConfig,
+      databaseConfig,
+      storageConfig: mapStorageConfig(storageConfig),
     });
   }
 
   async restore(
     filename: string,
-    sourceConfig: SourceConfig,
+    databaseConfig: DatabaseConfig,
     storageConfig: StorageConfig,
     dropDatabase: boolean
   ): Promise<void> {
     await invoke<string>("restore", {
       filename,
-      sourceConfig,
-      storageConfig,
+      databaseConfig,
+      storageConfig: mapStorageConfig(storageConfig),
       dropDatabase,
     });
   }

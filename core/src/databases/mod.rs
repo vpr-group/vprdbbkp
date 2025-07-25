@@ -22,7 +22,10 @@ pub struct BackupOptions {
     // compression: Option<u16>,
 }
 
-pub struct RestoreOptions {}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreOptions {
+    pub drop_database_first: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseMetadata {
@@ -35,6 +38,11 @@ pub trait DatabaseConnectionTrait: Send + Sync + Unpin {
     async fn get_metadata(&self) -> Result<DatabaseMetadata>;
     async fn backup(&self, writer: &mut (dyn Write + Send + Unpin)) -> Result<()>;
     async fn restore(&self, reader: &mut (dyn Read + Send + Unpin)) -> Result<()>;
+    async fn restore_with_options(
+        &self,
+        reader: &mut (dyn Read + Send + Unpin),
+        options: RestoreOptions,
+    ) -> Result<()>;
 }
 
 #[async_trait]
@@ -43,14 +51,14 @@ pub trait UtilitiesTrait: Send + Sync + Unpin {
     async fn get_command(&self, bin_name: &str) -> Result<Command>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionType {
     PostgreSql,
     MySql,
     // MariaDB,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseConfig {
     pub id: String,
     pub name: String,
