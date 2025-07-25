@@ -142,14 +142,15 @@ jobs:
           echo "OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
           echo "OPENSSL_INCLUDE_DIR=/usr/include/openssl" >> $GITHUB_ENV
 
-      # Install OpenSSL for musl target
-      - name: Install musl-tools and OpenSSL for musl
+      # Install OpenSSL for musl target - use vendored OpenSSL
+      - name: Install musl-tools and setup for musl
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
-          # Install statically compiled OpenSSL for musl
-          sudo apt-get install -y libssl-dev pkg-config
+          # Use vendored OpenSSL for musl to avoid linking issues
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+          echo "OPENSSL_VENDOR=1" >> $GITHUB_ENV
 
       # Handle OpenSSL for macOS - don't set conflicting environment variables
       - name: Install OpenSSL (macOS)
