@@ -20,7 +20,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: cli # Changed to match your actual binary name
-  # Remove global OpenSSL environment variables - set them per OS instead
 
 jobs:
   version:
@@ -31,8 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Git
         run: |
@@ -125,6 +123,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', needs.version.outputs.new_version) || '' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
