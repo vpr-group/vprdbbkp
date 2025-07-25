@@ -2,7 +2,7 @@
 
 A professional command-line tool for backing up and restoring PostgreSQL and MySQL databases with support for multiple storage backends, workspaces, and interactive configuration.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -37,12 +37,12 @@ dbkp
 ```
 
 **Features:**
-- 🎯 Guided workspace creation
-- 🔧 Step-by-step database configuration  
-- 🌐 Storage setup with validation
-- ✅ Real-time connection testing
-- 📊 Backup/restore with progress indicators
-- 🗂️ Workspace management
+- Guided workspace creation
+- Step-by-step database configuration  
+- Storage setup with validation
+- Real-time connection testing
+- Backup/restore with progress indicators
+- Workspace management
 
 ### 2. Workspace Mode (Recommended for Regular Use)
 
@@ -75,7 +75,7 @@ dbkp backup \
   --location myapp-backups
 ```
 
-## 🏗️ Commands Overview
+## Commands Overview
 
 | Command | Description |
 |---------|-------------|
@@ -86,7 +86,7 @@ dbkp backup \
 | `dbkp cleanup` | Remove old backups |
 | `dbkp workspace` | Manage workspaces |
 
-## 🗂️ Workspace Management
+## Workspace Management
 
 ### List Workspaces
 ```bash
@@ -105,7 +105,7 @@ dbkp workspace delete oldproject
 dbkp workspace active
 ```
 
-## 💾 Backup Operations
+## Backup Operations
 
 ### Using Workspaces
 ```bash
@@ -162,7 +162,7 @@ dbkp backup \
   --location /backups
 ```
 
-## 🔄 Restore Operations
+## Restore Operations
 
 ### Interactive Restore
 
@@ -199,7 +199,7 @@ dbkp restore \
   --latest
 ```
 
-## 📋 List Backups
+## List Backups
 
 ```bash
 # Using workspace
@@ -220,7 +220,7 @@ dbkp list \
   --location myapp-backups
 ```
 
-## 🧹 Cleanup Operations
+## Cleanup Operations
 
 ```bash
 # Using workspace
@@ -238,7 +238,7 @@ dbkp cleanup \
   --dry-run
 ```
 
-## 🔧 Parameter Reference
+## Parameter Reference
 
 ### Database Connection
 
@@ -295,7 +295,7 @@ dbkp cleanup \
 | `--retention` | Keep backups newer than this | Yes | - |
 | `--dry-run` | Show what would be deleted | No | `false` |
 
-## 🌍 Environment Variables
+## Environment Variables
 
 | Variable | Description | CLI Equivalent |
 |----------|-------------|----------------|
@@ -327,37 +327,7 @@ dbkp backup \
   --location myapp-backups
 ```
 
-## 🎨 User Interface Features
-
-### Animated Spinners
-
-All operations show animated progress indicators with color changes:
-
-```
-| Connecting to database...     (Red)
-/ Database connected...         (Yellow)  
-- Testing storage connection... (Green)
-\ Starting backup...            (Cyan)
-[SUCCESS] Backup completed successfully!
-```
-
-### Colored Output
-
-- **Success messages**: Green `[SUCCESS]`
-- **Error messages**: Red `[ERROR]`
-- **Info messages**: Cyan `[INFO]`
-- **Active workspace**: Green + Bold
-- **Backup listings**: Formatted with dates and sizes
-
-### Professional Interface
-
-- Clean ASCII-only characters
-- Consistent formatting throughout
-- Clear progress feedback
-- Detailed error messages
-- No emoji clutter
-
-## 📝 Backup Naming Convention
+## Backup Naming Convention
 
 Backups are automatically named with timestamps:
 
@@ -370,7 +340,7 @@ Example:
 myapp-2024-01-15-143022-a1b2c3d4.gz
 ```
 
-## 🔄 Retention Periods
+## Retention Periods
 
 Specify how long to keep backups:
 
@@ -388,7 +358,7 @@ dbkp cleanup --workspace myproject --retention 30d
 dbkp cleanup --workspace myproject --retention 6m
 ```
 
-## 🤖 Automation Examples
+## Automation Examples
 
 ### Cron Job
 
@@ -543,7 +513,7 @@ services:
       - database
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -655,7 +625,7 @@ You can manually edit the workspace file if needed:
 }
 ```
 
-## 📊 Performance Tips
+## Performance Tips
 
 ### Large Databases
 
@@ -677,18 +647,18 @@ For databases > 100GB:
 - Implement retention policies to manage storage costs
 - Monitor backup sizes over time
 
-## 🔗 Related Tools
+## Related Tools
 
 - **PostgreSQL**: [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html), [Barman](https://pgbarman.org)
 - **MySQL**: [mysqldump](https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html)
 - **Enterprise**: [pgbackrest](https://pgbackrest.org)
 - **Monitoring**: Integrate with your monitoring stack for backup success/failure alerts
 
-## 📄 License
+## License
 
 MIT License - See LICENSE file for details.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -696,11 +666,7 @@ MIT License - See LICENSE file for details.
 4. Add tests
 5. Submit a pull request
 
-## 📞 Support
+## Support
 
 - **GitHub Issues**: Report bugs or request features
 - **Discussions**: Community support and questions
-
----
-
-**Happy backing up! 🚀**
