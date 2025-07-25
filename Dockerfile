@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install vprs3bkp
-RUN curl -fsSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install.sh | bash
+RUN curl -fsSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install-cli.sh | bash
 
 # Create a non-root user for security
 RUN useradd -r -u 1001 -g root backup-user
