@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use colored::*;
 use inquire::{Confirm, Password, Select, Text};
 use vprs3bkp_core::{
     databases::{
@@ -8,6 +9,7 @@ use vprs3bkp_core::{
     storage::provider::{LocalStorageConfig, S3StorageConfig, StorageConfig},
 };
 
+use crate::spinner::Spinner;
 use crate::workspace::{Workspace, WorkspaceCollection, WorkspaceManager};
 
 pub struct InteractiveSetup {
@@ -25,7 +27,19 @@ impl InteractiveSetup {
         println!("Welcome to dbkp interactive mode!");
         println!();
 
-        let mut collection = self.workspace_manager.load()?;
+        let mut spinner = Spinner::new("Loading workspaces...");
+        spinner.start();
+
+        let mut collection = match self.workspace_manager.load() {
+            Ok(collection) => {
+                spinner.stop();
+                collection
+            }
+            Err(e) => {
+                spinner.error("Failed to load workspaces");
+                return Err(e);
+            }
+        };
 
         loop {
             let action = self.select_main_action(&collection)?;
@@ -35,41 +49,76 @@ impl InteractiveSetup {
                     let workspace = self.create_workspace_interactive().await?;
                     collection.add_workspace(workspace.clone());
                     collection.set_active(&workspace.name)?;
-                    self.workspace_manager.save(&collection)?;
-                    println!(
-                        "[SUCCESS] Workspace '{}' created and activated!",
-                        workspace.name
-                    );
+
+                    let mut spinner = Spinner::new("Saving workspace configuration...");
+                    spinner.start();
+                    match self.workspace_manager.save(&collection) {
+                        Ok(_) => {
+                            spinner.success(format!(
+                                "Workspace '{}' created and activated!",
+                                workspace.name.green().bold()
+                            ));
+                        }
+                        Err(e) => {
+                            spinner.error("Failed to save workspace configuration");
+                            return Err(e);
+                        }
+                    }
                 }
                 MainAction::UseWorkspace => {
                     if collection.workspaces.is_empty() {
-                        println!("[ERROR] No workspaces available. Create one first.");
+                        println!(
+                            "{}",
+                            "[ERROR] No workspaces available. Create one first.".red()
+                        );
                         continue;
                     }
                     let workspace_name = self.select_workspace(&collection)?;
                     collection.set_active(&workspace_name)?;
-                    self.workspace_manager.save(&collection)?;
-                    println!("[SUCCESS] Switched to workspace '{}'", workspace_name);
+
+                    let mut spinner = Spinner::new("Switching workspace...");
+                    spinner.start();
+                    match self.workspace_manager.save(&collection) {
+                        Ok(_) => {
+                            spinner.success(format!(
+                                "Switched to workspace '{}'",
+                                workspace_name.green().bold()
+                            ));
+                        }
+                        Err(e) => {
+                            spinner.error("Failed to save workspace configuration");
+                            return Err(e);
+                        }
+                    }
                 }
                 MainAction::BackupDatabase => {
                     if let Some(workspace) = collection.get_active() {
                         self.run_backup(workspace).await?;
                     } else {
-                        println!("[ERROR] No active workspace. Please create or select one first.");
+                        println!(
+                            "{}",
+                            "[ERROR] No active workspace. Please create or select one first.".red()
+                        );
                     }
                 }
                 MainAction::RestoreDatabase => {
                     if let Some(workspace) = collection.get_active() {
                         self.run_restore(workspace).await?;
                     } else {
-                        println!("[ERROR] No active workspace. Please create or select one first.");
+                        println!(
+                            "{}",
+                            "[ERROR] No active workspace. Please create or select one first.".red()
+                        );
                     }
                 }
                 MainAction::ListBackups => {
                     if let Some(workspace) = collection.get_active() {
                         self.run_list(workspace).await?;
                     } else {
-                        println!("[ERROR] No active workspace. Please create or select one first.");
+                        println!(
+                            "{}",
+                            "[ERROR] No active workspace. Please create or select one first.".red()
+                        );
                     }
                 }
                 MainAction::ManageWorkspaces => {
@@ -96,7 +145,7 @@ impl InteractiveSetup {
 
         if collection.get_active().is_some() {
             let active_workspace = collection.get_active().unwrap();
-            println!("Active workspace: {}", active_workspace.name);
+            println!("Active workspace: {}", active_workspace.name.green().bold());
             options.extend_from_slice(&[
                 MainAction::BackupDatabase,
                 MainAction::RestoreDatabase,
@@ -126,6 +175,9 @@ impl InteractiveSetup {
         println!("Storage Configuration");
         let storage_config = self.setup_storage_interactive().await?;
 
+        let mut spinner = Spinner::new("Configuring workspace...");
+        spinner.start();
+
         let workspace = Workspace {
             name,
             database: database_config,
@@ -134,6 +186,7 @@ impl InteractiveSetup {
             last_used: None,
         };
 
+        spinner.stop();
         Ok(workspace)
     }
 
@@ -269,7 +322,7 @@ impl InteractiveSetup {
 
     async fn manage_workspaces(&self, collection: &mut WorkspaceCollection) -> Result<()> {
         if collection.workspaces.is_empty() {
-            println!("[ERROR] No workspaces available.");
+            println!("{}", "[ERROR] No workspaces available.".red());
             return Ok(());
         }
 
@@ -293,7 +346,15 @@ impl InteractiveSetup {
                         } else {
                             ""
                         };
-                    println!("  - {}{}", workspace.name, active_marker);
+                    if active_marker.is_empty() {
+                        println!("  - {}", workspace.name);
+                    } else {
+                        println!(
+                            "  - {} {}",
+                            workspace.name.green().bold(),
+                            "(active)".green()
+                        );
+                    }
                 }
             }
             WorkspaceAction::Delete => {
@@ -304,8 +365,21 @@ impl InteractiveSetup {
 
                 if confirm {
                     collection.remove_workspace(&workspace_name);
-                    self.workspace_manager.save(collection)?;
-                    println!("[SUCCESS] Workspace '{}' deleted", workspace_name);
+
+                    let mut spinner = Spinner::new("Deleting workspace...");
+                    spinner.start();
+                    match self.workspace_manager.save(collection) {
+                        Ok(_) => {
+                            spinner.success(format!(
+                                "Workspace '{}' deleted",
+                                workspace_name.green().bold()
+                            ));
+                        }
+                        Err(e) => {
+                            spinner.error("Failed to save workspace configuration");
+                            return Err(e);
+                        }
+                    }
                 }
             }
             WorkspaceAction::Back => {}
@@ -319,107 +393,127 @@ impl InteractiveSetup {
             databases::DatabaseConnection, storage::provider::StorageProvider, DbBkp,
         };
 
-        println!(
-            "[INFO] Starting backup for workspace '{}'...",
+        let mut spinner = Spinner::new(format!(
+            "Starting backup for workspace '{}'...",
             workspace.name
-        );
+        ));
+        spinner.start();
 
-        let database_connection = DatabaseConnection::new(workspace.database.clone()).await?;
-        let storage_provider = StorageProvider::new(workspace.storage.clone())?;
+        let database_connection = match DatabaseConnection::new(workspace.database.clone()).await {
+            Ok(conn) => {
+                spinner.update_message("Database connection established, connecting to storage...");
+                conn
+            }
+            Err(e) => {
+                spinner.error("Failed to connect to database");
+                return Err(e);
+            }
+        };
+
+        let storage_provider = match StorageProvider::new(workspace.storage.clone()) {
+            Ok(provider) => {
+                spinner.update_message("Storage connection established, testing connections...");
+                provider
+            }
+            Err(e) => {
+                spinner.error("Failed to connect to storage");
+                return Err(e);
+            }
+        };
 
         let core = DbBkp::new(database_connection, storage_provider);
 
         // Test connections
-        core.test().await?;
+        match core.test().await {
+            Ok(_) => spinner.update_message("Connections verified, starting backup..."),
+            Err(e) => {
+                spinner.error("Connection test failed");
+                return Err(e);
+            }
+        }
 
-        let backup_file = core.backup().await?;
-
-        println!("[SUCCESS] Backup completed successfully: {}", backup_file);
+        match core.backup().await {
+            Ok(file) => {
+                spinner.success(format!("Backup completed successfully: {}", file));
+            }
+            Err(e) => {
+                spinner.error("Backup failed");
+                return Err(e);
+            }
+        }
         Ok(())
     }
 
     async fn run_restore(&self, workspace: &Workspace) -> Result<()> {
         use vprs3bkp_core::{
+            common::extract_timestamp_from_filename,
             databases::DatabaseConnection,
             storage::provider::{ListOptions, StorageProvider},
             DbBkp, RestoreOptions,
         };
 
-        println!(
-            "[INFO] Starting restore for workspace '{}'...",
+        let mut spinner = Spinner::new(format!(
+            "Preparing restore for workspace '{}'...",
             workspace.name
-        );
+        ));
+        spinner.start();
 
-        let database_connection = DatabaseConnection::new(workspace.database.clone()).await?;
-        let storage_provider = StorageProvider::new(workspace.storage.clone())?;
+        let database_connection = match DatabaseConnection::new(workspace.database.clone()).await {
+            Ok(conn) => {
+                spinner.update_message("Database connection established, connecting to storage...");
+                conn
+            }
+            Err(e) => {
+                spinner.error("Failed to connect to database");
+                return Err(e);
+            }
+        };
+
+        let storage_provider = match StorageProvider::new(workspace.storage.clone()) {
+            Ok(provider) => {
+                spinner.update_message("Storage connection established, fetching backup list...");
+                provider
+            }
+            Err(e) => {
+                spinner.error("Failed to connect to storage");
+                return Err(e);
+            }
+        };
 
         // List available backups
-        let entries = storage_provider
-            .list_with_options(ListOptions {
-                latest_only: Some(false),
-                limit: Some(20),
-            })
-            .await?;
-
-        if entries.is_empty() {
-            println!("[ERROR] No backups found in storage");
-            return Ok(());
-        }
-
-        let backup_names: Vec<String> = entries.iter().map(|e| e.name().to_string()).collect();
-        let selected_backup = Select::new("Select backup to restore:", backup_names).prompt()?;
-
-        let drop_database = Confirm::new("Drop database before restore?")
-            .with_default(false)
-            .with_help_message("This will delete all existing data in the database")
-            .prompt()?;
-
-        let core = DbBkp::new(database_connection, storage_provider);
-
-        // Test connections
-        core.test().await?;
-
-        core.restore(RestoreOptions {
-            name: selected_backup.clone(),
-            compression_format: None,
-            drop_database_first: Some(drop_database),
-        })
-        .await?;
-
-        println!(
-            "[SUCCESS] Restore completed successfully: {}",
-            selected_backup
-        );
-        Ok(())
-    }
-
-    async fn run_list(&self, workspace: &Workspace) -> Result<()> {
-        use vprs3bkp_core::storage::provider::{ListOptions, StorageProvider};
-
-        println!(
-            "[INFO] Listing backups for workspace '{}'...",
-            workspace.name
-        );
-
-        let storage_provider = StorageProvider::new(workspace.storage.clone())?;
-        storage_provider.test().await?;
-
-        let entries = storage_provider
+        let entries = match storage_provider
             .list_with_options(ListOptions {
                 latest_only: Some(false),
                 limit: Some(50),
             })
-            .await?;
+            .await
+        {
+            Ok(entries) => {
+                spinner.stop();
+                entries
+            }
+            Err(e) => {
+                spinner.error("Failed to fetch backup list");
+                return Err(e);
+            }
+        };
 
         if entries.is_empty() {
-            println!("[ERROR] No backups found");
+            println!("{}", "[ERROR] No backups found in storage".red());
             return Ok(());
         }
 
-        println!("\nAvailable backups:");
-        for entry in entries {
+        println!("\nAvailable backups (newest first):");
+
+        // Create formatted backup options for selection
+        let mut backup_options: Vec<String> = Vec::new();
+        let mut backup_names: Vec<String> = Vec::new();
+
+        for (index, entry) in entries.iter().enumerate() {
             let filename = entry.name();
             let size = entry.metadata().content_length();
+
+            // Format file size
             let size_str = if size < 1024 {
                 format!("{}B", size)
             } else if size < 1024 * 1024 {
@@ -430,7 +524,162 @@ impl InteractiveSetup {
                 format!("{:.2}GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
             };
 
-            println!("  - {} ({})", filename, size_str);
+            // Try to extract and format timestamp
+            let date_str = match extract_timestamp_from_filename(filename) {
+                Ok(timestamp) => timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                Err(_) => "Unknown date".to_string(),
+            };
+
+            // Create display string with index, date, size, and filename
+            let display_option = format!(
+                "{:2}. {} | {} | {}",
+                index + 1,
+                date_str,
+                size_str,
+                filename
+            );
+
+            backup_options.push(display_option);
+            backup_names.push(filename.to_string());
+        }
+
+        let selected_display =
+            Select::new("Select backup to restore:", backup_options.clone()).prompt()?;
+
+        // Find the actual backup name based on the selected display string
+        let selected_backup = backup_names
+            .iter()
+            .enumerate()
+            .find(|(i, _)| backup_options[*i] == selected_display)
+            .map(|(_, name)| name.clone())
+            .ok_or_else(|| anyhow!("Failed to find selected backup"))?;
+
+        let drop_database = Confirm::new("Drop database before restore?")
+            .with_default(false)
+            .with_help_message("This will delete all existing data in the database")
+            .prompt()?;
+
+        let mut spinner = Spinner::new("Testing connections...");
+        spinner.start();
+
+        let core = DbBkp::new(database_connection, storage_provider);
+
+        // Test connections
+        match core.test().await {
+            Ok(_) => {
+                spinner.update_message(format!("Starting restore of '{}'...", selected_backup))
+            }
+            Err(e) => {
+                spinner.error("Connection test failed");
+                return Err(e);
+            }
+        }
+
+        match core
+            .restore(RestoreOptions {
+                name: selected_backup.clone(),
+                compression_format: None,
+                drop_database_first: Some(drop_database),
+            })
+            .await
+        {
+            Ok(_) => {
+                spinner.success(format!(
+                    "Restore completed successfully: {}",
+                    selected_backup
+                ));
+            }
+            Err(e) => {
+                spinner.error("Restore failed");
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
+
+    async fn run_list(&self, workspace: &Workspace) -> Result<()> {
+        use vprs3bkp_core::{
+            common::extract_timestamp_from_filename,
+            storage::provider::{ListOptions, StorageProvider},
+        };
+
+        let mut spinner = Spinner::new(format!(
+            "Fetching backup list for workspace '{}'...",
+            workspace.name
+        ));
+        spinner.start();
+
+        let storage_provider = match StorageProvider::new(workspace.storage.clone()) {
+            Ok(provider) => {
+                spinner.update_message("Storage connection established, testing connection...");
+                provider
+            }
+            Err(e) => {
+                spinner.error("Failed to connect to storage");
+                return Err(e);
+            }
+        };
+
+        match storage_provider.test().await {
+            Ok(_) => spinner.update_message("Connection verified, fetching backup list..."),
+            Err(e) => {
+                spinner.error("Storage connection test failed");
+                return Err(e);
+            }
+        }
+
+        let entries = match storage_provider
+            .list_with_options(ListOptions {
+                latest_only: Some(false),
+                limit: Some(50),
+            })
+            .await
+        {
+            Ok(entries) => {
+                spinner.stop();
+                entries
+            }
+            Err(e) => {
+                spinner.error("Failed to fetch backup list");
+                return Err(e);
+            }
+        };
+
+        if entries.is_empty() {
+            println!("{}", "[ERROR] No backups found".red());
+            return Ok(());
+        }
+
+        println!("\nAvailable backups (newest first):");
+        for (index, entry) in entries.iter().enumerate() {
+            let filename = entry.name();
+            let size = entry.metadata().content_length();
+
+            // Format file size
+            let size_str = if size < 1024 {
+                format!("{}B", size)
+            } else if size < 1024 * 1024 {
+                format!("{:.2}KB", size as f64 / 1024.0)
+            } else if size < 1024 * 1024 * 1024 {
+                format!("{:.2}MB", size as f64 / (1024.0 * 1024.0))
+            } else {
+                format!("{:.2}GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
+            };
+
+            // Try to extract and format timestamp
+            let date_str = match extract_timestamp_from_filename(filename) {
+                Ok(timestamp) => timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                Err(_) => "Unknown date".to_string(),
+            };
+
+            // Display formatted backup info
+            println!(
+                "  {:2}. {} | {} | {}",
+                index + 1,
+                date_str,
+                size_str,
+                filename
+            );
         }
 
         Ok(())

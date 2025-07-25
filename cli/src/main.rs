@@ -11,6 +11,7 @@ use vprs3bkp_core::{
 
 mod cli;
 mod interactive;
+mod spinner;
 mod tests;
 mod workspace;
 
