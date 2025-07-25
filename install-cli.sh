@@ -11,15 +11,15 @@ GITHUB_REPO="vpr-group/vprs3bkp"  # Updated with your actual repo
 # Parse command line arguments
 INSTALL_FROM_SOURCE=false
 INSTALL_DEPENDENCIES=false
-USE_MUSL=false
 
 print_usage() {
   echo "Usage: $0 [OPTIONS]"
   echo "Options:"
   echo "  --from-source    Install from source code (requires Rust toolchain)"
   echo "  --with-deps      Install dependencies (pg_dump, gzip)"
-  echo "  --musl           Use statically linked MUSL build (better compatibility)"
   echo "  --help           Display this help message and exit"
+  echo ""
+  echo "Note: The installer now uses statically linked binaries by default for better compatibility."
 }
 
 for arg in "$@"; do
@@ -33,7 +33,8 @@ for arg in "$@"; do
       shift
       ;;
     --musl)
-      USE_MUSL=true
+      # Keep this for backward compatibility but ignore it since it's now default
+      echo "Note: --musl is now the default behavior"
       shift
       ;;
     --help)
@@ -134,21 +135,38 @@ if [ "$INSTALL_FROM_SOURCE" = true ]; then
   fi
 
   # Build the project with optimizations for small binary size
-  echo "Building optimized release..."
-  cat > Cargo.toml <<EOF
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-debug = false
-EOF
-
-  cargo build --release
-
-  # Install the binary
-  $SUDO_CMD cp target/release/$BINARY_NAME $INSTALL_DIR/
+  echo "Building optimized release with vendored OpenSSL..."
+  
+  # Build for the appropriate target with vendored OpenSSL
+  if [ "$OS" = "macos" ]; then
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "arm64" ]; then
+      TARGET="aarch64-apple-darwin"
+    else
+      TARGET="x86_64-apple-darwin"
+    fi
+    rustup target add $TARGET
+    cd cli
+    cargo build --release --target $TARGET --features vendored-openssl
+    # Install the binary
+    $SUDO_CMD cp ../target/$TARGET/release/$BINARY_NAME $INSTALL_DIR/
+  else
+    # Linux - use musl for static linking
+    rustup target add x86_64-unknown-linux-musl
+    # Install musl tools if needed
+    if command -v apt-get &> /dev/null; then
+      sudo apt-get update && sudo apt-get install -y musl-tools musl-dev
+    elif command -v dnf &> /dev/null; then
+      sudo dnf install -y musl-gcc musl-devel
+    elif command -v yum &> /dev/null; then
+      sudo yum install -y musl-gcc musl-devel
+    fi
+    cd cli
+    cargo build --release --target x86_64-unknown-linux-musl --features vendored-openssl
+    # Install the binary
+    $SUDO_CMD cp ../target/x86_64-unknown-linux-musl/release/$BINARY_NAME $INSTALL_DIR/
+  fi
+  
   $SUDO_CMD mv $INSTALL_DIR/$BINARY_NAME $INSTALL_DIR/vprs3bkp
 
   # Clean up
@@ -165,19 +183,13 @@ else
       ARTIFACT_NAME="macos-intel"
     fi
   else
-    # Linux
+    # Linux - always use musl builds for better compatibility
     if [ "$ARCH" = "x86_64" ]; then
-      if [ "$USE_MUSL" = true ]; then
-        ARTIFACT_NAME="linux-x86_64-musl"
-      else
-        ARTIFACT_NAME="linux-x86_64"
-      fi
+      ARTIFACT_NAME="linux-x86_64-musl"
     elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-      if [ "$USE_MUSL" = true ]; then
-        ARTIFACT_NAME="linux-aarch64-musl"
-      else
-        ARTIFACT_NAME="linux-aarch64"
-      fi
+      echo "ARM64 Linux builds not yet available. Please use --from-source instead."
+      echo "Or install on an x86_64 system."
+      exit 1
     else
       echo "Unsupported architecture: $ARCH"
       echo "Please install from source with --from-source"
@@ -188,7 +200,7 @@ else
   # New GitHub release asset URL format
   BINARY_URL="https://github.com/$GITHUB_REPO/releases/latest/download/vprs3bkp-$ARTIFACT_NAME"
   
-  echo "Downloading pre-built binary from $BINARY_URL..."
+  echo "Downloading statically linked binary from $BINARY_URL..."
   # Create a temporary directory
   TMP_DIR=$(mktemp -d)
   
@@ -213,6 +225,15 @@ $SUDO_CMD chmod +x $INSTALL_DIR/vprs3bkp
 if [ -x "$INSTALL_DIR/vprs3bkp" ]; then
   echo "Installation successful!"
   echo "The vprs3bkp tool is now available at $INSTALL_DIR/vprs3bkp"
+  echo ""
+  echo "Binary info:"
+  if [ "$OS" = "linux" ]; then
+    echo "  • Statically linked (no external dependencies)"
+    echo "  • Works on any Linux distribution"
+  else
+    echo "  • Optimized for $OS"
+  fi
+  echo "  • Version: $VERSION"
   echo ""
   echo "Example usage:"
   echo "vprs3bkp backup --database mydb --host localhost --username postgres \\"
