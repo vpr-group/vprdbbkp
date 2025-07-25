@@ -22,7 +22,7 @@ impl InteractiveSetup {
     }
 
     pub async fn run(&self) -> Result<()> {
-        println!("🚀 Welcome to dbkp interactive mode!");
+        println!("Welcome to dbkp interactive mode!");
         println!();
 
         let mut collection = self.workspace_manager.load()?;
@@ -36,44 +36,47 @@ impl InteractiveSetup {
                     collection.add_workspace(workspace.clone());
                     collection.set_active(&workspace.name)?;
                     self.workspace_manager.save(&collection)?;
-                    println!("✅ Workspace '{}' created and activated!", workspace.name);
+                    println!(
+                        "[SUCCESS] Workspace '{}' created and activated!",
+                        workspace.name
+                    );
                 }
                 MainAction::UseWorkspace => {
                     if collection.workspaces.is_empty() {
-                        println!("❌ No workspaces available. Create one first.");
+                        println!("[ERROR] No workspaces available. Create one first.");
                         continue;
                     }
                     let workspace_name = self.select_workspace(&collection)?;
                     collection.set_active(&workspace_name)?;
                     self.workspace_manager.save(&collection)?;
-                    println!("✅ Switched to workspace '{}'", workspace_name);
+                    println!("[SUCCESS] Switched to workspace '{}'", workspace_name);
                 }
                 MainAction::BackupDatabase => {
                     if let Some(workspace) = collection.get_active() {
                         self.run_backup(workspace).await?;
                     } else {
-                        println!("❌ No active workspace. Please create or select one first.");
+                        println!("[ERROR] No active workspace. Please create or select one first.");
                     }
                 }
                 MainAction::RestoreDatabase => {
                     if let Some(workspace) = collection.get_active() {
                         self.run_restore(workspace).await?;
                     } else {
-                        println!("❌ No active workspace. Please create or select one first.");
+                        println!("[ERROR] No active workspace. Please create or select one first.");
                     }
                 }
                 MainAction::ListBackups => {
                     if let Some(workspace) = collection.get_active() {
                         self.run_list(workspace).await?;
                     } else {
-                        println!("❌ No active workspace. Please create or select one first.");
+                        println!("[ERROR] No active workspace. Please create or select one first.");
                     }
                 }
                 MainAction::ManageWorkspaces => {
                     self.manage_workspaces(&mut collection).await?;
                 }
                 MainAction::Exit => {
-                    println!("👋 Goodbye!");
+                    println!("Goodbye!");
                     break;
                 }
             }
@@ -93,7 +96,7 @@ impl InteractiveSetup {
 
         if collection.get_active().is_some() {
             let active_workspace = collection.get_active().unwrap();
-            println!("📁 Active workspace: {}", active_workspace.name);
+            println!("Active workspace: {}", active_workspace.name);
             options.extend_from_slice(&[
                 MainAction::BackupDatabase,
                 MainAction::RestoreDatabase,
@@ -108,7 +111,7 @@ impl InteractiveSetup {
     }
 
     async fn create_workspace_interactive(&self) -> Result<Workspace> {
-        println!("🏗️  Let's create a new workspace!");
+        println!("Creating a new workspace...");
         println!();
 
         let name = Text::new("Workspace name:")
@@ -116,11 +119,11 @@ impl InteractiveSetup {
             .prompt()?;
 
         println!();
-        println!("📊 Database Configuration");
+        println!("Database Configuration");
         let database_config = self.setup_database_interactive().await?;
 
         println!();
-        println!("💾 Storage Configuration");
+        println!("Storage Configuration");
         let storage_config = self.setup_storage_interactive().await?;
 
         let workspace = Workspace {
@@ -266,7 +269,7 @@ impl InteractiveSetup {
 
     async fn manage_workspaces(&self, collection: &mut WorkspaceCollection) -> Result<()> {
         if collection.workspaces.is_empty() {
-            println!("❌ No workspaces available.");
+            println!("[ERROR] No workspaces available.");
             return Ok(());
         }
 
@@ -282,7 +285,7 @@ impl InteractiveSetup {
 
         match action {
             WorkspaceAction::List => {
-                println!("\n📋 Available workspaces:");
+                println!("\nAvailable workspaces:");
                 for workspace in collection.list_workspaces() {
                     let active_marker =
                         if Some(&workspace.name) == collection.active_workspace.as_ref() {
@@ -290,7 +293,7 @@ impl InteractiveSetup {
                         } else {
                             ""
                         };
-                    println!("  • {}{}", workspace.name, active_marker);
+                    println!("  - {}{}", workspace.name, active_marker);
                 }
             }
             WorkspaceAction::Delete => {
@@ -302,7 +305,7 @@ impl InteractiveSetup {
                 if confirm {
                     collection.remove_workspace(&workspace_name);
                     self.workspace_manager.save(collection)?;
-                    println!("✅ Workspace '{}' deleted", workspace_name);
+                    println!("[SUCCESS] Workspace '{}' deleted", workspace_name);
                 }
             }
             WorkspaceAction::Back => {}
@@ -316,7 +319,10 @@ impl InteractiveSetup {
             databases::DatabaseConnection, storage::provider::StorageProvider, DbBkp,
         };
 
-        println!("🔄 Starting backup for workspace '{}'...", workspace.name);
+        println!(
+            "[INFO] Starting backup for workspace '{}'...",
+            workspace.name
+        );
 
         let database_connection = DatabaseConnection::new(workspace.database.clone()).await?;
         let storage_provider = StorageProvider::new(workspace.storage.clone())?;
@@ -328,7 +334,7 @@ impl InteractiveSetup {
 
         let backup_file = core.backup().await?;
 
-        println!("✅ Backup completed successfully: {}", backup_file);
+        println!("[SUCCESS] Backup completed successfully: {}", backup_file);
         Ok(())
     }
 
@@ -339,7 +345,10 @@ impl InteractiveSetup {
             DbBkp, RestoreOptions,
         };
 
-        println!("🔄 Starting restore for workspace '{}'...", workspace.name);
+        println!(
+            "[INFO] Starting restore for workspace '{}'...",
+            workspace.name
+        );
 
         let database_connection = DatabaseConnection::new(workspace.database.clone()).await?;
         let storage_provider = StorageProvider::new(workspace.storage.clone())?;
@@ -353,7 +362,7 @@ impl InteractiveSetup {
             .await?;
 
         if entries.is_empty() {
-            println!("❌ No backups found in storage");
+            println!("[ERROR] No backups found in storage");
             return Ok(());
         }
 
@@ -377,14 +386,20 @@ impl InteractiveSetup {
         })
         .await?;
 
-        println!("✅ Restore completed successfully: {}", selected_backup);
+        println!(
+            "[SUCCESS] Restore completed successfully: {}",
+            selected_backup
+        );
         Ok(())
     }
 
     async fn run_list(&self, workspace: &Workspace) -> Result<()> {
         use vprs3bkp_core::storage::provider::{ListOptions, StorageProvider};
 
-        println!("📋 Listing backups for workspace '{}'...", workspace.name);
+        println!(
+            "[INFO] Listing backups for workspace '{}'...",
+            workspace.name
+        );
 
         let storage_provider = StorageProvider::new(workspace.storage.clone())?;
         storage_provider.test().await?;
@@ -397,11 +412,11 @@ impl InteractiveSetup {
             .await?;
 
         if entries.is_empty() {
-            println!("❌ No backups found");
+            println!("[ERROR] No backups found");
             return Ok(());
         }
 
-        println!("\n📦 Available backups:");
+        println!("\nAvailable backups:");
         for entry in entries {
             let filename = entry.name();
             let size = entry.metadata().content_length();
@@ -415,7 +430,7 @@ impl InteractiveSetup {
                 format!("{:.2}GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
             };
 
-            println!("  • {} ({})", filename, size_str);
+            println!("  - {} ({})", filename, size_str);
         }
 
         Ok(())
@@ -436,13 +451,13 @@ enum MainAction {
 impl std::fmt::Display for MainAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MainAction::CreateWorkspace => write!(f, "🏗️  Create new workspace"),
-            MainAction::UseWorkspace => write!(f, "📁 Switch workspace"),
-            MainAction::BackupDatabase => write!(f, "💾 Backup database"),
-            MainAction::RestoreDatabase => write!(f, "🔄 Restore database"),
-            MainAction::ListBackups => write!(f, "📋 List backups"),
-            MainAction::ManageWorkspaces => write!(f, "⚙️  Manage workspaces"),
-            MainAction::Exit => write!(f, "👋 Exit"),
+            MainAction::CreateWorkspace => write!(f, "Create new workspace"),
+            MainAction::UseWorkspace => write!(f, "Switch workspace"),
+            MainAction::BackupDatabase => write!(f, "Backup database"),
+            MainAction::RestoreDatabase => write!(f, "Restore database"),
+            MainAction::ListBackups => write!(f, "List backups"),
+            MainAction::ManageWorkspaces => write!(f, "Manage workspaces"),
+            MainAction::Exit => write!(f, "Exit"),
         }
     }
 }
@@ -487,9 +502,9 @@ enum WorkspaceAction {
 impl std::fmt::Display for WorkspaceAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WorkspaceAction::List => write!(f, "📋 List workspaces"),
-            WorkspaceAction::Delete => write!(f, "🗑️  Delete workspace"),
-            WorkspaceAction::Back => write!(f, "⬅️  Back to main menu"),
+            WorkspaceAction::List => write!(f, "List workspaces"),
+            WorkspaceAction::Delete => write!(f, "Delete workspace"),
+            WorkspaceAction::Back => write!(f, "Back to main menu"),
         }
     }
 }
