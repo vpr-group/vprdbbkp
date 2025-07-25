@@ -111,7 +111,7 @@
   {#snippet actions(cell: Cell, row?: Row)}
     <RestoreDialog
       backupKey={cell.label || ""}
-      onrestore={async ({ sourceConfig, dropDatabase }) => {
+      onrestore={async ({ databaseConfig, dropDatabase }) => {
         if (!storageConfig) return;
 
         const progressNotifications = addNotification({
@@ -123,7 +123,7 @@
         try {
           await actionsService.restore(
             cell.label || "",
-            sourceConfig,
+            databaseConfig,
             storageConfig,
             dropDatabase
           );

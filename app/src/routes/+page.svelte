@@ -1,13 +1,13 @@
 <script lang="ts">
-  import SourceConfigCard from "../components/SourceConfigCard.svelte";
-  import SourceConfigDialog from "../components/SourceConfigDialog.svelte";
+  import DatabaseConfigCard from "../components/DatabaseConfigCard.svelte";
+  import DatabaseConfigDialog from "../components/DatabaseConfigDialog.svelte";
   import Grid from "../components/Grid.svelte";
   import Separation from "../components/Separation.svelte";
   import StorageConfigCard from "../components/StorageConfigCard.svelte";
   import StorageConfigDialog from "../components/StorageConfigDialog.svelte";
   import {
     StoreService,
-    type SourceConfig,
+    type DatabaseConfig,
     type StorageConfig,
   } from "../services/store";
   import { onMount } from "svelte";
@@ -16,7 +16,7 @@
 
   let isLoading = $state(true);
   let storageConfigs = $state<StorageConfig[]>([]);
-  let sourceConfigs = $state<SourceConfig[]>([]);
+  let databaseConfigs = $state<DatabaseConfig[]>([]);
 
   const loadStorageConfigs = async () => {
     await storeService.waitForInitialized();
@@ -25,15 +25,15 @@
     });
   };
 
-  const loadSourceConfigs = async () => {
+  const loadDatabaseConfigs = async () => {
     await storeService.waitForInitialized();
-    storeService.getSourceConfigs().then((res) => {
-      sourceConfigs = res;
+    storeService.getDatabaseConfigs().then((res) => {
+      databaseConfigs = res;
     });
   };
 
   onMount(() => {
-    Promise.all([loadStorageConfigs(), loadSourceConfigs()]).finally(() => {
+    Promise.all([loadStorageConfigs(), loadDatabaseConfigs()]).finally(() => {
       isLoading = false;
     });
   });
@@ -59,20 +59,20 @@
     {/each}
   </Grid>
 
-  <Separation label="Data Source" subLabel={`${sourceConfigs.length} items`}>
+  <Separation label="Databases" subLabel={`${databaseConfigs.length} items`}>
     {#snippet sideSection()}
-      <SourceConfigDialog
+      <DatabaseConfigDialog
         onsubmit={async (backupSource) => {
-          await storeService.saveSourceConfig(backupSource);
-          loadSourceConfigs();
+          await storeService.saveDatabaseConfig(backupSource);
+          loadDatabaseConfigs();
         }}
       />
     {/snippet}
   </Separation>
 
   <Grid>
-    {#each sourceConfigs as backupSource}
-      <SourceConfigCard sourceConfig={backupSource} />
+    {#each databaseConfigs as backupSource}
+      <DatabaseConfigCard databaseConfig={backupSource} />
     {/each}
   </Grid>
 {/if}

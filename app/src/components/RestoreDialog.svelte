@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { StoreService, type SourceConfig } from "../services/store";
+  import { StoreService, type DatabaseConfig } from "../services/store";
   import Button from "./Button.svelte";
   import Dialog from "./Dialog.svelte";
   import DialogActions from "./DialogActions.svelte";
@@ -9,7 +9,7 @@
   interface Props {
     backupKey: string;
     onrestore?: (value: {
-      sourceConfig: SourceConfig;
+      databaseConfig: DatabaseConfig;
       dropDatabase: boolean;
     }) => void;
   }
@@ -17,14 +17,14 @@
   const { onrestore, backupKey }: Props = $props();
   const storeService = new StoreService();
 
-  let sourcesConfig = $state<SourceConfig[]>([]);
+  let sourcesConfig = $state<DatabaseConfig[]>([]);
   const dialogStates = $state<Record<string, boolean>>({});
   let isMainDialogOpen = $state(false);
   let dropDatabase = $state(false);
 
-  const loadSourceConfigs = async () => {
+  const loaddatabaseConfigs = async () => {
     await storeService.waitForInitialized();
-    sourcesConfig = await storeService.getSourceConfigs();
+    sourcesConfig = await storeService.getDatabaseConfigs();
 
     sourcesConfig.forEach((config) => {
       dialogStates[config.id] = false;
@@ -32,16 +32,16 @@
   };
 
   onMount(() => {
-    loadSourceConfigs();
+    loaddatabaseConfigs();
   });
 </script>
 
 <Dialog bind:open={isMainDialogOpen} title="Restore Source" icon="arrow-right">
-  {#each sourcesConfig as sourceConfig}
+  {#each sourcesConfig as databaseConfig}
     <Dialog
-      bind:open={dialogStates[sourceConfig.id]}
+      bind:open={dialogStates[databaseConfig.id]}
       icon="arrow-right"
-      label={sourceConfig.name}
+      label={databaseConfig.name}
       title="Restoration"
       buttonStyle={{
         justifyContent: "space-between",
@@ -51,7 +51,7 @@
     >
       <p>
         You are about ro override the following data source: <strong>
-          {sourceConfig.name}
+          {databaseConfig.name}
         </strong>
         with <strong>{backupKey}</strong>
       </p>
@@ -61,16 +61,16 @@
       <DialogActions>
         <Button
           icon="cross"
-          onclick={() => (dialogStates[sourceConfig.id] = false)}
+          onclick={() => (dialogStates[databaseConfig.id] = false)}
         >
           Cancel
         </Button>
         <Button
           icon="arrow-right"
           onclick={() => {
-            dialogStates[sourceConfig.id] = false;
+            dialogStates[databaseConfig.id] = false;
             isMainDialogOpen = false;
-            onrestore?.({ sourceConfig, dropDatabase });
+            onrestore?.({ databaseConfig, dropDatabase });
           }}>Continue</Button
         >
       </DialogActions>

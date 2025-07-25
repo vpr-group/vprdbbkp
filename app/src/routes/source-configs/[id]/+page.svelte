@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { StoreService, type SourceConfig } from "../../../services/store";
+  import { StoreService, type DatabaseConfig } from "../../../services/store";
   import Separation from "../../../components/Separation.svelte";
-  import BackupSourceDialog from "../../../components/SourceConfigDialog.svelte";
+  import BackupSourceDialog from "../../../components/DatabaseConfigDialog.svelte";
   import Button from "../../../components/Button.svelte";
   import Table from "../../../components/Table.svelte";
   import { goto } from "$app/navigation";
@@ -22,12 +22,12 @@
   const actionService = new ActionsService();
   const storeService = new StoreService();
 
-  let sourceConfig = $state<SourceConfig | null>(null);
+  let databaseConfig = $state<DatabaseConfig | null>(null);
   let connected = $state(false);
 
-  const loadSourceConfig = async () => {
+  const loaddatabaseConfig = async () => {
     await storeService.waitForInitialized();
-    sourceConfig = await storeService.getSourceConfig(page.params.id);
+    databaseConfig = await storeService.getDatabaseConfig(page.params.id);
   };
 
   const cellLabelStyle: CSSProperties = {
@@ -35,15 +35,15 @@
   };
 
   onMount(async () => {
-    loadSourceConfig();
+    loaddatabaseConfig();
   });
 
   $effect(() => {
-    if (!sourceConfig) return;
+    if (!databaseConfig) return;
     let notification: Notification | undefined = undefined;
 
     actionService
-      .verifySourceConnection(sourceConfig)
+      .testConnection(databaseConfig)
       .then((res) => {
         connected = res.connected;
 
@@ -78,21 +78,21 @@
   });
 </script>
 
-{#if sourceConfig}
+{#if databaseConfig}
   <Separation>
     {#snippet label()}
-      {#if sourceConfig}
-        <div class="source-config__label">
+      {#if databaseConfig}
+        <div class="database-config__label">
           <Icon icon="database" />
           <!-- <StatusDot status={connected ? "success" : undefined} /> -->
-          {sourceConfig.name}
+          {databaseConfig.name}
         </div>
       {/if}
     {/snippet}
 
     {#snippet subLabel()}
-      <div class="source-config__sub-label">
-        {#if sourceConfig?.type === "pg"}
+      <div class="database-config__sub-label">
+        {#if databaseConfig?.connection_type === "PostgreSql"}
           PostgreSQL •
           <Badge
             style={{
@@ -109,12 +109,12 @@
     {/snippet}
 
     {#snippet sideSection()}
-      {#if sourceConfig}
+      {#if databaseConfig}
         <Dialog title="Delete Data Source" icon="cross">
           <Button
             onclick={async () => {
-              if (!sourceConfig) return;
-              await storeService.deleteSourceConfig(sourceConfig?.id);
+              if (!databaseConfig) return;
+              await storeService.deleteDatabaseConfig(databaseConfig?.id);
               goto("/");
             }}
             icon="cross"
@@ -127,15 +127,15 @@
         </Dialog>
 
         <BackupSourceDialog
-          {sourceConfig}
-          onsubmit={async (sourceConfig) => {
-            await storeService.saveSourceConfig(sourceConfig);
-            loadSourceConfig();
+          {databaseConfig}
+          onsubmit={async (databaseConfig) => {
+            await storeService.saveDatabaseConfig(databaseConfig);
+            loaddatabaseConfig();
           }}
         />
         <BackupDialog
           onbackup={async (storageConfig) => {
-            if (!sourceConfig) return;
+            if (!databaseConfig) return;
 
             const backupInProgressNotification = addNotification({
               title: "Backup in progress...",
@@ -144,7 +144,7 @@
             });
 
             try {
-              await actionService.backup(sourceConfig, storageConfig);
+              await actionService.backup(databaseConfig, storageConfig);
               removeNotification(backupInProgressNotification.id);
               addNotification({
                 title: "Backup successful",
@@ -169,31 +169,31 @@
       {
         cells: [
           { label: "database type", width: "10rem", style: cellLabelStyle },
-          { label: sourceConfig.type || "-" },
+          { label: databaseConfig.connection_type || "-" },
         ],
       },
       {
         cells: [
           { label: "database", width: "10rem", style: cellLabelStyle },
-          { label: sourceConfig.database || "-" },
+          { label: databaseConfig.database || "-" },
         ],
       },
       {
         cells: [
           { label: "host", width: "10rem", style: cellLabelStyle },
-          { label: sourceConfig.host || "-" },
+          { label: databaseConfig.host || "-" },
         ],
       },
       {
         cells: [
           { label: "port", width: "10rem", style: cellLabelStyle },
-          { label: sourceConfig.port.toString() || "-" },
+          { label: databaseConfig.port.toString() || "-" },
         ],
       },
       {
         cells: [
           { label: "username", width: "10rem", style: cellLabelStyle },
-          { label: sourceConfig.username || "-" },
+          { label: databaseConfig.username || "-" },
         ],
       },
       {
@@ -201,7 +201,7 @@
           { label: "password", width: "10rem", style: cellLabelStyle },
           {
             label:
-              (sourceConfig.password || "")
+              (databaseConfig.password || "")
                 .split("")
                 .map((it) => "•")
                 .join("") || "-",
@@ -213,7 +213,7 @@
 {/if}
 
 <style lang="scss">
-  .source-config {
+  .database-config {
     &__label {
       display: flex;
       align-items: center;

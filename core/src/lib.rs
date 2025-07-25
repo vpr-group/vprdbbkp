@@ -1,148 +1,134 @@
-use std::{
-    borrow::Borrow,
-    io::{Cursor, Read},
-};
+use anyhow::{anyhow, Result};
+use common::get_default_backup_name;
+use compression::{CompressionFormat, Compressor, Decompressor};
+use databases::DatabaseConnection;
+use flate2::Compression;
+use opendal::Entry;
+use serde::{Deserialize, Serialize};
+use storage::provider::{ListOptions, StorageProvider};
 
-use anyhow::Result;
-
+pub mod archives;
 pub mod common;
+pub mod compression;
 pub mod databases;
 pub mod folders;
 pub mod storage;
+mod test_utils;
 mod tests;
-pub mod tunnel;
 
-use bytes::Bytes;
-use chrono::Utc;
-pub use common::get_backup_key;
-use common::{get_filename, get_source_name};
-use databases::configs::SourceConfig;
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use opendal::Entry;
-use storage::{configs::StorageConfig, storage::Storage};
-use tar::{Archive, Builder, Header};
-
-pub async fn is_connected<SO>(source_config: SO) -> Result<bool>
-where
-    SO: Borrow<SourceConfig>,
-{
-    let is_connected = databases::is_connected(source_config.borrow()).await?;
-    Ok(is_connected)
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BackupOptions {
+    name: Option<String>,
+    compression_format: Option<CompressionFormat>,
+    compression_level: Option<u32>,
 }
 
-pub async fn backup<SO, ST>(source_config: SO, storage_config: ST) -> Result<String>
-where
-    SO: Borrow<SourceConfig>,
-    ST: Borrow<StorageConfig>,
-{
-    let borrowed_source_config = source_config.borrow();
-    let borrowed_storage_config = storage_config.borrow();
-
-    let bytes = databases::backup(borrowed_source_config).await?;
-
-    // Compress bytes
-    let source_name = get_source_name(borrowed_source_config);
-    let filename = get_filename(borrowed_source_config);
-
-    let internal_filename = format!("backup_{}.sql", source_name);
-
-    let cursor = Cursor::new(Vec::new());
-    let encoder = GzEncoder::new(cursor, Compression::default());
-    let mut builder = Builder::new(encoder);
-
-    let mut header = Header::new_gnu();
-    header.set_size(bytes.len() as u64);
-    header.set_mode(0o644);
-    header.set_mtime(Utc::now().timestamp() as u64);
-
-    builder.append_data(&mut header, &internal_filename, Cursor::new(bytes.to_vec()))?;
-
-    let encoder = builder.into_inner()?;
-    let compressed_data = encoder.finish()?;
-    let compressed_bytes = Bytes::from(compressed_data.into_inner());
-
-    // Write compressed bytes to storage
-    let storage = Storage::new(borrowed_storage_config).await?;
-    let path = storage.write(&filename, compressed_bytes).await?;
-
-    Ok(path)
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RestoreOptions {
+    pub name: String,
+    pub compression_format: Option<CompressionFormat>,
+    pub drop_database_first: Option<bool>,
 }
 
-pub async fn restore<SO, ST>(
-    source_config: SO,
-    storage_config: ST,
-    filename: &str,
-    drop_database: bool,
-) -> Result<()>
-where
-    SO: Borrow<SourceConfig>,
-    ST: Borrow<StorageConfig>,
-{
-    let borrowed_source_config = source_config.borrow();
-    let borrowed_storage_config = storage_config.borrow();
+pub struct DbBkp {
+    database_connection: DatabaseConnection,
+    storage_provider: StorageProvider,
+}
 
-    let storage = Storage::new(borrowed_storage_config).await?;
-    let bytes = storage.read(filename).await?;
+impl DbBkp {
+    pub fn new(database_connection: DatabaseConnection, storage_provider: StorageProvider) -> Self {
+        Self {
+            database_connection,
+            storage_provider,
+        }
+    }
 
-    let cursor = std::io::Cursor::new(bytes);
-    let gz_decoder = GzDecoder::new(cursor);
-    let mut archive = Archive::new(gz_decoder);
+    pub async fn test(&self) -> Result<bool> {
+        let is_database_connected = self.database_connection.connection.test().await?;
+        let is_storage_connected = self.storage_provider.test().await?;
 
-    let mut extracted_content = Vec::new();
-    let mut found_file = false;
-
-    for entry in archive.entries()? {
-        let mut file = entry?;
-
-        if file.header().entry_type().is_dir() {
-            continue;
+        if !is_database_connected {
+            return Err(anyhow!("Failed to connect to the database"));
+        } else if !is_storage_connected {
+            return Err(anyhow!("Failed to connect to the storage provider"));
         }
 
-        let path = file.path()?;
-        let extension = match path.extension() {
-            Some(extension) => extension.to_str().unwrap_or(""),
-            None => "",
+        return Ok(true);
+    }
+
+    pub async fn backup_with(&self, options: Option<BackupOptions>) -> Result<String> {
+        let options = match options {
+            Some(options) => options,
+            None => BackupOptions {
+                name: None,
+                compression_format: None,
+                compression_level: None,
+            },
         };
 
-        if extension == "sql" {
-            file.read_to_end(&mut extracted_content)?;
-            found_file = true;
+        let compression_format = options
+            .compression_format
+            .unwrap_or(CompressionFormat::Gzip);
+        let compression_level = options.compression_level.unwrap_or(9);
+        let name = match options.name {
+            Some(name) => name,
+            None => get_default_backup_name(&self.database_connection.config, &compression_format),
+        };
 
-            break;
-        }
+        let writer = self.storage_provider.create_writer(&name).await?;
+        let mut compressed_writed = Compressor::new(
+            writer,
+            compression_format,
+            Compression::new(compression_level),
+        );
+
+        self.database_connection
+            .connection
+            .backup(&mut compressed_writed)
+            .await?;
+
+        let mut writer = compressed_writed.finish()?;
+        writer.flush()?;
+
+        Ok(name)
     }
 
-    if !found_file {
-        return Err(anyhow::anyhow!("No valid backup file found in the archive"));
+    pub async fn backup(&self) -> Result<String> {
+        self.backup_with(None).await
     }
 
-    let decompressed_bytes = Bytes::from(extracted_content);
+    pub async fn restore(&self, options: RestoreOptions) -> Result<()> {
+        let compression_format = options
+            .compression_format
+            .unwrap_or(CompressionFormat::Gzip);
 
-    databases::restore(borrowed_source_config, decompressed_bytes, drop_database).await?;
+        let reader = self.storage_provider.create_reader(&options.name).await?;
+        let mut compressed_reader = Decompressor::new(reader, compression_format);
 
-    Ok(())
-}
+        self.database_connection
+            .connection
+            .restore_with_options(
+                &mut compressed_reader,
+                databases::RestoreOptions {
+                    drop_database_first: match options.drop_database_first {
+                        Some(drop) => drop,
+                        None => false,
+                    },
+                },
+            )
+            .await?;
 
-pub async fn list<ST>(storage_config: ST) -> Result<Vec<Entry>>
-where
-    ST: Borrow<StorageConfig>,
-{
-    let borrowed_storage_config = storage_config.borrow();
-    let storage = Storage::new(borrowed_storage_config).await?;
-    let entries = storage.list().await?;
-    Ok(entries)
-}
+        Ok(())
+    }
 
-pub async fn cleanup<ST>(
-    storage_config: ST,
-    retention_days: u64,
-    dry_run: bool,
-) -> Result<(usize, u64)>
-where
-    ST: Borrow<StorageConfig>,
-{
-    let borrowed_storage_config = storage_config.borrow();
-    let storage = Storage::new(borrowed_storage_config).await?;
-    let result = storage.cleanup(retention_days, dry_run).await?;
-    Ok(result)
+    pub async fn list_with_options(&self, options: ListOptions) -> Result<Vec<Entry>> {
+        let entries = self.storage_provider.list_with_options(options).await?;
+        Ok(entries)
+    }
+
+    pub async fn list(&self) -> Result<Vec<Entry>> {
+        let entries = self.storage_provider.list().await?;
+
+        Ok(entries)
+    }
 }

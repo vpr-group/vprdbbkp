@@ -1,94 +1,52 @@
 use anyhow::Result;
 use clap::Parser;
-use cli::{parse_retention, source_from_cli, storage_from_cli, Cli, Commands};
-use vprs3bkp_core::{backup, list, restore, storage::storage::Storage};
+use cli::{database_config_from_cli, parse_retention, storage_from_cli, Cli, Commands};
+use vprs3bkp_core::{
+    databases::DatabaseConnection,
+    storage::provider::{ListOptions, StorageProvider},
+    DbBkp, RestoreOptions,
+};
 
 mod cli;
 mod tests;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Parse command line arguments
     let cli = Cli::parse();
 
-    // Process commands
-    match &cli.command {
+    match cli.command {
         Commands::Backup(args) => {
-            let source_config = source_from_cli(&args.source)?;
-            let storage_config = storage_from_cli(&args.storage)?;
+            let database_config = database_config_from_cli(&args.database_config)?;
+            let storage_config = storage_from_cli(&args.storage_config)?;
 
-            if let Some(retention) = &args.retention {
-                let storage = Storage::new(&storage_config).await?;
-                let (entries_deleted, storage_reclaimed) =
-                    storage.cleanup(parse_retention(retention)?, false).await?;
+            let database_connection = DatabaseConnection::new(database_config).await?;
+            let storage_provider = StorageProvider::new(storage_config)?;
 
-                println!(
-                    "{} Entries deleted, {} Storage reclaimed",
-                    entries_deleted, storage_reclaimed
-                );
-            }
+            let core = DbBkp::new(database_connection, storage_provider);
 
-            let path = backup(&source_config, &storage_config).await?;
-            println!("Backup completed successfully: {}", path);
+            // Test database & storage connection
+            core.test().await?;
+
+            let backup_file = core.backup().await?;
+
+            println!("Backup completed successfully: {}", backup_file);
         }
-
-        Commands::Restore(args) => {
-            let source_config = source_from_cli(&args.source)?;
-            let storage_config = storage_from_cli(&args.storage)?;
-
-            let drop_database = match args.drop_database {
-                Some(value) => value,
-                None => false,
-            };
-
-            if let Some(filename) = &args.filename {
-                // Use the provided filename
-                println!("Restoring from backup: {}", filename);
-                restore(&source_config, &storage_config, filename, drop_database).await?;
-            } else {
-                return Err(anyhow::anyhow!(
-                    "Either --filename or --latest must be specified for restore"
-                ));
-            }
-
-            println!("Restore completed successfully");
-        }
-
         Commands::List(args) => {
             let storage_config = storage_from_cli(&args.storage)?;
+            let storage_provider = StorageProvider::new(storage_config)?;
+            storage_provider.test().await?;
 
-            let entries = crate::list(&storage_config).await?;
-            let storage = Storage::new(&storage_config).await?;
-
-            // Filter entries if database is specified
-            let mut filtered_entries = if let Some(db_name) = &args.database {
-                entries
-                    .iter()
-                    .filter(|e| {
-                        let path = e.path();
-                        let filename = storage.get_filename_from_path(path);
-                        filename.contains(db_name)
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                entries.iter().collect::<Vec<_>>()
-            };
-
-            // Sort by path (most recent first)
-            filtered_entries.sort_by(|a, b| b.path().cmp(a.path()));
-
-            if args.latest_only && !filtered_entries.is_empty() {
-                // For latest only, we can just take the first entry since they're already sorted
-                filtered_entries = vec![filtered_entries[0]];
-            }
-
-            // Limit number of results
-            let limited_entries = filtered_entries.iter().take(args.limit);
+            let entries = storage_provider
+                .list_with_options(ListOptions {
+                    latest_only: Some(args.latest_only),
+                    limit: args.limit,
+                })
+                .await?;
 
             println!("Available backups:");
-            for entry in limited_entries {
-                let path = entry.path();
-                let filename = storage.get_filename_from_path(path);
+
+            for entry in entries {
+                let filename = entry.name();
                 let size = entry.metadata().content_length();
                 let size_str = if size < 1024 {
                     format!("{}B", size)
@@ -103,10 +61,34 @@ async fn main() -> Result<()> {
                 println!("  {} ({})", filename, size_str);
             }
         }
+        Commands::Restore(args) => {
+            let database_config = database_config_from_cli(&args.database_config)?;
+            let storage_config = storage_from_cli(&args.storage_config)?;
 
+            let database_connection = DatabaseConnection::new(database_config).await?;
+            let storage_provider = StorageProvider::new(storage_config)?;
+
+            let core = DbBkp::new(database_connection, storage_provider);
+
+            // Test database & storage connection
+            core.test().await?;
+
+            core.restore(RestoreOptions {
+                name: args.name.clone(),
+                compression_format: None,
+                drop_database_first: Some(args.drop_database),
+            })
+            .await?;
+
+            println!("Restore completed successfully: {}", args.name);
+        }
         Commands::Cleanup(args) => {
             let storage_config = storage_from_cli(&args.storage)?;
-            let storage = Storage::new(&storage_config).await?;
+            let storage = StorageProvider::new(storage_config)?;
+
+            // Test storage connection
+            storage.test().await?;
+
             let (entries_deleted, storage_reclaimed) = storage
                 .cleanup(parse_retention(&args.retention)?, args.dry_run)
                 .await?;
@@ -116,7 +98,7 @@ async fn main() -> Result<()> {
                 entries_deleted, storage_reclaimed
             );
         }
-    }
+    };
 
     Ok(())
 }

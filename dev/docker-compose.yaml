@@ -34,20 +34,37 @@ services:
     networks:
       - database_network
 
+  mysql:
+    image: mysql:9.3
+    container_name: mysql-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql_root_password
+      MYSQL_USER: mysql_user
+      MYSQL_PASSWORD: mysql_password
+      MYSQL_DATABASE: mysql_database
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - database_network
+
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: phpmyadmin
     restart: always
     environment:
-      PMA_HOST: mariadb
+      PMA_HOST: mysql
       PMA_PORT: 3306
-      MYSQL_ROOT_PASSWORD: mariadb_root_password
+      MYSQL_ROOT_PASSWORD: mysql_root_password
     ports:
       - "8080:80"
     networks:
       - database_network
     depends_on:
-      - mariadb
+      - mysql
 
 networks:
   database_network:

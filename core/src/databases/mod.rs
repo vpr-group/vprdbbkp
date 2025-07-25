@@ -1,137 +1,90 @@
-use std::{borrow::Borrow, time::Duration};
+use std::{
+    io::{Read, Write},
+    path::PathBuf,
+    sync::Arc,
+};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use bytes::Bytes;
-use configs::SourceConfig;
-use mariadb::MariaDB;
-use postgres::PostgreSQL;
-use tokio::time::timeout;
+use mysql::connection::MySqlConnection;
+use postgres::connection::PostgreSqlConnection;
+use serde::{Deserialize, Serialize};
+use ssh_tunnel::SshTunnelConfig;
+use tokio::process::Command;
+use version::Version;
 
-use crate::tunnel::Tunnel;
-
-pub mod configs;
-pub mod mariadb;
 pub mod mysql;
 pub mod postgres;
+pub mod ssh_tunnel;
+pub mod version;
+
+pub struct BackupOptions {
+    // compression: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestoreOptions {
+    pub drop_database_first: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseMetadata {
+    version: Version,
+}
 
 #[async_trait]
-pub trait DbAdapter: Send + Sync {
-    async fn is_connected(&self) -> Result<bool>;
-    async fn dump(&self) -> Result<Bytes>;
-    async fn restore(&self, dump_data: Bytes, drop_database: bool) -> Result<()>;
+pub trait DatabaseConnectionTrait: Send + Sync + Unpin {
+    async fn test(&self) -> Result<bool>;
+    async fn get_metadata(&self) -> Result<DatabaseMetadata>;
+    async fn backup(&self, writer: &mut (dyn Write + Send + Unpin)) -> Result<()>;
+    async fn restore(&self, reader: &mut (dyn Read + Send + Unpin)) -> Result<()>;
+    async fn restore_with_options(
+        &self,
+        reader: &mut (dyn Read + Send + Unpin),
+        options: RestoreOptions,
+    ) -> Result<()>;
 }
 
-pub trait DbVersion: Send + Sync + Sized {
-    fn as_str(&self) -> &'static str;
-    fn from_str(version: &str) -> Option<Self>;
-    fn from_version_tuple(major: u32, minor: u32, _patch: u32) -> Option<Self>;
-    fn parse_string_version(version_string: &str) -> Option<Self>;
+#[async_trait]
+pub trait UtilitiesTrait: Send + Sync + Unpin {
+    fn get_base_path(&self) -> Result<PathBuf>;
+    async fn get_command(&self, bin_name: &str) -> Result<Command>;
 }
 
-pub fn get_db_adapter<B>(source_config: B) -> Box<dyn DbAdapter>
-where
-    B: Borrow<SourceConfig>,
-{
-    match source_config.borrow() {
-        SourceConfig::PG(config) => Box::new(PostgreSQL::new(
-            &config.database,
-            &config.host,
-            config.port,
-            &config.username,
-            Some(config.password.as_deref().unwrap_or("")),
-        )),
-        SourceConfig::MariaDB(config) => Box::new(MariaDB::new(
-            &config.database,
-            &config.host,
-            config.port,
-            &config.username,
-            Some(config.password.as_deref().unwrap_or("")),
-        )),
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConnectionType {
+    PostgreSql,
+    MySql,
+    // MariaDB,
 }
 
-pub async fn get_source_config_with_tunnel<B>(
-    source_config: B,
-) -> Result<(SourceConfig, Option<Tunnel>)>
-where
-    B: Borrow<SourceConfig>,
-{
-    let borrowed_config = source_config.borrow();
-    let cloned_config = borrowed_config.clone();
-
-    let tunnel_config = match borrowed_config {
-        SourceConfig::PG(config) => config.tunnel_config.clone(),
-        SourceConfig::MariaDB(config) => config.tunnel_config.clone(),
-    };
-
-    if let Some(tunnel_config) = tunnel_config {
-        if tunnel_config.use_tunnel {
-            let mut tunnel = Tunnel::new(tunnel_config.clone());
-            tunnel.establish_tunnel(&cloned_config).await?;
-            let new_source_config = tunnel.get_tunneled_config(&cloned_config);
-
-            return match new_source_config {
-                Some(source_config) => Ok((source_config, Some(tunnel))),
-                None => Err(anyhow!("Unable to get a tunneled config for this source")),
-            };
-        }
-    }
-
-    Ok((cloned_config, None))
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseConfig {
+    pub id: String,
+    pub name: String,
+    pub connection_type: ConnectionType,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub username: String,
+    pub password: Option<String>,
+    pub ssh_tunnel: Option<SshTunnelConfig>,
 }
 
-pub async fn backup<B>(source_config: B) -> Result<Bytes>
-where
-    B: Borrow<SourceConfig>,
-{
-    let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
-
-    let db_adapter = get_db_adapter(&source_config);
-    let bytes = db_adapter.dump().await?;
-
-    if let Some(mut tunnel) = tunnel {
-        tunnel.close_tunnel().await?;
-    }
-
-    Ok(bytes)
+pub struct DatabaseConnection {
+    pub config: DatabaseConfig,
+    pub connection: Arc<dyn DatabaseConnectionTrait>,
 }
 
-pub async fn restore<B>(source_config: B, dump_data: Bytes, drop_database: bool) -> Result<()>
-where
-    B: Borrow<SourceConfig>,
-{
-    let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
+impl DatabaseConnection {
+    pub async fn new(config: DatabaseConfig) -> Result<Self> {
+        let connection: Arc<dyn DatabaseConnectionTrait> = match config.connection_type {
+            ConnectionType::PostgreSql => {
+                Arc::new(PostgreSqlConnection::new(config.clone()).await?)
+            }
+            ConnectionType::MySql => Arc::new(MySqlConnection::new(config.clone()).await?),
+        };
 
-    let db_adapter = get_db_adapter(&source_config);
-    db_adapter.restore(dump_data, drop_database).await?;
-
-    if let Some(mut tunnel) = tunnel {
-        tunnel.close_tunnel().await?;
-    }
-
-    Ok(())
-}
-
-pub async fn is_connected<B>(source_config: B) -> Result<bool>
-where
-    B: Borrow<SourceConfig>,
-{
-    match timeout(Duration::from_secs(5), async {
-        let (source_config, tunnel) = get_source_config_with_tunnel(source_config).await?;
-
-        let db_adapter = get_db_adapter(&source_config);
-        let is_connected = db_adapter.is_connected().await?;
-
-        if let Some(mut tunnel) = tunnel {
-            tunnel.close_tunnel().await?;
-        }
-
-        Ok(is_connected)
-    })
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Ok(false),
+        Ok(Self { config, connection })
     }
 }

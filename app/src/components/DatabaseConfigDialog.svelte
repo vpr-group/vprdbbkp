@@ -1,26 +1,34 @@
 <script lang="ts">
   import { createId } from "@paralleldrive/cuid2";
-  import type { SourceConfig, TunnelConfig } from "../services/store";
+  import type { DatabaseConfig, TunnelConfig } from "../services/store";
   import Dialog from "./Dialog.svelte";
   import Input from "./Input.svelte";
-  import Separation from "./Separation.svelte";
   import Button from "./Button.svelte";
   import DialogActions from "./DialogActions.svelte";
   import Checkbox from "./Checkbox.svelte";
-  import { tick } from "svelte";
 
   interface Props {
-    sourceConfig?: SourceConfig;
-    onchange?: (sourceConfig: SourceConfig) => void;
-    onsubmit?: (sourceConfig: SourceConfig) => void;
+    databaseConfig?: DatabaseConfig;
+    onchange?: (databaseConfig: DatabaseConfig) => void;
+    onsubmit?: (databaseConfig: DatabaseConfig) => void;
   }
 
-  const sourceConfigTypes: SourceConfig["type"][] = ["pg"];
-  const { sourceConfig, onchange, onsubmit }: Props = $props();
+  const databaseConfigTypes: DatabaseConfig["connection_type"][] = [
+    "PostgreSql",
+  ];
+
+  const {
+    databaseConfig: databaseConfig,
+    onchange,
+    onsubmit,
+  }: Props = $props();
+
   let isConfigDialogOpen = $state(false);
   let isCreateDialogOpen = $state(false);
 
-  let showTunnelConfig = $state(sourceConfig?.tunnelConfig?.useTunnel || false);
+  let showTunnelConfig = $state(
+    databaseConfig?.tunnelConfig?.useTunnel || false
+  );
 
   const defaultTunnelConfig: TunnelConfig = {
     useTunnel: false,
@@ -28,57 +36,57 @@
     keyPath: "",
   };
 
-  let currentSourceConfig = $state<SourceConfig>(
-    sourceConfig || {
+  let currentDatabaseConfig = $state<DatabaseConfig>(
+    databaseConfig || {
       id: createId(),
       name: "",
-      type: "pg",
+      connection_type: "PostgreSql",
       database: "",
       host: "",
       password: "",
       port: 0,
       username: "",
       tunnelConfig: defaultTunnelConfig,
-    },
+    }
   );
 
   $effect(() => {
-    onchange?.(currentSourceConfig);
+    onchange?.(currentDatabaseConfig);
   });
 </script>
 
-{#snippet pgDialog(sourceConfig?: SourceConfig)}
+{#snippet pgDialog(databaseConfig?: DatabaseConfig)}
   <Dialog
     bind:open={isConfigDialogOpen}
-    label={sourceConfig ? "" : "PostgreSQL"}
-    icon={sourceConfig ? "pencil" : "arrow-right"}
-    title={sourceConfig ? "Edit" : "Create"}
+    label={databaseConfig ? "" : "PostgreSQL"}
+    icon={databaseConfig ? "pencil" : "arrow-right"}
+    title={databaseConfig ? "Edit" : "Create"}
     buttonStyle={{
       justifyContent: "space-between",
-      backgroundColor: sourceConfig ? undefined : "var(--color-light-grey)",
-      color: sourceConfig ? undefined : "black",
+      backgroundColor: databaseConfig ? undefined : "var(--color-light-grey)",
+      color: databaseConfig ? undefined : "black",
     }}
   >
     <Input
       type="text"
       name="Name"
-      value={currentSourceConfig.name}
+      value={currentDatabaseConfig.name}
       oninput={(e) => {
-        currentSourceConfig = {
-          ...currentSourceConfig,
+        currentDatabaseConfig = {
+          ...currentDatabaseConfig,
           name: e.currentTarget.value,
         };
       }}
     />
 
-    {#if currentSourceConfig.type === "pg"}
+    {#if currentDatabaseConfig.connection_type === "PostgreSql"}
       <Input
         name="Database"
-        value={currentSourceConfig.database}
+        value={currentDatabaseConfig.database}
         oninput={(e) => {
           const database = e.currentTarget.value;
-          currentSourceConfig = {
-            ...currentSourceConfig,
+          currentDatabaseConfig = {
+            ...currentDatabaseConfig,
             database,
           };
         }}
@@ -86,11 +94,11 @@
 
       <Input
         name="Host"
-        value={currentSourceConfig.host}
+        value={currentDatabaseConfig.host}
         oninput={(e) => {
           const host = e.currentTarget.value;
-          currentSourceConfig = {
-            ...currentSourceConfig,
+          currentDatabaseConfig = {
+            ...currentDatabaseConfig,
             host,
           };
         }}
@@ -98,11 +106,11 @@
 
       <Input
         name="Port"
-        value={currentSourceConfig.port.toString()}
+        value={currentDatabaseConfig.port.toString()}
         oninput={(e) => {
           const port = parseInt(e.currentTarget.value);
-          currentSourceConfig = {
-            ...currentSourceConfig,
+          currentDatabaseConfig = {
+            ...currentDatabaseConfig,
             port,
           };
         }}
@@ -110,11 +118,11 @@
 
       <Input
         name="Username"
-        value={currentSourceConfig.username}
+        value={currentDatabaseConfig.username}
         oninput={(e) => {
           const username = e.currentTarget.value;
-          currentSourceConfig = {
-            ...currentSourceConfig,
+          currentDatabaseConfig = {
+            ...currentDatabaseConfig,
             username,
           };
         }}
@@ -122,11 +130,11 @@
 
       <Input
         name="Password"
-        value={currentSourceConfig.password}
+        value={currentDatabaseConfig.password}
         oninput={(e) => {
           const password = e.currentTarget.value;
-          currentSourceConfig = {
-            ...currentSourceConfig,
+          currentDatabaseConfig = {
+            ...currentDatabaseConfig,
             password,
           };
         }}
@@ -137,8 +145,8 @@
         bind:checked={showTunnelConfig}
         oncheckedchange={(checked) => {
           if (!checked) {
-            currentSourceConfig = {
-              ...currentSourceConfig,
+            currentDatabaseConfig = {
+              ...currentDatabaseConfig,
               tunnelConfig: defaultTunnelConfig,
             };
           }
@@ -151,16 +159,16 @@
       {#if showTunnelConfig}
         <Input
           name="Host Username"
-          value={currentSourceConfig.tunnelConfig?.username || ""}
+          value={currentDatabaseConfig.tunnelConfig?.username || ""}
           oninput={(e) => {
             const username = e.currentTarget.value;
             const useTunnel = Boolean(
-              currentSourceConfig.tunnelConfig?.keyPath && username,
+              currentDatabaseConfig.tunnelConfig?.keyPath && username
             );
-            currentSourceConfig = {
-              ...currentSourceConfig,
+            currentDatabaseConfig = {
+              ...currentDatabaseConfig,
               tunnelConfig: {
-                ...(currentSourceConfig.tunnelConfig || defaultTunnelConfig),
+                ...(currentDatabaseConfig.tunnelConfig || defaultTunnelConfig),
                 username,
                 useTunnel,
               },
@@ -170,16 +178,16 @@
 
         <Input
           name="Path to SSH Key"
-          value={currentSourceConfig.tunnelConfig?.keyPath || ""}
+          value={currentDatabaseConfig.tunnelConfig?.keyPath || ""}
           oninput={(e) => {
             const keyPath = e.currentTarget.value;
             const useTunnel = Boolean(
-              currentSourceConfig.tunnelConfig?.username && keyPath,
+              currentDatabaseConfig.tunnelConfig?.username && keyPath
             );
-            currentSourceConfig = {
-              ...currentSourceConfig,
+            currentDatabaseConfig = {
+              ...currentDatabaseConfig,
               tunnelConfig: {
-                ...(currentSourceConfig.tunnelConfig || defaultTunnelConfig),
+                ...(currentDatabaseConfig.tunnelConfig || defaultTunnelConfig),
                 keyPath,
                 useTunnel,
               },
@@ -201,20 +209,20 @@
       <Button
         icon="plus"
         onclick={() => {
-          onsubmit?.(currentSourceConfig);
+          onsubmit?.(currentDatabaseConfig);
           isConfigDialogOpen = false;
           isCreateDialogOpen = false;
         }}
       >
-        {sourceConfig ? "Update" : "Create"}
+        {databaseConfig ? "Update" : "Create"}
       </Button>
     </DialogActions>
   </Dialog>
 {/snippet}
 
-{#if sourceConfig}
-  {#if sourceConfig.type === "pg"}
-    {@render pgDialog(sourceConfig)}
+{#if databaseConfig}
+  {#if databaseConfig.connection_type === "PostgreSql"}
+    {@render pgDialog(databaseConfig)}
   {/if}
 {:else}
   <Dialog icon="plus" title="Create Data Source" bind:open={isCreateDialogOpen}>

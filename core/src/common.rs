@@ -1,10 +1,19 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
+use dirs::cache_dir;
 use regex::Regex;
-use std::{borrow::Borrow, path::Path};
+use std::{
+    borrow::Borrow,
+    env,
+    path::{Path, PathBuf},
+};
+
 use uuid::Uuid;
 
-use crate::databases::configs::SourceConfig;
+use crate::{
+    compression::CompressionFormat,
+    databases::{version::Version, DatabaseConfig},
+};
 
 pub fn slugify(input: &str) -> String {
     let mut slug = String::new();
@@ -27,32 +36,55 @@ pub fn slugify(input: &str) -> String {
     slug.to_string()
 }
 
-pub fn get_source_name<B>(source_config: B) -> String
+pub fn get_default_backup_name<B>(
+    database_config: B,
+    compression_format: &CompressionFormat,
+) -> String
 where
-    B: Borrow<SourceConfig>,
+    B: Borrow<DatabaseConfig>,
 {
-    match source_config.borrow() {
-        SourceConfig::PG(config) => {
-            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
-        }
-        SourceConfig::MariaDB(config) => {
-            format!("{}-{}", slugify(&config.name), slugify(&config.database),)
-        }
-    }
-}
-
-pub fn get_filename<B>(source_config: B) -> String
-where
-    B: Borrow<SourceConfig>,
-{
-    let borrowed_source_config = source_config.borrow();
+    let borrowed_config: &DatabaseConfig = database_config.borrow();
     let now = Utc::now();
     let date_str = now.format("%Y-%m-%d-%H%M%S");
     let uuid_string = Uuid::new_v4().to_string();
     let uuid = uuid_string.split('-').next().unwrap_or("backup");
-    let source_name = get_source_name(borrowed_source_config);
 
-    format!("{}-{}-{}.tar.gz", source_name, date_str, uuid)
+    let extension = match compression_format {
+        CompressionFormat::Zlib => "zip",
+        CompressionFormat::Deflate => "zz",
+        CompressionFormat::Gzip => "gz",
+        CompressionFormat::None => "",
+    };
+
+    format!(
+        "{}-{}-{}.{}",
+        borrowed_config.name, date_str, uuid, extension
+    )
+}
+
+pub fn get_binaries_base_path(version: &Version) -> PathBuf {
+    let db_name = get_db_name(&version);
+    let version_name = get_version_name(&version);
+
+    cache_dir()
+        .unwrap_or_else(|| env::temp_dir())
+        .join("vprdbbkp")
+        .join(db_name)
+        .join(version_name)
+}
+
+pub fn get_db_name(version: &Version) -> String {
+    match version {
+        Version::PostgreSQL(_) => "postgresql".into(),
+        Version::MySql(_) => "mysql".into(),
+    }
+}
+
+pub fn get_version_name(version: &Version) -> String {
+    match version {
+        Version::PostgreSQL(version) => version.to_string(),
+        Version::MySql(version) => version.to_string(),
+    }
 }
 
 pub fn extract_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>> {
@@ -77,59 +109,6 @@ pub fn extract_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>> 
     let datetime = DateTime::<Utc>::from_utc(naive_datetime, Utc);
 
     Ok(datetime)
-}
-
-pub fn get_backup_key(prefix: &str, db_type: &str, db_name: &str) -> String {
-    let now = Utc::now();
-    let date_str = now.format("%Y-%m-%d-%H%M%S");
-    let uuid_string = Uuid::new_v4().to_string();
-    let uuid = uuid_string.split('-').next().unwrap_or("backup");
-
-    format!(
-        "{}/{}/{}-{}-{}.gz",
-        prefix, db_type, db_name, date_str, uuid
-    )
-}
-
-pub fn format_timestamp(timestamp: &str) -> String {
-    // The timestamp format can vary, but we'll try to handle common cases
-
-    // If the timestamp is already in a standard format, try to parse it
-    if let Ok(datetime) = chrono::DateTime::parse_from_rfc3339(timestamp) {
-        return datetime.format("%Y-%m-%d %H:%M").to_string();
-    }
-
-    // Try parsing common timestamp formats
-    // Format: YYYY-MM-DD-HHMMSS
-    if timestamp.len() >= 17 && timestamp.contains('-') {
-        if let Some(year_end) = timestamp.find('-') {
-            if let Some(month_end) = timestamp[year_end + 1..]
-                .find('-')
-                .map(|pos| pos + year_end + 1)
-            {
-                if let Some(day_end) = timestamp[month_end + 1..]
-                    .find('-')
-                    .map(|pos| pos + month_end + 1)
-                {
-                    let year = &timestamp[..year_end];
-                    let month = &timestamp[year_end + 1..month_end];
-                    let day = &timestamp[month_end + 1..day_end];
-
-                    // Handle the time part (HHMMSS)
-                    let time_part = &timestamp[day_end + 1..];
-                    if time_part.len() >= 4 {
-                        let hour = &time_part[..2];
-                        let minute = &time_part[2..4];
-
-                        return format!("{}-{}-{} {}:{}", year, month, day, hour, minute);
-                    }
-                }
-            }
-        }
-    }
-
-    // If we couldn't parse the timestamp in a known format, return it as is
-    timestamp.to_string()
 }
 
 pub fn get_arch() -> Result<String> {

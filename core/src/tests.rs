@@ -1,574 +1,328 @@
 #[cfg(test)]
-mod lib_tests {
+mod vprdbbkp_tests {
     use anyhow::Result;
-    use dotenv::dotenv;
-    use serial_test::serial;
     use std::env;
-    use tokio::process::Command;
+    use tempfile::tempdir;
 
     use crate::{
-        backup,
         databases::{
-            configs::{MariaDBSourceConfig, PGSourceConfig, SourceConfig},
-            mariadb::{tools::MariaDBTools, MariaDB},
-            postgres::{tools::PostgreSQLTools, PostgreSQL},
+            ssh_tunnel::{SshAuthMethod, SshTunnelConfig},
+            ConnectionType, DatabaseConfig, DatabaseConnection,
         },
-        is_connected, list, restore,
-        storage::configs::{LocalStorageConfig, StorageConfig},
+        storage::provider::{LocalStorageConfig, S3StorageConfig, StorageConfig, StorageProvider},
+        test_utils::test_utils::{get_mysql_pool, get_postgresql_pool, initialize_test},
+        DbBkp, RestoreOptions,
     };
 
-    struct ConnectionOptions {
-        host: String,
-        port: u16,
-        user: String,
-        password: String,
-        db_name: String,
+    fn get_local_provider() -> Result<StorageProvider> {
+        initialize_test();
+
+        let temp_path = tempdir()?;
+        let config = StorageConfig::Local(LocalStorageConfig {
+            id: "test".into(),
+            name: "local".into(),
+            location: temp_path.path().to_str().unwrap().to_string(),
+        });
+        let provider = StorageProvider::new(config)?;
+        Ok(provider)
     }
 
-    fn get_postgresql_connection_options() -> Result<ConnectionOptions> {
-        dotenv().ok();
+    fn get_s3_provider() -> Result<StorageProvider> {
+        initialize_test();
+
+        let location = format!("s3_provider_test_{}", chrono::Utc::now().timestamp());
+
+        let endpoint = env::var("S3_ENDPOINT")
+            .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string());
+
+        let config = StorageConfig::S3(S3StorageConfig {
+            id: "test".into(),
+            name: "s3".into(),
+            access_key: env::var("S3_ACCESS_KEY").unwrap_or_default(),
+            secret_key: env::var("S3_SECRET_KEY").unwrap_or_default(),
+            bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
+            endpoint: Some(endpoint),
+            region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
+            location,
+        });
+
+        let provider = StorageProvider::new(config)?;
+
+        Ok(provider)
+    }
+
+    fn get_postgresql_config() -> Result<DatabaseConfig> {
+        initialize_test();
 
         let port: u16 = env::var("POSTGRESQL_PORT").unwrap_or("0".into()).parse()?;
+        let password = env::var("POSTGRESQL_PASSWORD").unwrap_or_default();
 
-        Ok(ConnectionOptions {
+        let config = DatabaseConfig {
+            id: "test".to_string(),
+            name: "test".to_string(),
+            connection_type: ConnectionType::PostgreSql,
             host: env::var("POSTGRESQL_HOST").unwrap_or_default(),
-            password: env::var("POSTGRESQL_PASSWORD").unwrap_or_default(),
-            user: env::var("POSTGRESQL_USERNAME").unwrap_or_default(),
-            db_name: env::var("POSTGRESQL_NAME").unwrap_or_default(),
+            password: Some(password),
+            username: env::var("POSTGRESQL_USERNAME").unwrap_or_default(),
+            database: env::var("POSTGRESQL_NAME").unwrap_or_default(),
             port,
-        })
+            ssh_tunnel: None,
+        };
+
+        Ok(config)
     }
 
-    fn get_mariadb_connection_options() -> Result<ConnectionOptions> {
-        dotenv().ok();
+    fn get_mysql_config() -> Result<DatabaseConfig> {
+        initialize_test();
 
-        let port: u16 = env::var("MARIADB_PORT").unwrap_or("0".into()).parse()?;
+        let port: u16 = env::var("MYSQL_PORT").unwrap_or("0".into()).parse()?;
+        let password = env::var("MYSQL_PASSWORD").unwrap_or_default();
 
-        Ok(ConnectionOptions {
-            host: env::var("MARIADB_HOST").unwrap_or_default(),
-            password: env::var("MARIADB_PASSWORD").unwrap_or_default(),
-            user: env::var("MARIADB_USERNAME").unwrap_or_default(),
-            db_name: env::var("MARIADB_NAME").unwrap_or_default(),
+        let config = DatabaseConfig {
+            id: "test".to_string(),
+            name: "test".to_string(),
+            connection_type: ConnectionType::MySql,
+            host: env::var("MYSQL_HOST").unwrap_or_default(),
+            password: Some(password),
+            username: env::var("MYSQL_USERNAME").unwrap_or_default(),
+            database: env::var("MYSQL_NAME").unwrap_or_default(),
             port,
-        })
+            ssh_tunnel: None,
+        };
+
+        Ok(config)
     }
 
-    fn get_local_storage_config() -> Result<LocalStorageConfig> {
-        let current_dir = env::current_dir()?;
-        let test_backup_dir = current_dir.join("test-backups");
+    async fn get_postgresql_tunneled_config() -> Result<DatabaseConfig> {
+        initialize_test();
 
-        Ok(LocalStorageConfig {
-            name: "tests".into(),
-            root: test_backup_dir.to_string_lossy().into_owned().into(),
-            prefix: None,
-        })
-    }
+        let port: u16 = env::var("DB_PORT").unwrap_or("0".into()).parse()?;
+        let password = env::var("DB_PASSWORD").unwrap_or_default();
 
-    fn get_storage_config() -> Result<StorageConfig> {
-        Ok(StorageConfig::Local(get_local_storage_config()?))
-    }
+        let mut config = get_postgresql_config()?;
 
-    fn get_postgresql_source_config() -> Result<SourceConfig> {
-        dotenv().ok();
+        config.password = Some(password);
+        config.port = port;
+        config.username = env::var("DB_USERNAME").unwrap_or_default();
+        config.database = env::var("DB_NAME").unwrap_or_default();
 
-        let options = get_postgresql_connection_options()?;
+        config.ssh_tunnel = Some(SshTunnelConfig {
+            host: env::var("SSH_HOST").unwrap_or_default(),
+            username: env::var("SSH_USERNAME").unwrap_or_default(),
+            port: 22,
+            auth_method: SshAuthMethod::PrivateKey {
+                key_path: env::var("SSH_KEY_PATH").unwrap_or_default(),
+                passphrase_key: None,
+            },
+        });
 
-        Ok(SourceConfig::PG(PGSourceConfig {
-            name: "postgresql".into(),
-            database: options.db_name,
-            host: options.host,
-            username: options.user,
-            port: options.port,
-            password: Some(options.password),
-            tunnel_config: None,
-        }))
-    }
-
-    fn get_mariadb_source_config() -> Result<SourceConfig> {
-        dotenv().ok();
-        let port: u16 = env::var("MARIADB_PORT").unwrap_or("0".into()).parse()?;
-
-        Ok(SourceConfig::MariaDB(MariaDBSourceConfig {
-            name: "mariadb".into(),
-            database: env::var("MARIADB_NAME").unwrap_or_default(),
-            host: env::var("MARIADB_HOST").unwrap_or_default(),
-            username: env::var("MARIADB_USERNAME").unwrap_or_default(),
-            port,
-            password: Some(env::var("MARIADB_PASSWORD").unwrap_or_default()),
-            tunnel_config: None,
-        }))
-    }
-
-    fn get_postgresql() -> Result<PostgreSQL> {
-        let options = get_postgresql_connection_options()?;
-
-        Ok(PostgreSQL::new(
-            options.db_name.as_str(),
-            options.host.as_str(),
-            options.port,
-            options.user.as_str(),
-            Some(options.password.as_str()),
-        ))
-    }
-
-    async fn get_postgresql_tools() -> Result<PostgreSQLTools> {
-        let postgresql = get_postgresql()?;
-        let tools = postgresql.get_tools().await?;
-
-        Ok(tools)
-    }
-
-    async fn get_postgresql_connection() -> Result<Command> {
-        let options = get_postgresql_connection_options()?;
-        let tools = get_postgresql_tools().await?;
-        let connection = tools
-            .get_connection(
-                &options.db_name,
-                &options.host,
-                options.port,
-                &options.user,
-                Some(options.password.as_str()),
-            )
-            .await?;
-
-        Ok(connection)
-    }
-
-    fn get_mariadb() -> Result<MariaDB> {
-        let options = get_mariadb_connection_options()?;
-
-        Ok(MariaDB::new(
-            options.db_name.as_str(),
-            options.host.as_str(),
-            options.port,
-            options.user.as_str(),
-            Some(options.password.as_str()),
-        ))
-    }
-
-    async fn get_mariadb_tools() -> Result<MariaDBTools> {
-        let mariadb = get_mariadb()?;
-        let tools = mariadb.get_tools().await?;
-
-        Ok(tools)
-    }
-
-    async fn get_mariadb_connection() -> Result<Command> {
-        let options = get_mariadb_connection_options()?;
-        let tools = get_mariadb_tools().await?;
-        let connection = tools
-            .get_connection(
-                &options.db_name,
-                &options.host,
-                options.port,
-                &options.user,
-                Some(options.password.as_str()),
-            )
-            .await?;
-
-        Ok(connection)
+        Ok(config)
     }
 
     #[tokio::test]
-    #[serial]
-    async fn test_01_is_postgresql_connected() {
-        let source_config =
-            get_postgresql_source_config().expect("Failed to get PostgreSQL source config");
+    async fn test_01_postgresql_backup() {
+        initialize_test();
+        let config = get_postgresql_config().expect("Failed to get postgresql config");
+        let db_pool = get_postgresql_pool().await.expect("Failed to get db pool");
 
-        let is_connected = is_connected(source_config)
+        let database_connection = DatabaseConnection::new(config.clone())
             .await
-            .expect("Failed to check PostgreSQL connection");
+            .expect("Failed to get database connection");
 
-        assert_eq!(is_connected, true);
-    }
+        let storage_provider = get_local_provider().expect("Failed to get local storage provider");
 
-    #[tokio::test]
-    #[serial]
-    async fn test_02_is_mariadb_connected() {
-        let source_config =
-            get_mariadb_source_config().expect("Failed to get MariaDB source config");
+        let engine = DbBkp::new(database_connection, storage_provider);
 
-        let is_connected = is_connected(source_config)
+        sqlx::query("DROP TABLE IF EXISTS backup_test_table")
+            .execute(&db_pool)
             .await
-            .expect("Failed to check MariaDB connection");
+            .expect("Failed to drop test table");
 
-        assert_eq!(is_connected, true);
-    }
+        sqlx::query(
+            "CREATE TABLE backup_test_table (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
+        )
+        .execute(&db_pool)
+        .await
+        .expect("Failed to create test table");
 
-    #[tokio::test]
-    #[serial]
-    async fn test_03_backup_postgresql() {
-        let source_config =
-            get_postgresql_source_config().expect("Failed to get PostgreSQL source config");
+        sqlx::query("INSERT INTO backup_test_table (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)")
+        .execute(&db_pool)
+        .await
+        .expect("Failed to insert test data");
 
-        let storage_config = get_storage_config().expect("Failed to get local storage config");
+        let rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&db_pool)
+                .await
+                .expect("Failed to fetch test data");
 
-        let backup_key = backup(source_config, storage_config)
+        assert_eq!(rows.len(), 3, "Should have 3 rows before backup");
+
+        let backup_name = engine.backup().await.expect("Failed to backup");
+
+        sqlx::query("UPDATE backup_test_table SET value = 999 WHERE name = 'test1'")
+            .execute(&db_pool)
             .await
-            .expect("Failed to check PostgreSQL connection");
+            .expect("Failed to update test data");
 
-        let root = get_local_storage_config()
-            .expect("Failed to get local storage config")
-            .root;
-
-        let backup_path = root.join(backup_key);
-
-        assert_eq!(backup_path.exists(), true);
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_04_backup_mariadb() {
-        let source_config =
-            get_mariadb_source_config().expect("Failed to get MariaDB source config");
-
-        let storage_config = get_storage_config().expect("Failed to get local storage config");
-
-        let backup_key = backup(source_config, storage_config)
+        sqlx::query("DELETE FROM backup_test_table WHERE name = 'test3'")
+            .execute(&db_pool)
             .await
-            .expect("Failed to check MariaDB connection");
+            .expect("Failed to delete test data");
 
-        let root = get_local_storage_config()
-            .expect("Failed to get local storage config")
-            .root;
+        let modified_rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&db_pool)
+                .await
+                .expect("Failed to fetch modified data");
 
-        let backup_path = root.join(backup_key);
+        assert_eq!(modified_rows.len(), 2, "Should have 2 rows after deletion");
+        assert_eq!(modified_rows[0].1, 999, "Value should be modified");
 
-        assert_eq!(backup_path.exists(), true);
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_05_restore_postgresql() {
-        let source_config =
-            get_postgresql_source_config().expect("Failed to get PostgreSQL source config");
-
-        let storage_config = get_storage_config().expect("Failed to get local storage config");
-
-        let test_table_name = format!("test_lib_restore_{}", chrono::Utc::now().timestamp());
-        let mut connection = get_postgresql_connection()
+        engine
+            .restore(RestoreOptions {
+                name: backup_name,
+                compression_format: None,
+                drop_database_first: Some(true),
+            })
             .await
-            .expect("Failed to get PostgreSQL connection");
+            .expect("Failed to restore");
 
-        let create_table_cmd = connection
-            .arg(format!(
-                "CREATE TABLE {} (id INT PRIMARY KEY, value VARCHAR(255))",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute create table command");
+        let restored_rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&db_pool)
+                .await
+                .expect("Failed to fetch restored data");
 
-        if !create_table_cmd.status.success() {
-            panic!(
-                "Failed to create test table: {}",
-                String::from_utf8_lossy(&create_table_cmd.stderr)
-            );
-        }
+        assert_eq!(restored_rows.len(), 3, "Should have 3 rows after restore");
 
-        connection = get_postgresql_connection()
-            .await
-            .expect("Failed to get PostgreSQL connection");
-
-        let insert_data_cmd = connection
-            .arg(format!(
-                "INSERT INTO {} VALUES (1, 'test_value')",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute insert command");
-
-        if !insert_data_cmd.status.success() {
-            panic!(
-                "Failed to insert test data: {}",
-                String::from_utf8_lossy(&insert_data_cmd.stderr)
-            );
-        }
-
-        connection = get_postgresql_connection()
-            .await
-            .expect("Failed to get PostgreSQL connection");
-
-        let select_data_cmd = connection
-            .arg(format!(
-                "SELECT value FROM {} WHERE id = 1",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute select command");
-
-        if !select_data_cmd.status.success() {
-            panic!(
-                "Failed to query test data: {}",
-                String::from_utf8_lossy(&select_data_cmd.stderr)
-            );
-        }
-
-        let output = String::from_utf8_lossy(&select_data_cmd.stdout)
-            .trim()
-            .to_string();
-
-        assert_eq!(
-            output, "test_value",
-            "Value in database doesn't match expected value"
-        );
-
-        let backup_key = backup(&source_config, &storage_config)
-            .await
-            .expect("Failed to check PostgreSQL connection");
-
-        let root = get_local_storage_config()
-            .expect("Failed to get local storage config")
-            .root;
-
-        let backup_path = root.join(&backup_key);
-
-        assert_eq!(backup_path.exists(), true);
-
-        connection = get_postgresql_connection()
-            .await
-            .expect("Failed to get PostgreSQL connection");
-
-        let drop_table_cmd = connection
-            .arg(format!("DROP table {}", test_table_name))
-            .output()
-            .await
-            .expect("Failed to execture drop table command");
-
-        if !drop_table_cmd.status.success() {
-            panic!(
-                "Failed to drop table: {}",
-                String::from_utf8_lossy(&select_data_cmd.stderr)
-            );
-        }
-
-        connection = get_postgresql_connection()
-            .await
-            .expect("Failed to get PostgreSQL connection");
-
-        let select_data_cmd = connection
-            .arg(format!(
-                "SELECT value FROM {} WHERE id = 1",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute select command");
-
-        // Expect the query to fail as the table has been dropped
-        assert_eq!(select_data_cmd.status.success(), false);
-
-        restore(source_config, storage_config, backup_key.as_str(), true)
-            .await
-            .expect("Failed to restore database");
-
-        connection = get_postgresql_connection()
-            .await
-            .expect("Failed to get PostgreSQL connection");
-
-        let select_data_cmd = connection
-            .arg(format!(
-                "SELECT value FROM {} WHERE id = 1",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute select command");
-
-        if !select_data_cmd.status.success() {
-            panic!(
-                "Failed to query test data: {}",
-                String::from_utf8_lossy(&select_data_cmd.stderr)
-            );
-        }
-
-        let output = String::from_utf8_lossy(&select_data_cmd.stdout)
-            .trim()
-            .to_string();
-
-        assert_eq!(
-            output, "test_value",
-            "Value in database doesn't match expected value"
-        );
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_06_restore_mariadb() {
-        let source_config =
-            get_mariadb_source_config().expect("Failed to get MariaDB source config");
-
-        let storage_config = get_storage_config().expect("Failed to get local storage config");
-
-        let test_table_name = format!("test_lib_restore_{}", chrono::Utc::now().timestamp());
-        let mut connection = get_mariadb_connection()
-            .await
-            .expect("Failed to get MariaDB connection");
-
-        let create_table_cmd = connection
-            .arg(format!(
-                "CREATE TABLE {} (id INT PRIMARY KEY, value VARCHAR(255))",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute create table command");
-
-        if !create_table_cmd.status.success() {
-            panic!(
-                "Failed to create test table: {}",
-                String::from_utf8_lossy(&create_table_cmd.stderr)
-            );
-        }
-
-        connection = get_mariadb_connection()
-            .await
-            .expect("Failed to get MariaDB connection");
-
-        let insert_data_cmd = connection
-            .arg(format!(
-                "INSERT INTO {} VALUES (1, 'test_value')",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute insert command");
-
-        if !insert_data_cmd.status.success() {
-            panic!(
-                "Failed to insert test data: {}",
-                String::from_utf8_lossy(&insert_data_cmd.stderr)
-            );
-        }
-
-        connection = get_mariadb_connection()
-            .await
-            .expect("Failed to get MariaDB connection");
-
-        let select_data_cmd = connection
-            .arg(format!(
-                "SELECT value FROM {} WHERE id = 1",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute select command");
-
-        if !select_data_cmd.status.success() {
-            panic!(
-                "Failed to query test data: {}",
-                String::from_utf8_lossy(&select_data_cmd.stderr)
-            );
-        }
-
-        let output = String::from_utf8_lossy(&select_data_cmd.stdout)
-            .trim()
-            .to_string();
-
-        assert_eq!(
-            output, "test_value",
-            "Value in database doesn't match expected value"
-        );
-
-        let backup_key = backup(&source_config, &storage_config)
-            .await
-            .expect("Failed to check PostgreSQL connection");
-
-        let root = get_local_storage_config()
-            .expect("Failed to get local storage config")
-            .root;
-
-        let backup_path = root.join(&backup_key);
-
-        assert_eq!(backup_path.exists(), true);
-
-        connection = get_mariadb_connection()
-            .await
-            .expect("Failed to get MariaDB connection");
-
-        let drop_table_cmd = connection
-            .arg(format!("DROP table {}", test_table_name))
-            .output()
-            .await
-            .expect("Failed to execture drop table command");
-
-        if !drop_table_cmd.status.success() {
-            panic!(
-                "Failed to drop table: {}",
-                String::from_utf8_lossy(&select_data_cmd.stderr)
-            );
-        }
-
-        connection = get_mariadb_connection()
-            .await
-            .expect("Failed to get MariaDB connection");
-
-        let select_data_cmd = connection
-            .arg(format!(
-                "SELECT value FROM {} WHERE id = 1",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute select command");
-
-        // Expect the query to fail as the table has been dropped
-        assert_eq!(select_data_cmd.status.success(), false);
-
-        restore(source_config, storage_config, backup_key.as_str(), true)
-            .await
-            .expect("Failed to restore database");
-
-        connection = get_mariadb_connection()
-            .await
-            .expect("Failed to get MariaDB connection");
-
-        let select_data_cmd = connection
-            .arg(format!(
-                "SELECT value FROM {} WHERE id = 1",
-                test_table_name
-            ))
-            .output()
-            .await
-            .expect("Failed to execute select command");
-
-        if !select_data_cmd.status.success() {
-            panic!(
-                "Failed to query test data: {}",
-                String::from_utf8_lossy(&select_data_cmd.stderr)
-            );
-        }
-
-        let output = String::from_utf8_lossy(&select_data_cmd.stdout)
-            .trim()
-            .to_string();
-
-        assert_eq!(
-            output, "test_value",
-            "Value in database doesn't match expected value"
-        );
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_07_list_backups() {
-        let source_config =
-            get_mariadb_source_config().expect("Failed to get MariaDB source config");
-
-        let storage_config = get_storage_config().expect("Failed to get local storage config");
-
-        let backup_key = backup(source_config, &storage_config)
-            .await
-            .expect("Failed to check MariaDB connection");
-
-        let entries = list(storage_config).await.expect("Failed to list backups");
-
-        let entry = entries
+        let test1_row = restored_rows
             .iter()
-            .find(|entry| entry.path().contains(&backup_key));
+            .find(|(name, _)| name == "test1")
+            .expect("Should have test1 row after restore");
+
+        assert_eq!(
+            test1_row.1, 100,
+            "test1 value should be restored to original"
+        );
+
+        let test3_exists = restored_rows.iter().any(|(name, _)| name == "test3");
+        assert!(test3_exists, "test3 should be restored");
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_02_postgresql_tunneled_backup() {
+        initialize_test();
+        let config = get_postgresql_tunneled_config()
+            .await
+            .expect("Failed to get postgresql connection config");
+
+        let database_connection = DatabaseConnection::new(config.clone())
+            .await
+            .expect("Failed to get database connection");
+
+        let storage_provider = get_s3_provider().expect("Failed to get local storage provider");
+
+        let engine = DbBkp::new(database_connection, storage_provider);
+
+        let backup_name = engine.backup().await.expect("Failed to backup");
+        let entries = engine.list().await.expect("Failed to list backups");
+        let entry = entries.iter().find(|e| e.name() == backup_name);
 
         assert!(entry.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_03_mysql_backup() {
+        initialize_test();
+        let config = get_mysql_config().expect("Failed to get mysql config");
+        let db_pool = get_mysql_pool().await.expect("Failed to get db pool");
+
+        let database_connection = DatabaseConnection::new(config.clone())
+            .await
+            .expect("Failed to get database connection");
+
+        let storage_provider = get_local_provider().expect("Failed to get local storage provider");
+
+        let engine = DbBkp::new(database_connection, storage_provider);
+
+        sqlx::query("DROP TABLE IF EXISTS backup_test_table")
+            .execute(&db_pool)
+            .await
+            .expect("Failed to drop test table");
+
+        sqlx::query(
+            "CREATE TABLE backup_test_table (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
+        )
+        .execute(&db_pool)
+        .await
+        .expect("Failed to create test table");
+
+        sqlx::query("INSERT INTO backup_test_table (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)")
+        .execute(&db_pool)
+        .await
+        .expect("Failed to insert test data");
+
+        let rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&db_pool)
+                .await
+                .expect("Failed to fetch test data");
+
+        assert_eq!(rows.len(), 3, "Should have 3 rows before backup");
+
+        let backup_name = engine.backup().await.expect("Failed to backup");
+
+        sqlx::query("UPDATE backup_test_table SET value = 999 WHERE name = 'test1'")
+            .execute(&db_pool)
+            .await
+            .expect("Failed to update test data");
+
+        sqlx::query("DELETE FROM backup_test_table WHERE name = 'test3'")
+            .execute(&db_pool)
+            .await
+            .expect("Failed to delete test data");
+
+        let modified_rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&db_pool)
+                .await
+                .expect("Failed to fetch modified data");
+
+        assert_eq!(modified_rows.len(), 2, "Should have 2 rows after deletion");
+        assert_eq!(modified_rows[0].1, 999, "Value should be modified");
+
+        engine
+            .restore(RestoreOptions {
+                name: backup_name,
+                compression_format: None,
+                drop_database_first: Some(true),
+            })
+            .await
+            .expect("Failed to restore");
+
+        let db_pool = get_mysql_pool().await.expect("Failed to get db pool");
+
+        let restored_rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
+                .fetch_all(&db_pool)
+                .await
+                .expect("Failed to fetch restored data");
+
+        assert_eq!(restored_rows.len(), 3, "Should have 3 rows after restore");
+
+        let test1_row = restored_rows
+            .iter()
+            .find(|(name, _)| name == "test1")
+            .expect("Should have test1 row after restore");
+
+        assert_eq!(
+            test1_row.1, 100,
+            "test1 value should be restored to original"
+        );
+
+        let test3_exists = restored_rows.iter().any(|(name, _)| name == "test3");
+        assert!(test3_exists, "test3 should be restored");
     }
 }

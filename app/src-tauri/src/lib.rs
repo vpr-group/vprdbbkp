@@ -1,7 +1,7 @@
-use commands::{backup, list, restore, verify_connection};
 use log::LevelFilter;
 mod commands;
 mod utils;
+use commands::{backup, list, restore, test_connection};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,7 +16,7 @@ pub fn run() {
             list,
             backup,
             restore,
-            verify_connection
+            test_connection
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

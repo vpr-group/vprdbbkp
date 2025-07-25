@@ -20,10 +20,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: cli # Changed to match your actual binary name
-  # Add OpenSSL environment variables
-  OPENSSL_DIR: /usr/lib/ssl
-  OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-  OPENSSL_INCLUDE_DIR: /usr/include/openssl
+  # Remove global OpenSSL environment variables - set them per OS instead
+
 jobs:
   version:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -107,16 +105,16 @@ jobs:
     strategy:
       matrix:
         include:
-          # Linux x86_64 targets with older GLIBC compatibility
-          - os: ubuntu-22.04
-            rust-version: stable
-            target: x86_64-unknown-linux-gnu
-            artifact-name: linux-x86_64
-          # Static Linux build (no GLIBC dependency)
+          # Static Linux build (no GLIBC dependency) - musl
           - os: ubuntu-latest
             rust-version: stable
             target: x86_64-unknown-linux-musl
             artifact-name: linux-x86_64-musl
+          # macOS Intel (x86_64) targets
+          - os: macos-latest
+            rust-version: stable
+            target: x86_64-apple-darwin
+            artifact-name: macos-intel
           # macOS Silicon (ARM64) targets
           - os: macos-latest
             rust-version: stable
@@ -133,30 +131,27 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Install OpenSSL for Linux builds
-      - name: Install OpenSSL (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
-
-      # Install OpenSSL for musl target
-      - name: Install musl-tools and OpenSSL for musl
+      # Setup for musl builds (Linux only)
+      - name: Install musl-tools and setup for musl
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools musl-dev
-          # Install statically compiled OpenSSL for musl
-          sudo apt-get install -y libssl-dev pkg-config
+          # Clear any existing OpenSSL environment variables for musl
+          echo "OPENSSL_DIR=" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=" >> $GITHUB_ENV
+          # Use vendored OpenSSL for musl to avoid linking issues
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+          echo "OPENSSL_VENDOR=1" >> $GITHUB_ENV
 
-      # Handle OpenSSL for macOS
+      # Setup for macOS builds
       - name: Install OpenSSL (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install openssl@3
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          echo "Adding homebrew openssl to PKG_CONFIG_PATH"
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          # For cross-compilation on macOS, we need to use vendored OpenSSL
+          # because Homebrew OpenSSL is built for the host architecture
+          echo "Using vendored OpenSSL for macOS cross-compilation"
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -168,7 +163,13 @@ jobs:
         run: |
           # Navigate to cli directory and build
           cd cli
-          cargo build --target ${{ matrix.target }} --release --verbose
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-musl" ]; then
+            # For musl, use vendored OpenSSL features
+            cargo build --target ${{ matrix.target }} --release --verbose --features vendored-openssl
+          else
+            # For macOS targets, also use vendored OpenSSL to avoid cross-compilation issues
+            cargo build --target ${{ matrix.target }} --release --verbose --features vendored-openssl
+          fi
 
       - name: Prepare Artifact
         run: |
