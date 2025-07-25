@@ -26,7 +26,7 @@ dbkp
 
 This launches an interactive wizard that guides you through creating your first workspace and running backups.
 
-## 📖 Usage Modes
+## Usage Modes
 
 ### 1. Interactive Mode (Recommended for Beginners)
 
