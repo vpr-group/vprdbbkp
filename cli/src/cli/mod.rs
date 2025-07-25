@@ -14,24 +14,41 @@ mod tests;
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    Interactive,
     Backup(BackupArgs),
     Restore(RestoreArgs),
     List(ListArgs),
     Cleanup(CleanupArgs),
+    Workspace {
+        #[command(subcommand)]
+        command: WorkspaceCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum WorkspaceCommands {
+    List,
+    Create { name: String },
+    Delete { name: String },
+    Use { name: String },
+    Active,
 }
 
 #[derive(Args, Debug)]
 pub struct BackupArgs {
-    #[command(flatten)]
-    pub database_config: DatabaseArgs,
+    #[arg(short, long, help = "Use workspace for configuration")]
+    pub workspace: Option<String>,
 
     #[command(flatten)]
-    pub storage_config: StorageArgs,
+    pub database_config: Option<DatabaseArgs>,
+
+    #[command(flatten)]
+    pub storage_config: Option<StorageArgs>,
 
     #[arg(short, long, help = "Retention period (e.g. '30d', '1w', '6m')")]
     pub retention: Option<String>,
@@ -40,7 +57,7 @@ pub struct BackupArgs {
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
     #[arg(long)]
-    pub name: String,
+    pub name: Option<String>,
 
     #[arg(long)]
     pub drop_database: bool,
@@ -48,11 +65,14 @@ pub struct RestoreArgs {
     #[arg(long)]
     pub latest: bool,
 
-    #[command(flatten)]
-    pub database_config: DatabaseArgs,
+    #[arg(short, long, help = "Use workspace for configuration")]
+    pub workspace: Option<String>,
 
     #[command(flatten)]
-    pub storage_config: StorageArgs,
+    pub database_config: Option<DatabaseArgs>,
+
+    #[command(flatten)]
+    pub storage_config: Option<StorageArgs>,
 }
 
 #[derive(Args, Debug)]
@@ -66,8 +86,11 @@ pub struct ListArgs {
     #[arg(long, default_value = "10")]
     pub limit: Option<usize>,
 
+    #[arg(short, long, help = "Use workspace for configuration")]
+    pub workspace: Option<String>,
+
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub storage: Option<StorageArgs>,
 }
 
 #[derive(Args, Debug)]
@@ -84,8 +107,11 @@ pub struct CleanupArgs {
     #[arg(short, long, help = "Database name to cleanup backups for")]
     pub database: Option<String>,
 
+    #[arg(short, long, help = "Use workspace for configuration")]
+    pub workspace: Option<String>,
+
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub storage: Option<StorageArgs>,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -103,19 +129,19 @@ pub struct SshArgs {
 #[derive(Args, Clone, Debug)]
 pub struct DatabaseArgs {
     #[arg(long, help = "Database type ('postgresql' or 'mysql')")]
-    pub database_type: String,
+    pub database_type: Option<String>,
 
     #[arg(long)]
-    pub database: String,
+    pub database: Option<String>,
 
     #[arg(long)]
-    pub host: String,
+    pub host: Option<String>,
 
     #[arg(long)]
-    pub port: u16,
+    pub port: Option<u16>,
 
     #[arg(long)]
-    pub username: String,
+    pub username: Option<String>,
 
     #[arg(long, env = "PGPASSWORD")]
     pub password: Option<String>,
@@ -127,13 +153,13 @@ pub struct DatabaseArgs {
 #[derive(Args, Debug)]
 pub struct StorageArgs {
     #[arg(long, default_value = "local")]
-    pub storage_type: String,
+    pub storage_type: Option<String>,
 
     #[arg(long, default_value = "default")]
-    pub storage_name: String,
+    pub storage_name: Option<String>,
 
     #[arg(long)]
-    pub location: String,
+    pub location: Option<String>,
 
     #[arg(long, env = "S3_BUCKET")]
     pub bucket: Option<String>,
@@ -173,7 +199,9 @@ pub fn parse_retention(retention: &str) -> Result<u64> {
 }
 
 pub fn storage_from_cli(args: &StorageArgs) -> Result<StorageConfig> {
-    match args.storage_type.as_str() {
+    let default_storage_type = "local".to_string();
+    let storage_type = args.storage_type.as_ref().unwrap_or(&default_storage_type);
+    match storage_type.as_str() {
         "s3" => {
             // Validate required args for S3
             let bucket = args
@@ -198,26 +226,55 @@ pub fn storage_from_cli(args: &StorageArgs) -> Result<StorageConfig> {
                 .ok_or_else(|| anyhow!("S3 storage requires --region parameter"))?;
 
             Ok(StorageConfig::S3(S3StorageConfig {
-                name: args.storage_name.clone(),
+                name: args
+                    .storage_name
+                    .clone()
+                    .unwrap_or_else(|| "default".to_string()),
                 bucket,
                 region,
                 endpoint: Some(endpoint),
                 access_key,
                 secret_key,
-                location: args.location.clone(),
+                location: args
+                    .location
+                    .clone()
+                    .ok_or_else(|| anyhow!("Location is required"))?,
                 id: "".into(),
             }))
         }
         "local" => Ok(StorageConfig::Local(LocalStorageConfig {
-            name: args.storage_name.clone(),
+            name: args
+                .storage_name
+                .clone()
+                .unwrap_or_else(|| "default".to_string()),
             id: "".into(),
-            location: args.location.clone(),
+            location: args
+                .location
+                .clone()
+                .ok_or_else(|| anyhow!("Location is required"))?,
         })),
-        _ => Err(anyhow!("Unsupported storage type: {}", args.storage_type)),
+        _ => Err(anyhow!("Unsupported storage type: {}", storage_type)),
     }
 }
 
 pub fn database_config_from_cli(args: &DatabaseArgs) -> Result<DatabaseConfig> {
+    let database_type = args
+        .database_type
+        .as_ref()
+        .ok_or_else(|| anyhow!("Database type is required"))?;
+    let database = args
+        .database
+        .as_ref()
+        .ok_or_else(|| anyhow!("Database name is required"))?;
+    let host = args
+        .host
+        .as_ref()
+        .ok_or_else(|| anyhow!("Host is required"))?;
+    let port = args.port.ok_or_else(|| anyhow!("Port is required"))?;
+    let username = args
+        .username
+        .as_ref()
+        .ok_or_else(|| anyhow!("Username is required"))?;
     let ssh_tunnel = if let Some(ssh) = &args.ssh {
         let ssh_host = ssh
             .ssh_host
@@ -250,29 +307,29 @@ pub fn database_config_from_cli(args: &DatabaseArgs) -> Result<DatabaseConfig> {
         None
     };
 
-    match args.database_type.as_str() {
+    match database_type.as_str() {
         "postgresql" => Ok(DatabaseConfig {
             connection_type: ConnectionType::PostgreSql,
-            database: args.database.clone(),
+            database: database.clone(),
             id: "".into(),
-            name: args.database.clone(),
-            host: args.host.clone(),
-            port: args.port,
-            username: args.username.clone(),
+            name: database.clone(),
+            host: host.clone(),
+            port,
+            username: username.clone(),
             password: args.password.clone(),
             ssh_tunnel,
         }),
         "mysql" => Ok(DatabaseConfig {
             connection_type: ConnectionType::MySql,
-            database: args.database.clone(),
+            database: database.clone(),
             id: "".into(),
-            name: args.database.clone(),
-            host: args.host.clone(),
-            port: args.port,
-            username: args.username.clone(),
+            name: database.clone(),
+            host: host.clone(),
+            port,
+            username: username.clone(),
             password: args.password.clone(),
             ssh_tunnel,
         }),
-        _ => Err(anyhow!("Unsupported database type: {}", args.database_type)),
+        _ => Err(anyhow!("Unsupported database type: {}", database_type)),
     }
 }
