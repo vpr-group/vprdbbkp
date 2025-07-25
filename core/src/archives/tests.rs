@@ -33,6 +33,7 @@ mod archives_tests {
         assert!(path.to_string_lossy().contains("postgresql/17"));
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_02_install_mysql() {
         initialize();

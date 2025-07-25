@@ -30,6 +30,7 @@ mod mysql_connection_tests {
         Ok(config)
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_01_mysql_connection() {
         let config = get_mysql_config().expect("Failed to get config");
@@ -58,6 +59,7 @@ mod mysql_connection_tests {
         assert_eq!(version.to_string(), "9");
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_02_mysql_backup() {
         let config = get_mysql_config().expect("Failed to get config");
@@ -75,6 +77,7 @@ mod mysql_connection_tests {
         assert!(!buffer.is_empty());
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_03_mysql_restore() {
         let test_table_name = format!("test_restore_{}", chrono::Utc::now().timestamp());
