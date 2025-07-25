@@ -3,42 +3,18 @@ mod postgresql_connection_test {
     use crate::databases::postgres::connection::PostgreSqlConnection;
     use crate::databases::ssh_tunnel::{SshAuthMethod, SshTunnelConfig};
     use crate::databases::version::Version;
-    use crate::databases::{ConnectionType, DatabaseConfig, DatabaseConnectionTrait};
+    use crate::databases::{
+        ConnectionType, DatabaseConfig, DatabaseConnectionTrait, RestoreOptions,
+    };
+    use crate::test_utils::test_utils::{
+        get_postgresql_connection, get_postgresql_pool, initialize_test,
+    };
+
     use anyhow::Result;
     use dotenv::dotenv;
     use std::env;
     use std::thread::sleep;
     use std::time::Duration;
-
-    fn initialize_test() {
-        dotenv().ok();
-        env_logger::builder()
-            .filter_level(log::LevelFilter::Debug)
-            .is_test(true)
-            .try_init()
-            .ok();
-    }
-
-    async fn get_connection() -> Result<PostgreSqlConnection> {
-        dotenv().ok();
-
-        let port: u16 = env::var("POSTGRESQL_PORT").unwrap_or("0".into()).parse()?;
-        let password = env::var("POSTGRESQL_PASSWORD").unwrap_or_default();
-        let connection = PostgreSqlConnection::new(DatabaseConfig {
-            id: "test".to_string(),
-            name: "test".to_string(),
-            connection_type: ConnectionType::PostgreSql,
-            host: env::var("POSTGRESQL_HOST").unwrap_or_default(),
-            password: Some(password),
-            username: env::var("POSTGRESQL_USERNAME").unwrap_or_default(),
-            database: env::var("POSTGRESQL_NAME").unwrap_or_default(),
-            port,
-            ssh_tunnel: None,
-        })
-        .await?;
-
-        Ok(connection)
-    }
 
     async fn get_tunneled_connection() -> Result<PostgreSqlConnection> {
         dotenv().ok();
@@ -74,7 +50,9 @@ mod postgresql_connection_test {
     #[tokio::test]
     async fn test_01_connection_test() {
         initialize_test();
-        let connection = get_connection().await.expect("Failed to get connection");
+        let connection = get_postgresql_connection(false)
+            .await
+            .expect("Failed to get connection");
         let is_connected = connection.test().await.expect("Failed to test connection");
         assert!(is_connected)
     }
@@ -82,7 +60,9 @@ mod postgresql_connection_test {
     #[tokio::test]
     async fn test_02_get_metadata() {
         initialize_test();
-        let connection = get_connection().await.expect("Failed to get connection");
+        let connection = get_postgresql_connection(false)
+            .await
+            .expect("Failed to get connection");
         let metadata = connection
             .get_metadata()
             .await
@@ -103,7 +83,9 @@ mod postgresql_connection_test {
     #[tokio::test]
     async fn test_03_dump() {
         initialize_test();
-        let connection = get_connection().await.expect("Failed to get connection");
+        let connection = get_postgresql_connection(false)
+            .await
+            .expect("Failed to get connection");
 
         let mut buffer = Vec::new();
         connection
@@ -118,10 +100,13 @@ mod postgresql_connection_test {
     async fn test_04_restore() {
         initialize_test();
         let test_table_name = format!("test_restore_{}", chrono::Utc::now().timestamp());
-        let connection = get_connection().await.expect("Failed to get connection");
+        let db_pool = get_postgresql_pool().await.expect("Failed to get db_pool");
+        let connection = get_postgresql_connection(false)
+            .await
+            .expect("Failed to get connection");
 
         sqlx::query(format!("DROP TABLE IF EXISTS {}", test_table_name).as_str())
-            .execute(&connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to drop test table");
 
@@ -132,21 +117,21 @@ mod postgresql_connection_test {
             )
             .as_str(),
         )
-        .execute(&connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to create test table");
 
         sqlx::query(
             format!("INSERT INTO {} (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)", test_table_name).as_str(),
         )
-        .execute(&connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to insert test data");
 
         let rows: Vec<(String, i32)> = sqlx::query_as(
             format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
         )
-        .fetch_all(&connection.pool)
+        .fetch_all(&db_pool)
         .await
         .expect("Failed to fetch test data");
 
@@ -160,6 +145,10 @@ mod postgresql_connection_test {
 
         assert!(!backup_buffer.is_empty(), "Backup should not be empty");
 
+        println!("{}", String::from_utf8(backup_buffer.clone()).unwrap());
+
+        println!("ldxkjhflkjdfhklsjhglkjshdlfkjgh");
+
         sqlx::query(
             format!(
                 "UPDATE {} SET value = 999 WHERE name = 'test1'",
@@ -167,19 +156,19 @@ mod postgresql_connection_test {
             )
             .as_str(),
         )
-        .execute(&connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to update test data");
 
         sqlx::query(format!("DELETE FROM {} WHERE name = 'test3'", test_table_name).as_str())
-            .execute(&connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to delete test data");
 
         let modified_rows: Vec<(String, i32)> = sqlx::query_as(
             format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
         )
-        .fetch_all(&connection.pool)
+        .fetch_all(&db_pool)
         .await
         .expect("Failed to fetch modified data");
 
@@ -188,25 +177,30 @@ mod postgresql_connection_test {
 
         sleep(Duration::from_secs(1));
 
-        let restore_connection = get_connection()
+        let restore_connection = get_postgresql_connection(false)
             .await
             .expect("Failed to get connection for restore");
 
         let mut backup_cursor = std::io::Cursor::new(backup_buffer);
 
         restore_connection
-            .restore(&mut backup_cursor)
+            .restore_with_options(
+                &mut backup_cursor,
+                RestoreOptions {
+                    drop_database_first: false,
+                },
+            )
             .await
             .expect("Failed to restore database");
 
-        let verify_connection = get_connection()
+        let verify_pool = get_postgresql_pool()
             .await
             .expect("Failed to get connection after restore");
 
         let restored_rows: Vec<(String, i32)> = sqlx::query_as(
             format!("SELECT name, value FROM {} ORDER BY id", test_table_name).as_str(),
         )
-        .fetch_all(&verify_connection.pool)
+        .fetch_all(&verify_pool)
         .await
         .expect("Failed to fetch restored data");
 

@@ -137,8 +137,7 @@ impl DatabaseConnectionTrait for PostgreSqlConnection {
     async fn backup(&self, writer: &mut (dyn Write + Send + Unpin)) -> Result<()> {
         let mut cmd = self.get_command("pg_dump").await?;
 
-        cmd.arg("--format=custom")
-            .arg("--format=plain")
+        cmd.arg("--format=plain")
             .arg("--encoding=UTF8")
             .arg("--schema=*")
             .arg("--clean")

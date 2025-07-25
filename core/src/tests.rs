@@ -1,35 +1,21 @@
 #[cfg(test)]
 mod vprdbbkp_tests {
-
-    use std::env;
-
     use anyhow::Result;
-    use dotenv::dotenv;
-
+    use std::env;
     use tempfile::tempdir;
 
     use crate::{
         databases::{
-            mysql::connection::MySqlConnection,
-            postgres::connection::PostgreSqlConnection,
             ssh_tunnel::{SshAuthMethod, SshTunnelConfig},
             ConnectionType, DatabaseConfig, DatabaseConnection,
         },
         storage::provider::{LocalStorageConfig, S3StorageConfig, StorageConfig, StorageProvider},
+        test_utils::test_utils::{get_mysql_pool, get_postgresql_pool, initialize_test},
         DbBkp, RestoreOptions,
     };
 
-    fn initialize() {
-        dotenv().ok();
-        env_logger::builder()
-            .filter_level(log::LevelFilter::Debug)
-            .is_test(true)
-            .try_init()
-            .ok();
-    }
-
     fn get_local_provider() -> Result<StorageProvider> {
-        initialize();
+        initialize_test();
 
         let temp_path = tempdir()?;
         let config = StorageConfig::Local(LocalStorageConfig {
@@ -42,7 +28,7 @@ mod vprdbbkp_tests {
     }
 
     fn get_s3_provider() -> Result<StorageProvider> {
-        initialize();
+        initialize_test();
 
         let location = format!("s3_provider_test_{}", chrono::Utc::now().timestamp());
 
@@ -66,7 +52,7 @@ mod vprdbbkp_tests {
     }
 
     fn get_postgresql_config() -> Result<DatabaseConfig> {
-        initialize();
+        initialize_test();
 
         let port: u16 = env::var("POSTGRESQL_PORT").unwrap_or("0".into()).parse()?;
         let password = env::var("POSTGRESQL_PASSWORD").unwrap_or_default();
@@ -87,7 +73,7 @@ mod vprdbbkp_tests {
     }
 
     fn get_mysql_config() -> Result<DatabaseConfig> {
-        initialize();
+        initialize_test();
 
         let port: u16 = env::var("MYSQL_PORT").unwrap_or("0".into()).parse()?;
         let password = env::var("MYSQL_PASSWORD").unwrap_or_default();
@@ -108,7 +94,7 @@ mod vprdbbkp_tests {
     }
 
     async fn get_postgresql_tunneled_config() -> Result<DatabaseConfig> {
-        initialize();
+        initialize_test();
 
         let port: u16 = env::var("DB_PORT").unwrap_or("0".into()).parse()?;
         let password = env::var("DB_PASSWORD").unwrap_or_default();
@@ -135,12 +121,9 @@ mod vprdbbkp_tests {
 
     #[tokio::test]
     async fn test_01_postgresql_backup() {
-        initialize();
+        initialize_test();
         let config = get_postgresql_config().expect("Failed to get postgresql config");
-
-        let postgresql_connection = PostgreSqlConnection::new(config.clone())
-            .await
-            .expect("Failed to get postgresql connection");
+        let db_pool = get_postgresql_pool().await.expect("Failed to get db pool");
 
         let database_connection = DatabaseConnection::new(config.clone())
             .await
@@ -151,25 +134,25 @@ mod vprdbbkp_tests {
         let engine = DbBkp::new(database_connection, storage_provider);
 
         sqlx::query("DROP TABLE IF EXISTS backup_test_table")
-            .execute(&postgresql_connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to drop test table");
 
         sqlx::query(
             "CREATE TABLE backup_test_table (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
         )
-        .execute(&postgresql_connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to create test table");
 
         sqlx::query("INSERT INTO backup_test_table (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)")
-        .execute(&postgresql_connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to insert test data");
 
         let rows: Vec<(String, i32)> =
             sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&postgresql_connection.pool)
+                .fetch_all(&db_pool)
                 .await
                 .expect("Failed to fetch test data");
 
@@ -178,18 +161,18 @@ mod vprdbbkp_tests {
         let backup_name = engine.backup().await.expect("Failed to backup");
 
         sqlx::query("UPDATE backup_test_table SET value = 999 WHERE name = 'test1'")
-            .execute(&postgresql_connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to update test data");
 
         sqlx::query("DELETE FROM backup_test_table WHERE name = 'test3'")
-            .execute(&postgresql_connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to delete test data");
 
         let modified_rows: Vec<(String, i32)> =
             sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&postgresql_connection.pool)
+                .fetch_all(&db_pool)
                 .await
                 .expect("Failed to fetch modified data");
 
@@ -205,13 +188,9 @@ mod vprdbbkp_tests {
             .await
             .expect("Failed to restore");
 
-        let postgresql_connection = PostgreSqlConnection::new(config.clone())
-            .await
-            .expect("Failed to get postgresql connection");
-
         let restored_rows: Vec<(String, i32)> =
             sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&postgresql_connection.pool)
+                .fetch_all(&db_pool)
                 .await
                 .expect("Failed to fetch restored data");
 
@@ -234,7 +213,7 @@ mod vprdbbkp_tests {
     #[ignore]
     #[tokio::test]
     async fn test_02_postgresql_tunneled_backup() {
-        initialize();
+        initialize_test();
         let config = get_postgresql_tunneled_config()
             .await
             .expect("Failed to get postgresql connection config");
@@ -256,12 +235,9 @@ mod vprdbbkp_tests {
 
     #[tokio::test]
     async fn test_03_mysql_backup() {
-        initialize();
+        initialize_test();
         let config = get_mysql_config().expect("Failed to get mysql config");
-
-        let mysql_connection = MySqlConnection::new(config.clone())
-            .await
-            .expect("Failed to get mysql connection");
+        let db_pool = get_mysql_pool().await.expect("Failed to get db pool");
 
         let database_connection = DatabaseConnection::new(config.clone())
             .await
@@ -272,25 +248,25 @@ mod vprdbbkp_tests {
         let engine = DbBkp::new(database_connection, storage_provider);
 
         sqlx::query("DROP TABLE IF EXISTS backup_test_table")
-            .execute(&mysql_connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to drop test table");
 
         sqlx::query(
             "CREATE TABLE backup_test_table (id SERIAL PRIMARY KEY, name TEXT, value INTEGER)",
         )
-        .execute(&mysql_connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to create test table");
 
         sqlx::query("INSERT INTO backup_test_table (name, value) VALUES ('test1', 100), ('test2', 200), ('test3', 300)")
-        .execute(&mysql_connection.pool)
+        .execute(&db_pool)
         .await
         .expect("Failed to insert test data");
 
         let rows: Vec<(String, i32)> =
             sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&mysql_connection.pool)
+                .fetch_all(&db_pool)
                 .await
                 .expect("Failed to fetch test data");
 
@@ -299,18 +275,18 @@ mod vprdbbkp_tests {
         let backup_name = engine.backup().await.expect("Failed to backup");
 
         sqlx::query("UPDATE backup_test_table SET value = 999 WHERE name = 'test1'")
-            .execute(&mysql_connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to update test data");
 
         sqlx::query("DELETE FROM backup_test_table WHERE name = 'test3'")
-            .execute(&mysql_connection.pool)
+            .execute(&db_pool)
             .await
             .expect("Failed to delete test data");
 
         let modified_rows: Vec<(String, i32)> =
             sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&mysql_connection.pool)
+                .fetch_all(&db_pool)
                 .await
                 .expect("Failed to fetch modified data");
 
@@ -326,13 +302,11 @@ mod vprdbbkp_tests {
             .await
             .expect("Failed to restore");
 
-        let postgresql_connection = MySqlConnection::new(config.clone())
-            .await
-            .expect("Failed to get postgresql connection");
+        let db_pool = get_mysql_pool().await.expect("Failed to get db pool");
 
         let restored_rows: Vec<(String, i32)> =
             sqlx::query_as("SELECT name, value FROM backup_test_table ORDER BY id")
-                .fetch_all(&postgresql_connection.pool)
+                .fetch_all(&db_pool)
                 .await
                 .expect("Failed to fetch restored data");
 

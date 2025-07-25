@@ -13,6 +13,7 @@ pub mod compression;
 pub mod databases;
 pub mod folders;
 pub mod storage;
+mod test_utils;
 mod tests;
 
 #[derive(Clone, Serialize, Deserialize)]
