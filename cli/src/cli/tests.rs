@@ -9,11 +9,11 @@ mod cli_test {
     #[test]
     fn test_01_parse_backup_command() {
         let database_args = DatabaseArgs {
-            database_type: "postgresql".into(),
-            database: "test".into(),
-            host: "localhost".into(),
-            port: 5432,
-            username: "username".into(),
+            database_type: Some("postgresql".into()),
+            database: Some("test".into()),
+            host: Some("localhost".into()),
+            port: Some(5432),
+            username: Some("username".into()),
             password: Some("password".into()),
             ssh: Some(SshArgs {
                 ssh_host: Some("ssh_host".into()),
@@ -41,9 +41,9 @@ mod cli_test {
     #[test]
     fn test_02_parse_storage_config() {
         let storage_args = StorageArgs {
-            storage_type: "s3".into(),
-            storage_name: "test".into(),
-            location: "".into(),
+            storage_type: Some("s3".into()),
+            storage_name: Some("test".into()),
+            location: Some("".into()),
             bucket: Some("bucket".into()),
             region: Some("region".into()),
             endpoint: Some("endpoint".into()),

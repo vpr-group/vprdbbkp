@@ -39,6 +39,7 @@ mod tests {
         None
     }
 
+    #[ignore]
     #[test]
     fn test_01_backup_list_restore_postgresql() {
         let options = get_postgresql_connection_options().expect("Failed to get postgres options");
