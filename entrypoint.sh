@@ -82,7 +82,7 @@ validate_env() {
 
 # Function to build vprs3bkp command
 build_command() {
-    local cmd="vprs3bkp $1"
+    local cmd="/usr/local/bin/vprs3bkp $1"
     
     # Add database parameters
     cmd="$cmd --database-type $DATABASE_TYPE"
@@ -113,14 +113,6 @@ build_command() {
     # Add optional parameters
     if [ -n "$BACKUP_NAME" ]; then
         cmd="$cmd --backup-name $BACKUP_NAME"
-    fi
-    
-    if [ "$1" = "backup" ]; then
-        cmd="$cmd --format $FORMAT"
-        
-        if [ "$COMPRESS" = "true" ]; then
-            cmd="$cmd --compress"
-        fi
     fi
     
     if [ "$VERBOSE" = "true" ]; then
@@ -205,10 +197,22 @@ run_list() {
 show_version() {
     echo "vprs3bkp Docker Container"
     echo "Built with:"
-    vprs3bkp --version
+    /usr/local/bin/vprs3bkp --version
+}
+
+# Check if vprs3bkp is available
+check_vprs3bkp() {
+    if ! command -v /usr/local/bin/vprs3bkp &> /dev/null; then
+        echo "❌ Error: vprs3bkp not found at /usr/local/bin/vprs3bkp"
+        echo "Available binaries:"
+        ls -la /usr/local/bin/ | grep vprs3bkp || echo "No vprs3bkp binaries found"
+        exit 1
+    fi
 }
 
 # Main script logic
+check_vprs3bkp
+
 case "${1:-backup}" in
     backup)
         run_backup
