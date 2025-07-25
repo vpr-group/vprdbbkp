@@ -20,7 +20,7 @@ on:
 
 env:
     CARGO_TERM_COLOR: always
-    BINARY_NAME: cli
+    BINARY_NAME: dbkp
     REGISTRY: ghcr.io
     IMAGE_NAME: ${{ github.repository }}/dbkp
 

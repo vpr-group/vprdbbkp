@@ -45,10 +45,10 @@ pub struct BackupArgs {
     pub workspace: Option<String>,
 
     #[command(flatten)]
-    pub database_config: Option<DatabaseArgs>,
+    pub database_config: DatabaseArgs,
 
     #[command(flatten)]
-    pub storage_config: Option<StorageArgs>,
+    pub storage_config: StorageArgs,
 
     #[arg(short, long, help = "Retention period (e.g. '30d', '1w', '6m')")]
     pub retention: Option<String>,
@@ -69,10 +69,10 @@ pub struct RestoreArgs {
     pub workspace: Option<String>,
 
     #[command(flatten)]
-    pub database_config: Option<DatabaseArgs>,
+    pub database_config: DatabaseArgs,
 
     #[command(flatten)]
-    pub storage_config: Option<StorageArgs>,
+    pub storage_config: StorageArgs,
 }
 
 #[derive(Args, Debug)]
@@ -90,7 +90,7 @@ pub struct ListArgs {
     pub workspace: Option<String>,
 
     #[command(flatten)]
-    pub storage: Option<StorageArgs>,
+    pub storage: StorageArgs,
 }
 
 #[derive(Args, Debug)]
@@ -111,7 +111,7 @@ pub struct CleanupArgs {
     pub workspace: Option<String>,
 
     #[command(flatten)]
-    pub storage: Option<StorageArgs>,
+    pub storage: StorageArgs,
 }
 
 #[derive(Args, Clone, Debug)]
