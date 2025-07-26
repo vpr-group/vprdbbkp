@@ -1,19 +1,19 @@
 #!/bin/bash
-# entrypoint.sh - Docker entrypoint for vprs3bkp
+# entrypoint.sh - Docker entrypoint for dbkp
 
 set -e
 
 # Function to show usage
 show_usage() {
-    echo "vprs3bkp Docker Container"
+    echo "dbkp Docker Container"
     echo ""
-    echo "Usage: docker run [OPTIONS] vprs3bkp:latest [COMMAND]"
+    echo "Usage: docker run [OPTIONS] dbkp:latest [COMMAND]"
     echo ""
     echo "Commands:"
     echo "  backup    Perform database backup (default)"
     echo "  restore   Restore database from backup"
     echo "  list      List available backups"
-    echo "  version   Show vprs3bkp version"
+    echo "  version   Show dbkp version"
     echo "  help      Show this help"
     echo ""
     echo "Environment Variables:"
@@ -38,25 +38,25 @@ show_usage() {
     echo "Example:"
     echo "  docker run -e DATABASE=mydb -e USERNAME=user -e PASSWORD=pass \\"
     echo "             -e BUCKET=my-bucket -e ACCESS_KEY=key -e SECRET_KEY=secret \\"
-    echo "             vprs3bkp:latest backup"
+    echo "             dbkp:latest backup"
 }
 
 # Function to validate required environment variables
 validate_env() {
     local missing_vars=()
-    
+
     if [ -z "$DATABASE" ]; then
         missing_vars+=("DATABASE")
     fi
-    
+
     if [ -z "$USERNAME" ]; then
         missing_vars+=("USERNAME")
     fi
-    
+
     if [ -z "$PASSWORD" ]; then
         missing_vars+=("PASSWORD")
     fi
-    
+
     if [ "$STORAGE_TYPE" = "s3" ]; then
         if [ -z "$BUCKET" ]; then
             missing_vars+=("BUCKET")
@@ -68,22 +68,22 @@ validate_env() {
             missing_vars+=("SECRET_KEY")
         fi
     fi
-    
+
     if [ ${#missing_vars[@]} -ne 0 ]; then
         echo "❌ Error: Missing required environment variables:"
         for var in "${missing_vars[@]}"; do
             echo "  - $var"
         done
         echo ""
-        echo "Use 'docker run vprs3bkp:latest help' for usage information."
+        echo "Use 'docker run dbkp:latest help' for usage information."
         exit 1
     fi
 }
 
-# Function to build vprs3bkp command
+# Function to build dbkp command
 build_command() {
-    local cmd="/usr/local/bin/vprs3bkp $1"
-    
+    local cmd="/usr/local/bin/dbkp $1"
+
     # Add database parameters
     cmd="$cmd --database-type $DATABASE_TYPE"
     cmd="$cmd --database $DATABASE"
@@ -91,34 +91,34 @@ build_command() {
     cmd="$cmd --port $PORT"
     cmd="$cmd --username $USERNAME"
     cmd="$cmd --password $PASSWORD"
-    
+
     # Add storage parameters
     cmd="$cmd --storage-type $STORAGE_TYPE"
-    
+
     if [ -n "$LOCATION" ]; then
         cmd="$cmd --location $LOCATION"
     fi
-    
+
     if [ "$STORAGE_TYPE" = "s3" ]; then
         cmd="$cmd --bucket $BUCKET"
         cmd="$cmd --region $REGION"
         cmd="$cmd --access-key $ACCESS_KEY"
         cmd="$cmd --secret-key $SECRET_KEY"
-        
+
         if [ -n "$ENDPOINT" ]; then
             cmd="$cmd --endpoint $ENDPOINT"
         fi
     fi
-    
+
     # Add optional parameters
     if [ -n "$BACKUP_NAME" ]; then
         cmd="$cmd --backup-name $BACKUP_NAME"
     fi
-    
+
     if [ "$VERBOSE" = "true" ]; then
         cmd="$cmd --verbose"
     fi
-    
+
     echo "$cmd"
 }
 
@@ -127,7 +127,7 @@ run_backup() {
     echo "🚀 Starting database backup..."
     echo "Database: $DATABASE_TYPE://$USERNAME@$HOST:$PORT/$DATABASE"
     echo "Storage: $STORAGE_TYPE"
-    
+
     if [ "$STORAGE_TYPE" = "s3" ]; then
         echo "S3 Bucket: $BUCKET"
         echo "S3 Region: $REGION"
@@ -135,17 +135,17 @@ run_backup() {
             echo "S3 Endpoint: $ENDPOINT"
         fi
     fi
-    
+
     echo ""
-    
+
     validate_env
-    
+
     local cmd=$(build_command "backup")
     echo "Executing: $cmd"
     echo ""
-    
+
     eval "$cmd"
-    
+
     if [ $? -eq 0 ]; then
         echo ""
         echo "✅ Backup completed successfully!"
@@ -162,15 +162,15 @@ run_restore() {
     echo "Database: $DATABASE_TYPE://$USERNAME@$HOST:$PORT/$DATABASE"
     echo "Storage: $STORAGE_TYPE"
     echo ""
-    
+
     validate_env
-    
+
     local cmd=$(build_command "restore")
     echo "Executing: $cmd"
     echo ""
-    
+
     eval "$cmd"
-    
+
     if [ $? -eq 0 ]; then
         echo ""
         echo "✅ Restore completed successfully!"
@@ -185,33 +185,33 @@ run_restore() {
 run_list() {
     echo "📋 Listing available backups..."
     echo ""
-    
+
     local cmd=$(build_command "list")
     echo "Executing: $cmd"
     echo ""
-    
+
     eval "$cmd"
 }
 
 # Function to show version
 show_version() {
-    echo "vprs3bkp Docker Container"
+    echo "dbkp Docker Container"
     echo "Built with:"
-    /usr/local/bin/vprs3bkp --version
+    /usr/local/bin/dbkp --version
 }
 
-# Check if vprs3bkp is available
-check_vprs3bkp() {
-    if ! command -v /usr/local/bin/vprs3bkp &> /dev/null; then
-        echo "❌ Error: vprs3bkp not found at /usr/local/bin/vprs3bkp"
+# Check if dbkp is available
+check_dbkp() {
+    if ! command -v /usr/local/bin/dbkp &> /dev/null; then
+    echo "❌ Error: dbkp not found at /usr/local/bin/dbkp"
         echo "Available binaries:"
-        ls -la /usr/local/bin/ | grep vprs3bkp || echo "No vprs3bkp binaries found"
+        ls -la /usr/local/bin/ | grep dbkp || echo "No dbkp binaries found"
         exit 1
     fi
 }
 
 # Main script logic
-check_vprs3bkp
+check_dbkp
 
 case "${1:-backup}" in
     backup)
