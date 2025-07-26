@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod cli_test {
-    use vprs3bkp_core::databases::ConnectionType;
+    use dbkp_core::databases::ConnectionType;
 
     use crate::cli::{
         database_config_from_cli, storage_from_cli, DatabaseArgs, SshArgs, StorageArgs,

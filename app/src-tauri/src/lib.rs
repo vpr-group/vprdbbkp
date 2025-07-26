@@ -1,6 +1,5 @@
 use log::LevelFilter;
 mod commands;
-mod utils;
 use commands::{backup, list, restore, test_connection};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

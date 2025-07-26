@@ -228,7 +228,7 @@ mod vprdbbkp_tests {
 
         let backup_name = engine.backup().await.expect("Failed to backup");
         let entries = engine.list().await.expect("Failed to list backups");
-        let entry = entries.iter().find(|e| e.name() == backup_name);
+        let entry = entries.iter().find(|e| e.metadata.name == backup_name);
 
         assert!(entry.is_some());
     }

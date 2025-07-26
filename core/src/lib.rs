@@ -3,9 +3,10 @@ use common::get_default_backup_name;
 use compression::{CompressionFormat, Compressor, Decompressor};
 use databases::DatabaseConnection;
 use flate2::Compression;
-use opendal::Entry;
 use serde::{Deserialize, Serialize};
 use storage::provider::{ListOptions, StorageProvider};
+
+use crate::storage::Entry;
 
 pub mod archives;
 pub mod common;

@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
+use dbkp_core::{databases::DatabaseConfig, storage::provider::StorageConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use vprs3bkp_core::{databases::DatabaseConfig, storage::provider::StorageConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workspace {

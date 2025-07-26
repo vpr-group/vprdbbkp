@@ -18,11 +18,11 @@ debug = false     # No debug symbols
 
 [features]
 default = []
-vendored-openssl = ["vprs3bkp-core/vendored-openssl"]
+vendored-openssl = ["dbkp-core/vendored-openssl"]
 
 [dependencies]
 anyhow = "1.0"
-vprs3bkp-core = { path = "../core" }
+dbkp-core = { path = "../core" }
 clap = { version = "4.3", features = ["derive", "env"] }
 tokio = { version = "1.28", default-features = false, features = [
 	"rt-multi-thread",

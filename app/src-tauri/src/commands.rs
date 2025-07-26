@@ -1,14 +1,13 @@
-use std::fmt::format;
-
-use crate::utils::serializable_entry::{entries_to_serializable, SerializableEntry};
-use log::info;
-use serde::{Deserialize, Serialize};
-use vprs3bkp_core::{
-    databases::{DatabaseConfig, DatabaseConnection, DatabaseConnectionTrait},
-    storage::provider::{ListOptions, StorageConfig, StorageProvider},
+use dbkp_core::{
+    databases::{DatabaseConfig, DatabaseConnection},
+    storage::{
+        provider::{StorageConfig, StorageProvider},
+        Entry,
+    },
     DbBkp, RestoreOptions,
 };
-// use vprs3bkp_core::{
+use serde::{Deserialize, Serialize};
+// use dbkp_core::{
 //     databases::{configs::databaseConfig, is_connected},
 //     storage::configs::StorageConfig,
 // };
@@ -19,7 +18,7 @@ pub struct BackupConnectionResult {
 }
 
 #[tauri::command]
-pub async fn list(storage_config: StorageConfig) -> Result<Vec<SerializableEntry>, String> {
+pub async fn list(storage_config: StorageConfig) -> Result<Vec<Entry>, String> {
     let storage_provider = StorageProvider::new(storage_config)
         .map_err(|e| format!("Failed to create storage provider: {}", e))?;
 
@@ -28,7 +27,7 @@ pub async fn list(storage_config: StorageConfig) -> Result<Vec<SerializableEntry
         .await
         .map_err(|e| format!("Failed to list entries: {}", e))?;
 
-    Ok(entries_to_serializable(entries))
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -60,7 +59,7 @@ pub async fn backup(
 //     storage_config: StorageConfig,
 //     drop_database: bool,
 // ) -> Result<String, String> {
-//     vprs3bkp_core::restore(source_config, storage_config, &filename, drop_database)
+//     dbkp_core::restore(source_config, storage_config, &filename, drop_database)
 //         .await
 //         .map_err(|e| format!("Failed to restore backup: {}", e))?;
 

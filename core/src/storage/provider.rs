@@ -4,17 +4,19 @@ use log::{info, warn};
 use opendal::{
     layers::LoggingLayer,
     services::{Fs, S3},
-    BufferStream, Entry, Operator,
+    BufferStream, Operator,
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    fs,
     io::{Read, Write},
+    path::Path,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 use tokio::sync::Mutex;
 
-use crate::common::extract_timestamp_from_filename;
+use crate::{common::extract_timestamp_from_filename, storage::Entry};
 
 use super::io::{StorageReader, StorageWriter};
 
@@ -144,15 +146,20 @@ impl StorageProvider {
 
         let mut filtered_results: Vec<Entry> = result
             .into_iter()
-            .filter(|entry| entry.metadata().is_file())
+            .map(|opendal_entry| {
+                let mut entry = Entry::from(&opendal_entry);
+                entry.metadata.content_length = self.get_content_length(&entry);
+                entry
+            })
+            .filter(|entry| entry.metadata.is_file)
             .collect();
 
         filtered_results.sort_by(|a, b| {
             let a_timestamp =
-                extract_timestamp_from_filename(a.name()).unwrap_or(DateTime::default());
+                extract_timestamp_from_filename(&a.metadata.name).unwrap_or(DateTime::default());
 
             let b_timestamp =
-                extract_timestamp_from_filename(b.name()).unwrap_or(DateTime::default());
+                extract_timestamp_from_filename(&b.metadata.name).unwrap_or(DateTime::default());
 
             b_timestamp.cmp(&a_timestamp)
         });
@@ -217,25 +224,43 @@ impl StorageProvider {
         let mut deleted_size = 0;
 
         for backup in backups {
-            match extract_timestamp_from_filename(backup.name()) {
+            match extract_timestamp_from_filename(&backup.metadata.name) {
                 Ok(timestamp) => {
                     if timestamp < cutoff_datetime {
-                        let size = backup.metadata().content_length();
+                        let size = backup.metadata.content_length;
                         deleted_size += size;
                         deleted_count += 1;
 
                         if !dry_run {
-                            self.delete(&backup.path()).await?;
-                            info!("Successfully deleted {}", backup.path());
+                            self.delete(&backup.path).await?;
+                            info!("Successfully deleted {}", backup.path);
                         }
                     }
                 }
                 Err(_) => {
-                    warn!("Failed to extract timestamp from {}", backup.name());
+                    warn!("Failed to extract timestamp from {}", backup.metadata.name);
                 }
             };
         }
 
         Ok((deleted_count, deleted_size))
+    }
+
+    fn get_content_length(&self, entry: &Entry) -> u64 {
+        match &self.config {
+            StorageConfig::Local(local_config) => {
+                let full_path = Path::new(&local_config.location).join(&entry.path);
+                let content_length = match fs::metadata(&full_path).context(format!(
+                    "Failed to get metadata for {}",
+                    full_path.display()
+                )) {
+                    Ok(metadata) => metadata.len(),
+                    Err(_) => 0,
+                };
+
+                content_length
+            }
+            _ => entry.metadata.content_length,
+        }
     }
 }

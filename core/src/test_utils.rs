@@ -9,9 +9,11 @@ pub mod test_utils {
         postgres::{PgConnectOptions, PgPoolOptions},
         MySql, Pool, Postgres,
     };
+    use tempfile::tempdir;
 
-    use crate::databases::{
-        postgres::connection::PostgreSqlConnection, ConnectionType, DatabaseConfig,
+    use crate::{
+        databases::{postgres::connection::PostgreSqlConnection, ConnectionType, DatabaseConfig},
+        storage::provider::{LocalStorageConfig, S3StorageConfig, StorageConfig, StorageProvider},
     };
 
     pub fn initialize_test() {
@@ -70,7 +72,7 @@ pub mod test_utils {
     }
 
     pub async fn get_postgresql_connection(admin_connection: bool) -> Result<PostgreSqlConnection> {
-        dotenv().ok();
+        initialize_test();
 
         let port: u16 = env::var("POSTGRESQL_PORT").unwrap_or("0".into()).parse()?;
         let password = env::var("POSTGRESQL_PASSWORD").unwrap_or_default();
@@ -92,5 +94,38 @@ pub mod test_utils {
         .await?;
 
         Ok(connection)
+    }
+
+    pub fn get_local_provider() -> Result<StorageProvider> {
+        let temp_path = tempdir()?;
+        let config = StorageConfig::Local(LocalStorageConfig {
+            id: "test".into(),
+            name: "local".into(),
+            location: temp_path.path().to_str().unwrap().to_string(),
+        });
+        let provider = StorageProvider::new(config)?;
+        Ok(provider)
+    }
+
+    pub fn get_s3_provider() -> Result<StorageProvider> {
+        let location = format!("s3_provider_test_{}", chrono::Utc::now().timestamp());
+
+        let endpoint = env::var("S3_ENDPOINT")
+            .unwrap_or_else(|_| "https://s3.pub1.infomaniak.cloud/".to_string());
+
+        let config = StorageConfig::S3(S3StorageConfig {
+            id: "test".into(),
+            name: "s3".into(),
+            access_key: env::var("S3_ACCESS_KEY").unwrap_or_default(),
+            secret_key: env::var("S3_SECRET_KEY").unwrap_or_default(),
+            bucket: env::var("S3_BUCKET").unwrap_or_else(|_| "test-bkp".to_string()),
+            endpoint: Some(endpoint),
+            region: env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string()),
+            location,
+        });
+
+        let provider = StorageProvider::new(config)?;
+
+        Ok(provider)
     }
 }

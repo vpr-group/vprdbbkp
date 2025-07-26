@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
-use vprs3bkp_core::{
+use dbkp_core::{
     databases::{
         ssh_tunnel::{SshAuthMethod, SshTunnelConfig},
         ConnectionType, DatabaseConfig,

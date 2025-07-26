@@ -4,7 +4,7 @@ use cli::{
     database_config_from_cli, parse_retention, storage_from_cli, Cli, Commands, WorkspaceCommands,
 };
 use colored::*;
-use vprs3bkp_core::{
+use dbkp_core::{
     databases::DatabaseConnection,
     storage::provider::{ListOptions, StorageProvider},
     DbBkp, RestoreOptions,
@@ -150,8 +150,8 @@ async fn main() -> Result<()> {
             println!("\n{}:", "Available backups".green().bold());
 
             for (index, entry) in entries.iter().enumerate() {
-                let filename = entry.name();
-                let size = entry.metadata().content_length();
+                let filename = &entry.metadata.name;
+                let size = entry.metadata.content_length;
                 let size_str = if size < 1024 {
                     format!("{}B", size)
                 } else if size < 1024 * 1024 {
@@ -163,11 +163,10 @@ async fn main() -> Result<()> {
                 };
 
                 // Try to extract and format timestamp
-                let date_str =
-                    match vprs3bkp_core::common::extract_timestamp_from_filename(filename) {
-                        Ok(timestamp) => timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-                        Err(_) => "Unknown date".to_string(),
-                    };
+                let date_str = match dbkp_core::common::extract_timestamp_from_filename(filename) {
+                    Ok(timestamp) => timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                    Err(_) => "Unknown date".to_string(),
+                };
 
                 println!(
                     "  {:2}. {} | {} | {}",
@@ -432,8 +431,8 @@ async fn handle_workspace_command(command: WorkspaceCommands) -> Result<()> {
 async fn resolve_configs_for_backup(
     args: &cli::BackupArgs,
 ) -> Result<(
-    vprs3bkp_core::databases::DatabaseConfig,
-    vprs3bkp_core::storage::provider::StorageConfig,
+    dbkp_core::databases::DatabaseConfig,
+    dbkp_core::storage::provider::StorageConfig,
 )> {
     if let Some(workspace_name) = &args.workspace {
         let workspace_manager = WorkspaceManager::new()?;
@@ -471,8 +470,8 @@ async fn resolve_configs_for_backup(
 async fn resolve_configs_for_restore(
     args: &cli::RestoreArgs,
 ) -> Result<(
-    vprs3bkp_core::databases::DatabaseConfig,
-    vprs3bkp_core::storage::provider::StorageConfig,
+    dbkp_core::databases::DatabaseConfig,
+    dbkp_core::storage::provider::StorageConfig,
 )> {
     if let Some(workspace_name) = &args.workspace {
         let workspace_manager = WorkspaceManager::new()?;
@@ -510,7 +509,7 @@ async fn resolve_configs_for_restore(
 async fn resolve_storage_config(
     workspace_name: &Option<String>,
     storage_args: &Option<cli::StorageArgs>,
-) -> Result<vprs3bkp_core::storage::provider::StorageConfig> {
+) -> Result<dbkp_core::storage::provider::StorageConfig> {
     if let Some(workspace_name) = workspace_name {
         let workspace_manager = WorkspaceManager::new()?;
         let collection = workspace_manager.load()?;
@@ -541,7 +540,7 @@ async fn resolve_storage_config(
 
 async fn resolve_backup_name(
     args: &cli::RestoreArgs,
-    storage_config: &vprs3bkp_core::storage::provider::StorageConfig,
+    storage_config: &dbkp_core::storage::provider::StorageConfig,
 ) -> Result<String> {
     if let Some(name) = &args.name {
         Ok(name.clone())
@@ -556,7 +555,7 @@ async fn resolve_backup_name(
             .await?;
 
         if let Some(entry) = entries.first() {
-            Ok(entry.name().to_string())
+            Ok(entry.metadata.name.clone())
         } else {
             Err(anyhow!("No backups found"))
         }

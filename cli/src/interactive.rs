@@ -1,13 +1,13 @@
 use anyhow::{anyhow, Result};
 use colored::*;
-use inquire::{Confirm, Password, Select, Text};
-use vprs3bkp_core::{
+use dbkp_core::{
     databases::{
         ssh_tunnel::{SshAuthMethod, SshTunnelConfig},
         ConnectionType, DatabaseConfig,
     },
     storage::provider::{LocalStorageConfig, S3StorageConfig, StorageConfig},
 };
+use inquire::{Confirm, Password, Select, Text};
 
 use crate::spinner::Spinner;
 use crate::workspace::{Workspace, WorkspaceCollection, WorkspaceManager};
@@ -389,9 +389,7 @@ impl InteractiveSetup {
     }
 
     async fn run_backup(&self, workspace: &Workspace) -> Result<()> {
-        use vprs3bkp_core::{
-            databases::DatabaseConnection, storage::provider::StorageProvider, DbBkp,
-        };
+        use dbkp_core::{databases::DatabaseConnection, storage::provider::StorageProvider, DbBkp};
 
         let mut spinner = Spinner::new(format!(
             "Starting backup for workspace '{}'...",
@@ -445,7 +443,7 @@ impl InteractiveSetup {
     }
 
     async fn run_restore(&self, workspace: &Workspace) -> Result<()> {
-        use vprs3bkp_core::{
+        use dbkp_core::{
             common::extract_timestamp_from_filename,
             databases::DatabaseConnection,
             storage::provider::{ListOptions, StorageProvider},
@@ -510,8 +508,8 @@ impl InteractiveSetup {
         let mut backup_names: Vec<String> = Vec::new();
 
         for (index, entry) in entries.iter().enumerate() {
-            let filename = entry.name();
-            let size = entry.metadata().content_length();
+            let filename = &entry.metadata.name;
+            let size = entry.metadata.content_length;
 
             // Format file size
             let size_str = if size < 1024 {
@@ -598,7 +596,7 @@ impl InteractiveSetup {
     }
 
     async fn run_list(&self, workspace: &Workspace) -> Result<()> {
-        use vprs3bkp_core::{
+        use dbkp_core::{
             common::extract_timestamp_from_filename,
             storage::provider::{ListOptions, StorageProvider},
         };
@@ -652,8 +650,8 @@ impl InteractiveSetup {
 
         println!("\nAvailable backups (newest first):");
         for (index, entry) in entries.iter().enumerate() {
-            let filename = entry.name();
-            let size = entry.metadata().content_length();
+            let filename = &entry.metadata.name;
+            let size = entry.metadata.content_length;
 
             // Format file size
             let size_str = if size < 1024 {
