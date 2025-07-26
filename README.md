@@ -1,4 +1,4 @@
-# VPR DB Backup - Database Backup & Restore Utility
+# DB Backup - Database Backup & Restore Utility
 
 A simple tool for backing up databases to various cloud storage providers or local filesystems.
 
@@ -8,18 +8,6 @@ Designed to make database migrations easier, this project streamlines copying, b
 
 If you need more advanced tools please check [Barman](https://pgbarman.org) or [pgbackrest](https://pgbackrest.org).
 
-## Features
-
-- **Database Support**: PostgreSQL backup & restore
-- **Storage Options**: S3 compatible storage or local filesystem
-- **Compression**: Optional compression with configurable levels
-- **Flexible Restoration**: Restore from specific backups or automatically use the latest one
-- **Listing & Management**: List available backups with filtering options
-- **Retention Management**: Define retention periods for automatic cleanup of old backups
-- **SSH Tunneling**: Connect to remote databases through SSH tunnels
-- **Environment Variable Support**: Configure via environment variables for seamless CI/CD integration
-- **Cross-Platform**: Available for Linux and macOS
-
 ## Installation
 
 ### Quick Installation
@@ -27,341 +15,182 @@ If you need more advanced tools please check [Barman](https://pgbarman.org) or [
 #### Linux
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install-cli.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/vpr-group/dbkp/main/install-cli.sh | sudo bash
 ```
 
 #### macOS
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install-cli.sh | bash
+curl -sSL https://raw.githubusercontent.com/vpr-group/dbkp/main/install-cli.sh | bash
 ```
 
 Note: macOS users may need to remove `sudo` depending on their permission settings.
 
-### Install with Dependencies
-
-To also install required system dependencies (PostgreSQL client, gzip):
-
-```bash
-curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install-cli.sh | sudo bash -s -- --with-deps
-```
-
-### Static Build Installation (Better Compatibility)
-
-For environments where dynamic linking might be an issue:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install-cli.sh | sudo bash -s -- --musl
-```
-
 ### Install from Source (requires Rust toolchain)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vpr-group/vprs3bkp/main/install-cli.sh | sudo bash -s -- --from-source
-```
-
-Or manually:
-
-```bash
 # Clone the repository
-git clone https://github.com/vpr-group/vprs3bkp.git
-cd vprs3bkp
+git clone https://github.com/vpr-group/dbkp.git
+cd dbkp
 
 # Build the project
 cd cli
 cargo build --release
 
 # Install the binary
-sudo cp target/release/cli /usr/local/bin/vprs3bkp
+sudo cp target/release/cli /usr/local/bin/dbkp
 ```
 
-## CLI Usage
+## GUI Application
 
-This CLI tool helps you back up, restore, and list PostgreSQL databases, with support for local or S3 storage and SSH tunneling.
+This project also provides a GUI application for easier visual management of backups and databases. The GUI offers the same functionality as the CLI with a user-friendly interface.
 
-## Commands
+**Note**: The GUI application currently requires manual building and is not distributed as pre-built binaries.
 
-The CLI supports four main commands:
+### Building the GUI
 
-- `backup`: Create a database backup
-- `restore`: Restore a database from backup
-- `list`: List available backups
-- `cleanup`: Delete backups older than a specified retention period
-
-## Parameter Reference
-
-### Global Parameters
-
-| Parameter   | Description              | Default | Required | Environment Variable |
-| ----------- | ------------------------ | ------- | -------- | -------------------- |
-| `--help`    | Show help information    | -       | No       | -                    |
-| `--version` | Show version information | -       | No       | -                    |
-
-### Backup Command Parameters
-
-```
-cli backup [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--retention <PERIOD>] [--other-options]
-```
-
-### Restore Command Parameters
-
-```
-cli restore [OPTIONS] --database <DATABASE> [--storage-type <TYPE>] [--filename <FILENAME> | --latest] [--other-options]
-```
-
-### List Command Parameters
-
-```
-cli list [OPTIONS] [--database <DATABASE>] [--storage-type <TYPE>] [--other-options]
-```
-
-### Cleanup Command Parameters
-
-```
-cli cleanup [OPTIONS] --retention <PERIOD> [--database <DATABASE>] [--storage-type <TYPE>] [--dry-run]
-```
-
-### Source Parameters (Database Connection)
-
-| Parameter          | Description                    | Default     | Required                          | Environment Variable |
-| ------------------ | ------------------------------ | ----------- | --------------------------------- | -------------------- |
-| `--source-type`    | Database type                  | `postgres`  | No                                | -                    |
-| `--source-name`    | Name identifier for the source | `default`   | No                                | -                    |
-| `--database`, `-d` | Database name                  | -           | Yes                               | -                    |
-| `--host`, `-H`     | Database host                  | `localhost` | No                                | -                    |
-| `--port`, `-p`     | Database port                  | `5432`      | No                                | -                    |
-| `--username`, `-u` | Database username              | `postgres`  | No                                | -                    |
-| `--password`       | Database password              | -           | No                                | `PGPASSWORD`         |
-| `--use-ssh-tunnel` | Enable SSH tunneling           | `false`     | No                                | -                    |
-| `--ssh-key-path`   | Path to SSH private key        | -           | Only if `--use-ssh-tunnel` is set | -                    |
-| `--ssh-username`   | SSH username                   | -           | Only if `--use-ssh-tunnel` is set | -                    |
-
-### Storage Parameters
-
-| Parameter        | Description                            | Default   | Required | Environment Variable |
-| ---------------- | -------------------------------------- | --------- | -------- | -------------------- |
-| `--storage-type` | Storage backend type (`s3` or `local`) | `s3`      | No       | -                    |
-| `--storage-name` | Name identifier for storage            | `default` | No       | -                    |
-| `--prefix`       | Optional prefix for backup files       | -         | No       | -                    |
-
-#### S3 Storage Parameters
-
-| Parameter      | Description     | Default     | Required   | Environment Variable                    |
-| -------------- | --------------- | ----------- | ---------- | --------------------------------------- |
-| `--bucket`     | S3 bucket name  | -           | Yes for S3 | `S3_BUCKET`                             |
-| `--region`     | S3 region       | `us-east-1` | No         | `S3_REGION`                             |
-| `--endpoint`   | S3 endpoint URL | -           | Yes for S3 | `S3_ENDPOINT`                           |
-| `--access-key` | S3 access key   | -           | Yes for S3 | `S3_ACCESS_KEY_ID`, `S3_ACCESS_KEY`     |
-| `--secret-key` | S3 secret key   | -           | Yes for S3 | `S3_SECRET_ACCESS_KEY`, `S3_SECRET_KEY` |
-
-#### Local Storage Parameters
-
-| Parameter | Description                     | Default | Required      | Environment Variable |
-| --------- | ------------------------------- | ------- | ------------- | -------------------- |
-| `--root`  | Root directory path for backups | -       | Yes for local | -                    |
-
-### Backup-Specific Parameters
-
-| Parameter             | Description                                              | Default | Required | Environment Variable |
-| --------------------- | -------------------------------------------------------- | ------- | -------- | -------------------- |
-| `--compression`, `-c` | Compression level (0-9)                                  | -       | No       | -                    |
-| `--retention`, `-r`   | Retention period for the backup (e.g. '30d', '1w', '6m') | -       | No       | -                    |
-
-### Restore-Specific Parameters
-
-| Parameter               | Description                               | Default | Required                                   | Environment Variable |
-| ----------------------- | ----------------------------------------- | ------- | ------------------------------------------ | -------------------- |
-| `--filename`, `-f`      | Specific backup file to restore           | -       | One of `--filename` or `--latest` required | -                    |
-| `--drop-database`, `-d` | Drop database if it exists before restore | -       | No                                         | -                    |
-| `--latest`              | Use the most recent backup                | `false` | One of `--filename` or `--latest` required | -                    |
-
-### List-Specific Parameters
-
-| Parameter          | Description                                   | Default | Required | Environment Variable |
-| ------------------ | --------------------------------------------- | ------- | -------- | -------------------- |
-| `--database`, `-d` | Filter backups for specific database          | -       | No       | -                    |
-| `--latest-only`    | Show only the latest backup for each database | `false` | No       | -                    |
-| `--limit`, `-l`    | Maximum number of backups to list             | `10`    | No       | -                    |
-
-### Cleanup-Specific Parameters
-
-| Parameter           | Description                                          | Default | Required | Environment Variable |
-| ------------------- | ---------------------------------------------------- | ------- | -------- | -------------------- |
-| `--retention`, `-r` | Retention period (e.g. '30d', '1w', '6m', '1y')      | -       | Yes      | -                    |
-| `--dry-run`         | Show what would be deleted without actually deleting | `false` | No       | -                    |
-| `--database`, `-d`  | Filter cleanup for specific database                 | -       | No       | -                    |
-
-## Retention Format
-
-The retention period defines how long backups should be kept before being automatically deleted. The format is:
-
-- `Nd`: N days (e.g., `30d` for 30 days)
-- `Nw`: N weeks (e.g., `4w` for 4 weeks)
-- `Nm`: N months (e.g., `6m` for 6 months, calculated as 30 days per month)
-- `Ny`: N years (e.g., `1y` for 1 year, calculated as 365 days)
-
-## Examples
-
-### Create a backup to S3
+To build and run the GUI application:
 
 ```bash
-cli backup \
-  --database my_database \
-  --host db.example.com \
-  --username dbuser \
-  --password mypassword \
-  --bucket my-backups \
-  --endpoint https://s3.amazonaws.com \
-  --access-key AKIAIOSFODNN7EXAMPLE \
-  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+# Clone the repository (if not already done)
+git clone https://github.com/vpr-group/dbkp.git
+cd dbkp
+
+# Build the GUI application
+cd app
+# Follow build instructions in /app directory
 ```
 
-### Create a backup with retention period
+For detailed GUI setup instructions, features, and usage, see the [GUI Documentation](/app).
+
+## CLI Documentation
+
+For detailed CLI usage, commands, parameters, and examples, see the [CLI Documentation](/cli/README.md).
+
+The CLI supports multiple usage modes:
+- **Interactive Mode**: Guided wizard for beginners
+- **Workspace Mode**: Saved configurations for regular use
+- **Direct Parameters**: Full command-line control for automation
+
+## Features
+
+### Database Support
+- **PostgreSQL**: Full backup and restore support with streaming architecture
+- **Connection Options**: Direct connections or SSH tunneling
+- **Version Detection**: Automatic PostgreSQL version detection and compatibility
+- **Connection Pooling**: Efficient connection management with configurable pooling
+
+### Storage Backends
+- **S3-Compatible Storage**: Amazon S3, MinIO, DigitalOcean Spaces, and other S3-compatible providers
+- **Local Filesystem**: Store backups on local or network-mounted filesystems
+- **Flexible Configuration**: Multiple storage configurations per project
+
+### Backup & Restore Operations
+- **Streaming Architecture**: Memory-efficient streaming for large databases without loading everything into memory
+- **Logical Backups**: Full schema and data backup using `pg_dump`
+- **Flexible Restore Options**: Restore to same or different database with optional database recreation
+- **Connection Termination**: Automatic handling of active connections during restore
+- **Data Integrity**: Built-in validation and error handling
+
+### Management & Organization
+- **Workspace System**: Save and reuse database and storage configurations
+- **Backup Listing**: View available backups with timestamps and sizes
+- **Retention Policies**: Automatic cleanup of old backups (30d, 4w, 6m, 1y formats)
+- **Dry Run Mode**: Preview cleanup operations before execution
+- **Backup Naming**: Consistent naming with timestamps and UUIDs
+
+### Connectivity & Security
+- **SSH Tunneling**: Secure connections to remote databases through SSH
+- **Private Key Authentication**: Support for SSH key-based authentication
+- **Environment Variable Support**: Secure credential management via environment variables
+- **Connection Testing**: Built-in connection validation before operations
+
+### User Experience
+- **Interactive Mode**: Guided setup wizard for easy configuration
+- **Progress Indicators**: Real-time feedback with animated spinners
+- **Colored Output**: Professional colored terminal output
+- **Error Handling**: Detailed error messages with context
+- **Cross-Platform**: Support for Linux and macOS
+
+### Automation & Integration
+- **CLI Automation**: Full command-line interface for scripts and CI/CD
+- **Environment Variables**: Complete environment variable support for automated deployments
+- **Cron Job Ready**: Designed for scheduled backup operations
+- **Docker Compatible**: Works in containerized environments
+- **CI/CD Integration**: Examples for GitHub Actions, GitLab CI, and other platforms
+
+### Performance & Efficiency
+- **Streaming Processing**: Handles large databases efficiently with constant memory usage
+- **Configurable Buffers**: Tunable buffer sizes for optimal performance
+- **Connection Pooling**: Efficient database connection management
+- **Binary Management**: Automatic download and installation of required PostgreSQL utilities
+- **Version Compatibility**: Support for multiple PostgreSQL versions
+
+### Monitoring & Debugging
+- **Comprehensive Logging**: Detailed logging for troubleshooting
+- **Connection Validation**: Pre-flight checks before operations
+- **Storage Testing**: Validate storage connectivity before backup/restore
+- **Debug Mode**: Enhanced logging for development and troubleshooting
+
+## Quick Start Example
 
 ```bash
-cli backup \
-  --database my_database \
-  --retention 30d \
-  --bucket my-backups \
-  --endpoint https://s3.amazonaws.com \
-  --access-key AKIAIOSFODNN7EXAMPLE \
-  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-```
+# Interactive mode (recommended for first-time users)
+dbkp
 
-### Create a backup to local storage
-
-```bash
-cli backup \
-  --database my_database \
-  --storage-type local \
-  --root /path/to/backups
-```
-
-### Backup with SSH tunnel
-
-```bash
-cli backup \
-  --database my_database \
-  --host 10.0.0.5 \
-  --use-ssh-tunnel \
-  --ssh-username ssh_user \
-  --ssh-key-path ~/.ssh/id_rsa \
-  --storage-type local \
-  --root /path/to/backups
-```
-
-### Restore the latest backup
-
-```bash
-cli restore \
-  --database my_database \
-  --latest \
-  --storage-type local \
-  --root /path/to/backups
-```
-
-### List available backups
-
-```bash
-cli list \
-  --storage-type local \
-  --root /path/to/backups \
-  --limit 20
-```
-
-### Clean up old backups
-
-```bash
-cli cleanup \
-  --retention 30d \
-  --storage-type s3 \
-  --bucket my-backups \
-  --endpoint https://s3.amazonaws.com \
-  --access-key AKIAIOSFODNN7EXAMPLE \
-  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-```
-
-### Preview which backups would be deleted (dry run)
-
-```bash
-cli cleanup \
-  --retention 14d \
-  --dry-run \
-  --storage-type local \
-  --root /path/to/backups
-```
-
-### Clean up old backups for a specific database
-
-```bash
-cli cleanup \
-  --retention 60d \
-  --database production_db \
-  --storage-type s3 \
-  --bucket my-backups
-```
-
-## Backup Naming Convention
-
-Backups are automatically named using the format:
-
-```
-{source-name}-{database}-{timestamp}-{uuid}.gz
-```
-
-For example:
-
-```
-default-mydb-2023-10-15-084531-a7bf34.gz
-```
-
-## Setting Up Cron Jobs
-
-Add to `/etc/cron.d/database-backups`:
-
-```
-# Daily PostgreSQL backup at 2:00 AM with 30-day retention
-0 2 * * * root S3_BUCKET=my-backup-bucket PGPASSWORD=secret /usr/local/bin/vprs3bkp backup --database mydb --username dbuser --host db.example.com --storage-type s3 --retention 30d
-
-# Weekly cleanup of backups older than 30 days
-0 3 * * 0 root S3_BUCKET=my-backup-bucket /usr/local/bin/vprs3bkp cleanup --retention 30d --storage-type s3
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Connection refused**: Check database host, port, and firewall settings
-2. **Access denied**: Verify database credentials
-3. **S3 upload failed**: Check S3 credentials and permissions
-4. **"Failed to execute psql command: no such file"** or **"pg_dump not found"**: These errors indicate that PostgreSQL client tools are not installed or not in your PATH. Install them with:
-   - macOS: `brew install postgresql`
-   - Ubuntu/Debian: `sudo apt-get install postgresql-client`
-
-## AWS Authentication
-
-The tool uses the AWS SDK's credential provider chain, which checks for credentials in this order:
-
-1. Command-line arguments (`--access-key`, `--secret-key`)
-2. Environment variables (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`)
-3. AWS shared credentials file (`~/.aws/credentials`)
-4. IAM role for Amazon EC2 or ECS task role
-
-## S3-Compatible Storage Providers
-
-To use with S3-compatible storage providers (MinIO, DigitalOcean Spaces, etc.):
-
-```bash
-vprs3bkp backup \
-  --database mydb \
+# Direct backup to S3
+dbkp backup \
+  --database myapp \
+  --host localhost \
   --username dbuser \
   --storage-type s3 \
-  --bucket my-bucket \
-  --endpoint https://minio.example.com \
-  --access-key ACCESS_KEY \
-  --secret-key SECRET_KEY
+  --bucket my-backups \
+  --endpoint https://s3.amazonaws.com
+
+# Restore latest backup
+dbkp restore \
+  --database myapp \
+  --storage-type s3 \
+  --bucket my-backups \
+  --latest
 ```
+
+## Architecture
+
+The project is organized into several modules:
+
+- **Core Library** (`/core`): Database connections, backup/restore logic, and storage backends
+- **CLI Tool** (`/cli`): Command-line interface with interactive and direct modes
+- **PostgreSQL Module**: Specialized PostgreSQL implementation with streaming support
+- **Storage Modules**: S3 and local filesystem storage implementations
+- **SSH Tunneling**: Secure remote database connections
+
+## Use Cases
+
+### Development & Testing
+- Pull production data to local development environments
+- Create test data snapshots for consistent testing
+- Quick database migrations between environments
+
+### Small to Medium Production
+- Automated daily/weekly backups with retention policies
+- Database migrations and deployments
+- Disaster recovery for smaller applications
+
+### CI/CD Integration
+- Automated backup verification in deployment pipelines
+- Database state management in testing environments
+- Environment synchronization across deployment stages
+
+## Limitations
+
+- **Logical Backups Only**: Does not support physical/binary backups
+- **Single Database Focus**: Optimized for individual database operations
+- **Not Industrial-Grade**: Suitable for development and smaller production use cases
+- **PostgreSQL Focused**: Currently optimized primarily for PostgreSQL
+
+For enterprise-grade solutions with physical backups, point-in-time recovery, and high-availability features, consider [Barman](https://pgbarman.org) or [pgbackrest](https://pgbackrest.org).
 
 ## License
 
-MIT
+MIT License - see LICENSE file for details.
