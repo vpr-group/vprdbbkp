@@ -657,16 +657,3 @@ For databases > 100GB:
 ## License
 
 MIT License - See LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## Support
-
-- **GitHub Issues**: Report bugs or request features
-- **Discussions**: Community support and questions
