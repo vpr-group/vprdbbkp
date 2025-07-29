@@ -1,238 +1,220 @@
 use std::{
     io::{Error, ErrorKind, Read, Write},
-    sync::{
-        mpsc::{channel, Sender},
-        Arc, Mutex as StdMutex,
-    },
-    thread::{self, JoinHandle},
+    sync::mpsc::{channel, Sender},
 };
 
-use futures::StreamExt;
-use log::debug;
-use opendal::{Operator, Writer};
-use tokio::sync::Mutex as TokioMutex;
+use crate::storage::provider::{StorageProviderCommand, StorageProviderReadResponse};
 
 #[derive(Clone)]
 pub struct StorageWriter {
-    writer: Arc<TokioMutex<Writer>>,
+    writer_id: u64,
+    command_tx: Sender<StorageProviderCommand>,
+    is_closed: bool,
 }
 
 impl StorageWriter {
-    pub fn new(writer: Writer) -> Self {
+    pub fn new(writer_id: u64, command_tx: Sender<StorageProviderCommand>) -> Self {
         StorageWriter {
-            writer: Arc::new(TokioMutex::new(writer)),
+            writer_id,
+            command_tx,
+            is_closed: false,
         }
-    }
-
-    async fn write_async(&mut self, buf: &[u8]) -> Result<usize, Box<dyn std::error::Error>> {
-        let mut writer = self.writer.lock().await;
-        let data_to_write = buf.to_owned();
-        writer.write(data_to_write).await?;
-
-        Ok(buf.len())
-    }
-
-    async fn flush_async(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut writer = self.writer.lock().await;
-        writer.close().await?;
-
-        Ok(())
     }
 }
 
 impl Write for StorageWriter {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        let buf_copy = buf.to_vec();
-        let mut this = self.clone();
-        let (tx, rx) = channel();
-
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
-            let result: Result<usize, Error> = rt.block_on(async {
-                let len = this
-                    .write_async(&buf_copy.clone())
-                    .await
-                    .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-
-                debug!("{}, bytes written", len);
-
-                Ok(len)
-            });
-
-            let _ = tx.send(result);
-        });
-
-        match rx.recv() {
-            Ok(result) => match result {
-                Ok(size) => Result::Ok(size),
-                Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
-            },
-            Err(_) => Err(Error::new(ErrorKind::Other, "Thread communication failed")),
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self.is_closed {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "Writer has been closed",
+            ));
         }
+
+        let (response_tx, response_rx) = channel();
+
+        self.command_tx
+            .send(StorageProviderCommand::Write {
+                writer_id: self.writer_id,
+                data: bytes.to_vec(),
+                response: response_tx,
+            })
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    format!("Failed to send write command: {}", e),
+                )
+            })?;
+
+        let result = response_rx.recv().map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                format!("Failed to receive write response: {}", e),
+            )
+        })?;
+
+        result.map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Write operation failed: {}", e),
+            )
+        })?;
+
+        Ok(bytes.len())
     }
 
-    fn flush(&mut self) -> Result<(), Error> {
-        let mut this = self.clone();
-        let (tx, rx) = channel();
+    fn flush(&mut self) -> std::io::Result<()> {
+        if self.is_closed {
+            return Ok(());
+        }
 
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+        let (response_tx, response_rx) = channel();
 
-            let result: Result<(), Error> = rt.block_on(async {
-                let result = this
-                    .flush_async()
-                    .await
-                    .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-                Ok(result)
+        self.command_tx
+            .send(StorageProviderCommand::CloseWriter {
+                writer_id: self.writer_id,
+                response: response_tx,
+            })
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    format!("Failed to send close command: {}", e),
+                )
+            })?;
+
+        let result = response_rx.recv().map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                format!("Failed to receive close response: {}", e),
+            )
+        })?;
+
+        result.map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Close operation failed: {}", e),
+            )
+        })?;
+
+        self.is_closed = true;
+        Ok(())
+    }
+}
+
+impl Drop for StorageWriter {
+    fn drop(&mut self) {
+        if !self.is_closed {
+            let (response_tx, _response_rx) = channel();
+            let _ = self.command_tx.send(StorageProviderCommand::CloseWriter {
+                writer_id: self.writer_id,
+                response: response_tx,
             });
-
-            let _ = tx.send(result);
-        });
-
-        match rx.recv() {
-            Ok(result) => match result {
-                Ok(_) => Ok(()),
-                Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
-            },
-            Err(_) => Err(Error::new(ErrorKind::Other, "Thread communication failed")),
+            // We don't wait for the response in Drop to avoid blocking
         }
     }
 }
 
-#[derive(Debug)]
-enum FetchResult {
-    DataAvailable,
-    EndOfStream,
-    Error(String),
-}
-
-enum ReadRequest {
-    FetchMoreData(Sender<FetchResult>),
-    Stop,
-}
-
+#[derive(Clone)]
 pub struct StorageReader {
-    worker_handle: Option<JoinHandle<()>>,
-    buffer: Arc<StdMutex<Vec<u8>>>,
-    tx: Sender<ReadRequest>,
+    reader_id: u64,
+    command_tx: Sender<StorageProviderCommand>,
+    is_closed: bool,
+    buffer: Vec<u8>,
+}
+impl StorageReader {
+    pub fn new(reader_id: u64, command_tx: Sender<StorageProviderCommand>) -> Self {
+        StorageReader {
+            reader_id,
+            command_tx,
+            is_closed: false,
+            buffer: Vec::new(),
+        }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.is_closed
+    }
+
+    pub fn close(&mut self) {
+        self.is_closed = true;
+        self.buffer.clear();
+    }
+
+    fn fetch_more_data(&mut self) -> Result<StorageProviderReadResponse, Error> {
+        if self.is_closed {
+            return Err(Error::new(ErrorKind::BrokenPipe, "Reader is closed"));
+        }
+
+        let (response_tx, response_rx) = channel();
+
+        self.command_tx
+            .send(StorageProviderCommand::Read {
+                reader_id: self.reader_id,
+                response: response_tx,
+            })
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::BrokenPipe,
+                    format!("Failed to send read command: {}", e),
+                )
+            })?;
+
+        let result = response_rx.recv().map_err(|e| {
+            Error::new(
+                ErrorKind::BrokenPipe,
+                format!("Failed to receive read response: {}", e),
+            )
+        })?;
+
+        result.map_err(|e| Error::new(ErrorKind::Other, format!("Read operation failed: {}", e)))
+    }
 }
 
-impl StorageReader {
-    pub fn new(operator: Operator, filename: String) -> Self {
-        // I didn't find a way to make this simpler. It seems that a reader
-        // created from an operator cannot be shared accross threads without
-        // producing a deadlock when we need to read from it.
+impl Read for StorageReader {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        if self.is_closed {
+            return Err(Error::new(ErrorKind::BrokenPipe, "Reader is closed"));
+        }
 
-        let buffer = Arc::new(StdMutex::new(Vec::new()));
-        let (tx, rx) = channel();
+        if !self.buffer.is_empty() {
+            let bytes_to_copy = std::cmp::min(self.buffer.len(), buf.len());
+            buf[..bytes_to_copy].copy_from_slice(&self.buffer[..bytes_to_copy]);
+            self.buffer.drain(..bytes_to_copy);
+            return Ok(bytes_to_copy);
+        }
 
-        let worker_handle = thread::spawn({
-            let buffer = buffer.clone();
+        match self.fetch_more_data() {
+            Ok(read_response) => {
+                if read_response.is_eof {
+                    self.is_closed = true;
+                    return Ok(0); // EOF
+                }
 
-            move || {
-                let rt = match tokio::runtime::Runtime::new() {
-                    Ok(rt) => rt,
-                    Err(e) => {
-                        eprintln!("Failed to create runtime: {}", e);
-                        return;
-                    }
-                };
+                if read_response.data.is_empty() {
+                    self.is_closed = true;
+                    return Ok(0); // EOF
+                }
 
-                rt.block_on(async {
-                    let metadata = operator.stat(filename.as_str()).await.unwrap();
-                    let file_size = metadata.content_length() as usize;
-                    let chunk_size = if file_size > 512 { 512 } else { file_size };
+                self.buffer.extend_from_slice(&read_response.data);
 
-                    let mut stream = operator
-                        .reader_with(filename.as_str())
-                        .chunk(chunk_size as usize)
-                        .await
-                        .unwrap()
-                        .into_stream(0u64..(file_size as u64))
-                        .await
-                        .unwrap();
+                let bytes_to_copy = std::cmp::min(self.buffer.len(), buf.len());
+                buf[..bytes_to_copy].copy_from_slice(&self.buffer[..bytes_to_copy]);
+                self.buffer.drain(..bytes_to_copy);
 
-                    while let Ok(request) = rx.recv() {
-                        match request {
-                            ReadRequest::FetchMoreData(tx) => {
-                                let result = match stream.next().await {
-                                    Some(Ok(chunk)) => {
-                                        if let Ok(mut buffer) = buffer.lock() {
-                                            buffer.extend_from_slice(&chunk.to_bytes());
-                                            FetchResult::DataAvailable
-                                        } else {
-                                            FetchResult::Error(format!("Failed to lock buffer"))
-                                        }
-                                    }
-                                    Some(Err(e)) => {
-                                        FetchResult::Error(format!("Error reading chunk: {}", e))
-                                    }
-                                    None => FetchResult::EndOfStream,
-                                };
-
-                                let _ = tx.send(result);
-                            }
-                            ReadRequest::Stop => {
-                                break;
-                            }
-                        }
-                    }
-                });
+                Ok(bytes_to_copy)
             }
-        });
-
-        StorageReader {
-            worker_handle: Some(worker_handle),
-            buffer,
-            tx,
+            Err(e) => {
+                self.is_closed = true;
+                Err(e)
+            }
         }
     }
 }
 
 impl Drop for StorageReader {
     fn drop(&mut self) {
-        let _ = self.tx.send(ReadRequest::Stop);
-
-        if let Some(handle) = self.worker_handle.take() {
-            let _ = handle.join();
-        }
-    }
-}
-
-impl Read for StorageReader {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        {
-            let mut buffer = match self.buffer.lock() {
-                Ok(buffer) => buffer,
-                Err(_) => return Err(Error::new(ErrorKind::Other, "Failed to lock buffer")),
-            };
-
-            if !buffer.is_empty() {
-                let bytes_to_copy = std::cmp::min(buffer.len(), buf.len());
-                buf[..bytes_to_copy].copy_from_slice(&buffer[..bytes_to_copy]);
-                buffer.drain(..bytes_to_copy);
-
-                return Ok(bytes_to_copy);
-            }
-        }
-
-        let (response_tx, response_rx) = channel();
-
-        match self.tx.send(ReadRequest::FetchMoreData(response_tx)) {
-            Ok(()) => {}
-            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
-        };
-
-        let fetch_result = match response_rx.recv() {
-            Ok(response) => response,
-            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
-        };
-
-        match fetch_result {
-            FetchResult::DataAvailable => self.read(buf),
-            FetchResult::EndOfStream => Ok(0),
-            FetchResult::Error(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
-        }
+        // No cleanup needed for the reader_id in the provider
+        // The provider handles stream cleanup when it reaches EOF
+        self.close();
     }
 }

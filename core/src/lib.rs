@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use anyhow::{anyhow, Result};
 use common::get_default_backup_name;
 use compression::{CompressionFormat, Compressor, Decompressor};
